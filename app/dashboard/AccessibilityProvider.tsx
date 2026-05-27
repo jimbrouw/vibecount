@@ -156,27 +156,38 @@ function AccessibilityToolbar() {
               </div>
             </div>
 
-            <label className="flex items-center justify-between rounded-xl border border-[#e5e0d8] bg-[#f8f5ef] px-3 py-2.5">
+            <label
+              htmlFor="plain-language-toggle"
+              className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-[#e5e0d8] bg-[#f8f5ef] px-3 py-2.5"
+            >
               <div>
                 <p className="text-sm font-medium text-[#1a3a2a]">Plain language</p>
                 <p className="text-xs text-[#4a6a5a]">
                   Show extra short explanations in forms and summaries.
                 </p>
               </div>
-              <button
-                type="button"
-                aria-pressed={plainLanguage}
-                onClick={() => setPlainLanguage(!plainLanguage)}
-                className={`relative h-6 w-11 rounded-full transition-colors ${
-                  plainLanguage ? "bg-[#2d6a4a]" : "bg-[#d5d0c8]"
-                }`}
-              >
+              <span className="relative inline-flex h-6 w-11 shrink-0">
+                <input
+                  id="plain-language-toggle"
+                  type="checkbox"
+                  role="switch"
+                  checked={plainLanguage}
+                  onChange={(event) => setPlainLanguage(event.target.checked)}
+                  className="sr-only"
+                />
                 <span
-                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                    plainLanguage ? "translate-x-5" : "translate-x-0.5"
+                  aria-hidden="true"
+                  className={`h-6 w-11 rounded-full transition-colors ${
+                    plainLanguage ? "bg-[#2d6a4a]" : "bg-[#d5d0c8]"
                   }`}
                 />
-              </button>
+                <span
+                  aria-hidden="true"
+                  className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    plainLanguage ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </span>
             </label>
           </div>
         </section>

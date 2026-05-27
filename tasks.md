@@ -84,7 +84,7 @@ Read `spec.md` first. This file is the ordered work.
 - **Done when:** tapping a tax term shows its plain-English explanation beside the official one.
 
 ### Post-Task 4 follow-up
-- [ ] Replace seeded placeholder glossary content with founder-written and accountant-reviewed terms.
+- [x] Replace seeded placeholder glossary content with plain-English draft terms.
 - [ ] Verify glossary copy against final approved wording before launch.
 
 ### Task 5 — Accessibility layer
@@ -109,6 +109,8 @@ Read `spec.md` first. This file is the ordered work.
 - **Verification note:** implementation is in place and builds cleanly, but this task is
   not complete until `OPENAI_API_KEY` is added and the Whisper sub-gate plus logged-in
   browser testing are run.
+- **Founder check:** voice-to-invoice is confirmed working. The formal 20-sample
+  Whisper sub-gate remains the launch-readiness check.
 
 ### Task 7 — Tone, metrics, polish
 - [x] Apply the tone rules from the spec across core copy.

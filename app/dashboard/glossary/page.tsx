@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { resolveGlossaryTerms } from "@/lib/glossary";
 import LogoutButton from "../LogoutButton";
 import GlossaryBrowser from "./GlossaryBrowser";
 
@@ -79,7 +80,7 @@ export default async function GlossaryPage() {
           </p>
         </div>
 
-        <GlossaryBrowser terms={terms ?? []} />
+        <GlossaryBrowser terms={resolveGlossaryTerms(terms ?? [])} />
       </div>
     </main>
   );

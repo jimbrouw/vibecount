@@ -73,7 +73,7 @@ VibeCount is a freelancer invoicing tool built for people who find finance admin
 - Supabase migrations added under `supabase/migrations/`
 - `public.clients` — saved client entity with zero-friction inline-create shape: `id`, `user_id`, `name`
 - `public.invoices` — user-owned invoice rows with `client_id`, `number`, `invoice_date`, `description`, `amount`, `payment_terms`, `status`, `pdf_path`
-- `public.glossary_terms` — static placeholder glossary seed rows
+- `public.glossary_terms` — static Explain Simply glossary seed rows
 - Row-level security enabled on all three public tables
 - Client and invoice policies restrict reads/writes to the signed-in user
 - Glossary terms are read-only to app users and public-readable for the static Explain Simply UI

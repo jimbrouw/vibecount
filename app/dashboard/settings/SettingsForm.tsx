@@ -2,9 +2,28 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import ExplainTerm from "@/app/dashboard/ExplainTerm";
-import { EMPTY_SETTINGS, type UserSettings } from "@/lib/settings";
+import {
+  DEFAULT_LATE_PAYMENT_WORDING,
+  EMPTY_SETTINGS,
+  type UserSettings,
+} from "@/lib/settings";
 
 type Status = "idle" | "loading" | "saving" | "saved" | "error";
+type ContactDetails = {
+  email: string;
+  phone: string;
+  website: string;
+  other: string;
+};
+type BankDetails = {
+  accountName: string;
+  sortCode: string;
+  accountNumber: string;
+  iban: string;
+  swift: string;
+  bankName: string;
+  reference: string;
+};
 
 export default function SettingsForm() {
   const [settings, setSettings] = useState<UserSettings>(EMPTY_SETTINGS);
@@ -30,6 +49,23 @@ export default function SettingsForm() {
     },
     []
   );
+
+  const contact = parseContactDetails(settings.contact_details);
+  const bank = parseBankDetails(settings.bank_details);
+
+  const updateContact = useCallback((patch: Partial<ContactDetails>) => {
+    setSettings((prev) => {
+      const next = { ...parseContactDetails(prev.contact_details), ...patch };
+      return { ...prev, contact_details: formatContactDetails(next) };
+    });
+  }, []);
+
+  const updateBank = useCallback((patch: Partial<BankDetails>) => {
+    setSettings((prev) => {
+      const next = { ...parseBankDetails(prev.bank_details), ...patch };
+      return { ...prev, bank_details: formatBankDetails(next) };
+    });
+  }, []);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -84,17 +120,58 @@ export default function SettingsForm() {
               className={inputCls}
             />
           </Field>
-          <Field label="Contact details" hint="Email, phone, or website." id="contact_details">
+        </div>
+        <div className="mt-5 grid gap-5 sm:grid-cols-3">
+          <Field label="Email" hint="Shown on invoices." id="contact_email">
             <input
-              id="contact_details"
+              id="contact_email"
               type="text"
-              value={settings.contact_details}
-              onChange={(e) => update("contact_details", e.target.value)}
-              placeholder="jane@example.com · 07700 000000"
+              inputMode="email"
+              value={contact.email}
+              onChange={(e) => updateContact({ email: e.target.value })}
+              placeholder="jane@example.com"
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Phone" hint="Optional." id="contact_phone">
+            <input
+              id="contact_phone"
+              type="tel"
+              value={contact.phone}
+              onChange={(e) => updateContact({ phone: e.target.value })}
+              placeholder="07700 000000"
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Website" hint="Optional." id="contact_website">
+            <input
+              id="contact_website"
+              type="text"
+              inputMode="url"
+              value={contact.website}
+              onChange={(e) => updateContact({ website: e.target.value })}
+              placeholder="example.co.uk"
               className={inputCls}
             />
           </Field>
         </div>
+        {contact.other ? (
+          <div className="mt-5">
+            <Field
+              label="Other contact note"
+              hint="Kept from older unstructured contact details."
+              id="contact_other"
+            >
+              <input
+                id="contact_other"
+                type="text"
+                value={contact.other}
+                onChange={(e) => updateContact({ other: e.target.value })}
+                className={inputCls}
+              />
+            </Field>
+          </div>
+        ) : null}
         <div className="mt-5">
           <Field label="Address" hint="Your trading or correspondence address." id="address">
             <textarea
@@ -152,12 +229,24 @@ export default function SettingsForm() {
             label="Late payment wording"
             hint="Printed at the bottom of every invoice."
             id="late_payment_wording"
+            labelAction={
+              <button
+                type="button"
+                onClick={() =>
+                  update("late_payment_wording", DEFAULT_LATE_PAYMENT_WORDING)
+                }
+                className="font-medium underline decoration-[#7a9a87] underline-offset-4 hover:text-[#1a3a2a]"
+              >
+                Use default
+              </button>
+            }
           >
             <textarea
               id="late_payment_wording"
               value={settings.late_payment_wording}
               onChange={(e) => update("late_payment_wording", e.target.value)}
-              rows={2}
+              rows={4}
+              placeholder={DEFAULT_LATE_PAYMENT_WORDING}
               className={`${inputCls} h-auto resize-y py-3`}
             />
           </Field>
@@ -169,20 +258,82 @@ export default function SettingsForm() {
         <legend className="mb-4 -ml-1 px-1 text-xs font-semibold uppercase tracking-widest text-[#4a6a5a]">
           Bank details
         </legend>
-        <Field
-          label="Bank details"
-          hint="Shown at the bottom of invoices so clients know where to pay."
-          id="bank_details"
-        >
-          <textarea
-            id="bank_details"
-            value={settings.bank_details}
-            onChange={(e) => update("bank_details", e.target.value)}
-            rows={3}
-            placeholder={"Sort code: 00-00-00\nAccount number: 12345678\nBarclays Bank"}
-            className={`${inputCls} h-auto resize-y py-3`}
-          />
-        </Field>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="Account name" hint="Usually your business or legal name." id="bank_account_name">
+            <input
+              id="bank_account_name"
+              type="text"
+              value={bank.accountName}
+              onChange={(e) => updateBank({ accountName: e.target.value })}
+              placeholder="Jane Smith"
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Bank name" hint="Optional." id="bank_name">
+            <input
+              id="bank_name"
+              type="text"
+              value={bank.bankName}
+              onChange={(e) => updateBank({ bankName: e.target.value })}
+              placeholder="Barclays Bank"
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Sort code" hint="Shown at the bottom of invoices." id="sort_code">
+            <input
+              id="sort_code"
+              type="text"
+              inputMode="numeric"
+              value={bank.sortCode}
+              onChange={(e) => updateBank({ sortCode: e.target.value })}
+              placeholder="00-00-00"
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Account number" hint="Shown at the bottom of invoices." id="account_number">
+            <input
+              id="account_number"
+              type="text"
+              inputMode="numeric"
+              value={bank.accountNumber}
+              onChange={(e) => updateBank({ accountNumber: e.target.value })}
+              placeholder="12345678"
+              className={inputCls}
+            />
+          </Field>
+          <Field label="IBAN" hint="For international payments." id="iban">
+            <input
+              id="iban"
+              type="text"
+              value={bank.iban}
+              onChange={(e) => updateBank({ iban: e.target.value.toUpperCase() })}
+              placeholder="GB00 BUKB 2020 1512 3456 78"
+              className={inputCls}
+            />
+          </Field>
+          <Field label="SWIFT / BIC" hint="For international bank transfers." id="swift">
+            <input
+              id="swift"
+              type="text"
+              value={bank.swift}
+              onChange={(e) => updateBank({ swift: e.target.value.toUpperCase() })}
+              placeholder="BUKBGB22"
+              className={inputCls}
+            />
+          </Field>
+        </div>
+        <div className="mt-5">
+          <Field label="Payment reference or note" hint="Optional extra payment instruction." id="bank_reference">
+            <input
+              id="bank_reference"
+              type="text"
+              value={bank.reference}
+              onChange={(e) => updateBank({ reference: e.target.value })}
+              placeholder="Use the invoice number as the payment reference"
+              className={inputCls}
+            />
+          </Field>
+        </div>
       </fieldset>
 
       {/* VAT settings */}
@@ -191,9 +342,8 @@ export default function SettingsForm() {
           VAT settings
         </legend>
 
-        {/* VAT registered toggle */}
-        <label className="flex cursor-pointer items-center gap-3">
-          <div className="relative">
+        <label className="flex cursor-pointer items-center gap-3 text-sm font-medium text-[#1a3a2a]">
+          <span className="relative inline-flex h-6 w-11 shrink-0">
             <input
               type="checkbox"
               checked={settings.vat_registered}
@@ -201,20 +351,20 @@ export default function SettingsForm() {
               className="sr-only"
               id="vat_registered"
             />
-            <div
+            <span
+              aria-hidden="true"
               className={`h-6 w-11 rounded-full transition-colors duration-200 ${
                 settings.vat_registered ? "bg-[#2d6a4a]" : "bg-[#d5d0c8]"
               }`}
             />
-            <div
-              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${
-                settings.vat_registered ? "translate-x-5" : "translate-x-0.5"
+            <span
+              aria-hidden="true"
+              className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${
+                settings.vat_registered ? "translate-x-5" : "translate-x-0"
               }`}
             />
-          </div>
-          <span className="text-sm font-medium text-[#1a3a2a]">
-            I am VAT registered
           </span>
+          <span>I am VAT registered</span>
         </label>
 
         {settings.vat_registered && (
@@ -342,3 +492,99 @@ function Field({
 
 const inputCls =
   "h-12 w-full rounded-lg border border-[#d5d0c8] bg-white px-3 text-base text-[#1a3a2a] outline-none transition focus:border-[#2d6a4a] focus:ring-2 focus:ring-[#b9d2bd]";
+
+function parseContactDetails(value: string): ContactDetails {
+  const lines = value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const contact: ContactDetails = { email: "", phone: "", website: "", other: "" };
+  const other: string[] = [];
+
+  for (const line of lines) {
+    const [rawLabel, ...rest] = line.split(":");
+    const label = rawLabel?.trim().toLowerCase();
+    const content = rest.join(":").trim();
+
+    if (content && label === "email") contact.email = content;
+    else if (content && label === "phone") contact.phone = content;
+    else if (content && label === "website") contact.website = content;
+    else if (!contact.email && line.includes("@")) contact.email = line;
+    else if (!contact.website && /^(https?:\/\/|www\.|[a-z0-9-]+\.[a-z]{2,})/i.test(line)) {
+      contact.website = line;
+    } else if (!contact.phone && /[0-9]{5,}/.test(line)) {
+      contact.phone = line;
+    } else {
+      other.push(line);
+    }
+  }
+
+  contact.other = other.join(" · ");
+  return contact;
+}
+
+function formatContactDetails(contact: ContactDetails) {
+  return [
+    ["Email", contact.email],
+    ["Phone", contact.phone],
+    ["Website", contact.website],
+    ["Other", contact.other],
+  ]
+    .filter(([, value]) => value.trim())
+    .map(([label, value]) => `${label}: ${value.trim()}`)
+    .join("\n");
+}
+
+function parseBankDetails(value: string): BankDetails {
+  const lines = value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const bank: BankDetails = {
+    accountName: "",
+    sortCode: "",
+    accountNumber: "",
+    iban: "",
+    swift: "",
+    bankName: "",
+    reference: "",
+  };
+  const other: string[] = [];
+
+  for (const line of lines) {
+    const [rawLabel, ...rest] = line.split(":");
+    const label = rawLabel?.trim().toLowerCase();
+    const content = rest.join(":").trim();
+
+    if (content && (label === "account name" || label === "name")) bank.accountName = content;
+    else if (content && label === "sort code") bank.sortCode = content;
+    else if (content && label === "account number") bank.accountNumber = content;
+    else if (content && label === "iban") bank.iban = content;
+    else if (content && (label === "swift" || label === "swift / bic" || label === "bic")) {
+      bank.swift = content;
+    }
+    else if (content && label === "bank") bank.bankName = content;
+    else if (content && (label === "reference" || label === "payment reference")) {
+      bank.reference = content;
+    } else if (!bank.sortCode && /^\d{2}-?\d{2}-?\d{2}$/.test(line)) {
+      bank.sortCode = line;
+    } else if (!bank.accountNumber && /^\d{8}$/.test(line)) {
+      bank.accountNumber = line;
+    } else {
+      other.push(line);
+    }
+  }
+
+  if (other.length && !bank.bankName) bank.bankName = other.shift() ?? "";
+  if (other.length) bank.reference = other.join(" · ");
+  return bank;
+}
+
+function formatBankDetails(bank: BankDetails) {
+  return [
+    ["Account name", bank.accountName],
+    ["Sort code", bank.sortCode],
+    ["Account number", bank.accountNumber],
+    ["IBAN", bank.iban],
+    ["SWIFT / BIC", bank.swift],
+    ["Bank", bank.bankName],
+    ["Reference", bank.reference],
+  ]
+    .filter(([, value]) => value.trim())
+    .map(([label, value]) => `${label}: ${value.trim()}`)
+    .join("\n");
+}

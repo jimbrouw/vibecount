@@ -12,6 +12,9 @@ export type UserSettings = {
   utr: string;
 };
 
+export const DEFAULT_LATE_PAYMENT_WORDING =
+  "Payment is due within 30 days of the invoice date. We reserve the right to charge statutory interest at 8% above the Bank of England base rate, plus statutory debt recovery costs, under the Late Payment of Commercial Debts (Interest) Act 1998.";
+
 export const EMPTY_SETTINGS: UserSettings = {
   legal_name: "",
   address: "",
@@ -22,8 +25,7 @@ export const EMPTY_SETTINGS: UserSettings = {
   vat_number: "",
   vat_rate: 20,
   invoice_number_prefix: "VC",
-  late_payment_wording:
-    "Late payments may be subject to statutory interest and compensation.",
+  late_payment_wording: DEFAULT_LATE_PAYMENT_WORDING,
   utr: "",
 };
 
