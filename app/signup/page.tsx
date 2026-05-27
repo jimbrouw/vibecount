@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import GoogleAuthButton from "@/app/auth/GoogleAuthButton";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -29,7 +30,7 @@ export default function SignupPage() {
     });
 
     if (error) {
-      setError("Something went wrong. " + error.message);
+      setError("Account setup did not go through. Check the details and try again.");
       setLoading(false);
       return;
     }
@@ -39,7 +40,7 @@ export default function SignupPage() {
       router.push("/dashboard");
       router.refresh();
     } else {
-      setMessage("Check your email — we've sent you a confirmation link.");
+      setMessage("Check your email. Your confirmation link is ready.");
       setLoading(false);
     }
   }
@@ -54,7 +55,18 @@ export default function SignupPage() {
           Create your account
         </p>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm p-8 space-y-5">
+        <div className="bg-white rounded-2xl shadow-sm p-8 space-y-5">
+          <GoogleAuthButton label="Continue with Google" />
+
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-[#e5e0d8]" />
+            <span className="text-xs font-medium uppercase tracking-[0.12em] text-[#6f7f73]">
+              or
+            </span>
+            <div className="h-px flex-1 bg-[#e5e0d8]" />
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
           {error && (
             <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-3">
               {error}
@@ -106,7 +118,8 @@ export default function SignupPage() {
           >
             {loading ? "Creating account…" : "Create account"}
           </button>
-        </form>
+          </form>
+        </div>
 
         <p className="text-center text-sm text-[#4a6a5a] mt-6">
           Already have an account?{" "}

@@ -1,26 +1,52 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #f5f0e8;
+  --foreground: #1a3a2a;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html[data-text-size="large"] {
+  font-size: 18px;
+}
+
+html[data-spacing="relaxed"] .dashboard-shell p,
+html[data-spacing="relaxed"] .dashboard-shell li,
+html[data-spacing="relaxed"] .dashboard-shell label,
+html[data-spacing="relaxed"] .dashboard-shell button,
+html[data-spacing="relaxed"] .dashboard-shell a,
+html[data-spacing="relaxed"] .dashboard-shell input,
+html[data-spacing="relaxed"] .dashboard-shell textarea {
+  line-height: 1.75;
+}
+
+html[data-spacing="relaxed"] .dashboard-shell input,
+html[data-spacing="relaxed"] .dashboard-shell textarea {
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
+}
+
+.plain-language-note {
+  border: 1px solid #d5d0c8;
+  background: #f8f5ef;
+  color: #4a6a5a;
+  border-radius: 0.85rem;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+/* Smooth focus rings */
+*:focus-visible {
+  outline: 2px solid #2d6a4a;
+  outline-offset: 2px;
 }

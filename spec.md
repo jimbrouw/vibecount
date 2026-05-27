@@ -387,10 +387,17 @@ to see a plain-English, accountant-checked explanation beside the official wordi
 
 ## 15. Phase 2+ (do not build now)
 
-- Phase 2: spreadsheet import, bookkeeping assistance, AI finance guidance,
-  expense categorisation.
-- Phase 3: quarterly tax understanding (MTD-aware).
-- Phase 4: freelancer operating system.
+- Phase 2: spreadsheet / CSV / bank statement import, digital record-keeping,
+  quarterly summaries, MTD threshold tracking, bookkeeping assistance, AI finance
+  guidance, expense categorisation, plain-English Self Assessment prep.
+- Phase 3: accounting software integrations and direct HMRC-facing MTD workflows
+  once the records model is stable.
+- Phase 4: agentic tax copilot / freelancer operating system with strict approval
+  and audit boundaries.
 
-[Unverified] Making Tax Digital timelines are a likely demand driver for Phase 3
-— confirm current dates at gov.uk before betting roadmap on them.
+Making Tax Digital is now a verified roadmap driver. See
+`knowledge-base/making-tax-digital.md` for current HMRC dates and scope notes.
+See `knowledge-base/bank-statement-import.md` for the privacy-first import idea.
+See `knowledge-base/self-assessment-plain-english.md` for the plain-English tax
+return preparation idea.
+See `knowledge-base/agentic-tax-copilot.md` for the later agentic workflow idea.

@@ -68,15 +68,120 @@ VibeCount is a freelancer invoicing tool built for people who find finance admin
 - `app/auth/callback/route.ts` — handles Supabase email confirmation redirect, exchanges code for session
 - Home page (`app/page.tsx`) updated with "Create account" and "Sign in" links
 
+### ✅ Task 2 — Schema
+
+- Supabase migrations added under `supabase/migrations/`
+- `public.clients` — saved client entity with zero-friction inline-create shape: `id`, `user_id`, `name`
+- `public.invoices` — user-owned invoice rows with `client_id`, `number`, `invoice_date`, `description`, `amount`, `payment_terms`, `status`, `pdf_path`
+- `public.glossary_terms` — static placeholder glossary seed rows
+- Row-level security enabled on all three public tables
+- Client and invoice policies restrict reads/writes to the signed-in user
+- Glossary terms are read-only to app users and public-readable for the static Explain Simply UI
+- Supabase security advisor is clean after migration
+- Verified by inserting and reading a test invoice in Supabase, then cleaning it up
+
+### 🟡 Task 3 — The Spine (typed invoice → PDF)
+
+Implemented locally:
+
+- `/dashboard/invoices/new` protected page with typed invoice form
+- Live editable preview beside the form
+- Client name uses saved-client model: exact normalized match or inline create on confirm
+- Amount appears in figures and words in the form preview
+- `/api/invoices/pdf` authenticated route validates the user, creates/reuses client, inserts finalised invoice row, generates a server-side PDF, and returns it as a download
+- `pdf-lib` added for server-side PDF generation
+- Dashboard now links to "Create invoice"
+- Google sign-in added on login and signup once Supabase/Google OAuth is configured
+- Invoice date defaults to today's date in UK format (`day/month/year`)
+- Payment terms default to 30 days
+
+Verified:
+
+- `npm run lint` passes
+- `npm run build` passes
+- Unauthenticated `/dashboard/invoices/new` redirects to `/login`
+- Unauthenticated `/api/invoices/pdf` returns `401`
+- Logged-in browser flow reaches `/dashboard/invoices/new` and `POST /api/invoices/pdf` returns `200`
+
+### ✅ Task 4 — Explain Simply
+
+Implemented locally:
+
+- `/dashboard/glossary` protected page loads glossary terms from Supabase
+- Searchable glossary browser with tap-to-expand term cards
+- Display rule is implemented: official term stays visible, explanation and example expand beneath it
+- Dashboard layout now provides glossary data to logged-in routes
+
+Verified:
+
+- `npm run lint` passes
+- `npm run build` passes
+- `/dashboard/glossary` is included in the build output
+
+### ✅ Task 5 — Accessibility layer
+
+Implemented locally:
+
+- Shared accessibility provider for logged-in routes
+- Floating accessibility controls for large text, relaxed spacing, and plain-language mode
+- Read-aloud buttons for invoice amount summary and invoice preview summary using Web Speech API
+- Plain-language helper notes added to dashboard, invoice creation, and settings
+- Money displays on the dashboard now show figures and words, not figures only
+
+Verified:
+
+- `npm run lint` passes
+- `npm run build` passes
+
+Pending final check:
+
+- Browser-test the accessibility toolbar and read-aloud controls in a logged-in session
+
+### 🟡 Task 6 — Voice path
+
+Implemented locally:
+
+- `/dashboard/invoices/voice` protected voice-entry page
+- `/api/voice/draft` authenticated route that accepts either recorded audio or an edited transcript
+- Whisper transcription via OpenAI `audio/transcriptions`
+- Structured extraction using the validated `SYSTEM_PROMPT` from `validation_gate_v2.py`
+- Ambiguous amount hard-stop with candidate selection
+- Mandatory spoken read-back before continuing
+- Confirmed voice draft hands off into the existing typed invoice preview flow
+
+Verified:
+
+- `npm run lint` passes
+- `npm run build` passes
+- `/api/voice/draft` and `/dashboard/invoices/voice` are included in the build output
+
+Remaining before this task can be called done:
+
+- run the Whisper sub-gate with real founder recordings
+- browser-test the logged-in voice flow end to end
+
+Done since last handover:
+
+- `OPENAI_API_KEY` added locally and in Vercel for Whisper transcription, confirmed by founder on 2026-05-27.
+
+### 🟡 Settings groundwork
+
+Implemented locally:
+
+- `user_settings` migration added with RLS
+- `/dashboard/settings` protected page and `/api/settings` read/write route
+- Settings form for legal name, address, contact details, bank details, VAT, invoice prefix, payment terms, and late-payment wording
+- Invoice creation now reads saved defaults from `user_settings`
+- PDF generation now uses saved sender identity, bank details, VAT details, invoice prefix, and late-payment wording
+- Private UTR storage is supported in settings but intentionally not shown on invoices
+
 ---
 
 ## Incomplete / needs doing before moving forward
 
-### 🔴 Env vars not fully in Vercel
+### ✅ Env vars added to Vercel
 
-Only `NEXT_PUBLIC_SUPABASE_URL` is in Vercel (Production + Development only, not Preview).
-
-**These are missing from Vercel** — add at https://vercel.com/jims-projects-b7cb6c2e/vibecount/settings/environment-variables (tick all three environments for each):
+Vercel now has these variables across Production, Preview, and Development:
 
 | Variable | Value (from `.env.local`) |
 |---|---|
@@ -84,74 +189,42 @@ Only `NEXT_PUBLIC_SUPABASE_URL` is in Vercel (Production + Development only, not
 | `ANTHROPIC_API_KEY` | your `sk-ant-api03-...` key — server side only |
 | `NEXT_PUBLIC_POSTHOG_KEY` | `phc_vj8Y8ybvQs2A5zfKgWrfsaEknPNQzWaA82EiSmyJK8zL` |
 | `NEXT_PUBLIC_POSTHOG_HOST` | `https://app.posthog.com` |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://lazorvlkgxgzdgflzhjm.supabase.co` |
 
-Also edit `NEXT_PUBLIC_SUPABASE_URL` to add the Preview environment.
+Verified with `vercel env list` on 2026-05-26. Production was redeployed after the env change, and the stable alias is live at `https://vibecount-teal.vercel.app`.
 
-### 🔴 Supabase auth callback URL not configured
+### ✅ Supabase auth callback URL configured
 
 In Supabase dashboard → **Authentication → URL Configuration**:
 - **Site URL:** `https://vibecount-teal.vercel.app`
-- **Redirect URLs:** add both:
+- **Redirect URLs:** include:
   - `https://vibecount-teal.vercel.app/auth/callback`
   - `http://localhost:3000/auth/callback`
+  - `http://localhost:3002/auth/callback`
 
-Without this, email confirmation links will not work.
+Google OAuth also needs this Supabase callback URL registered in Google Cloud:
+`https://lazorvlkgxgzdgflzhjm.supabase.co/auth/v1/callback`
 
-### 🟡 Founder decision needed before Task 2
+### ✅ Founder decision for Task 2
 
-**Client model — confirm before building the schema:**
+Task 2 used the recommended model: **Client is a saved entity with zero-friction inline create.**
 
-The spec recommends (and the tasks.md has as the default): **Client is a saved entity with zero-friction inline create.**
-
-- On invoice creation, type or speak a client name
-- System fuzzy-matches existing clients
-- If matched → links to existing client (makes repeat invoicing fast)
-- If no match → creates a new client inline from just the name, no separate flow
-- No CRM, no required fields beyond name
-
-Alternative: plain freetext string (simpler schema, loses repeat-client matching).
-
-**Say "confirmed" or "use freetext" before Task 2 starts.**
+No separate client-management flow is part of MVP.
 
 ---
 
 ## Remaining tasks
 
-### Task 2 — Schema
-Create Supabase migrations for the 4 tables. Row-level security so users only see their own data. Seed placeholder glossary terms.
-
-**Tables:**
-```sql
-User        -- handled by Supabase Auth (auth.users)
-Client      -- id, user_id, name
-Invoice     -- id, user_id, client_id, number, date, description, amount,
-            --  payment_terms, status (draft|finalised), pdf_path
-GlossaryTerm -- id, term, explanation, example  (static seed data)
-```
-
-Done when: tables exist, RLS on, can insert/read a test invoice.
-
-### Task 3 — The Spine (typed invoice → PDF) ← most important task
-This is the backbone of the product. Build it before voice.
-
-- Typed invoice form: client (inline create), date, description, amount, payment terms. Invoice number auto-generated.
-- Preview screen — all fields editable.
-- **Amount shown in figures AND words** (`£8,500` + "eight thousand five hundred pounds") with number chunking. This is core accessibility, not polish.
-- Human confirm → generate server-side PDF → download.
-- Optional: copy email text.
-- No auto-send, no payment tracking.
-
-Library choice for PDF: not decided. Consider `pdf-lib`, `@react-pdf/renderer`, or Puppeteer. Pick at implementation time — the spec deliberately left this open.
-
-Done when: a user types an invoice and downloads a correct, professional PDF.
+### Task 3 — The Spine (typed invoice → PDF)
+Implementation is in place and logged-in PDF generation has been verified locally.
 
 ### Task 4 — Explain Simply (static glossary UI)
-- Load from static JSON or seeded GlossaryTerm table.
-- Display rule (mandatory): official wording → simple explanation → example. Official wording always visible, never replaced, never hidden.
-- Tap-to-expand on any term.
-- **Dependency:** founder writes 20–30 terms, accountant reviews them. Feature does not launch until review is done. Start this content work immediately — it's the only external dependency.
+Implementation is in place and builds cleanly. Glossary terms can also be opened
+from supported finance labels inside the app, not only on the glossary page.
 
-Done when: tapping a tax term shows plain-English explanation beside the official wording.
+Remaining before launch:
+- founder-written glossary content
+- accountant review of glossary wording
 
 ### Task 5 — Accessibility layer
 - Large-text mode, spacing controls, plain-language toggle
@@ -170,9 +243,43 @@ Done when: accessibility toggles work, money is always shown figures + words eve
 Done when: speak an invoice → ambiguous amounts force a choice → lands in Task 3 preview flow.
 
 ### Task 7 — Tone, metrics, polish
-- Apply tone rules from spec (see spec Section 10). Banned words: "guarantee", "ensure", "will never", "safe to spend", "prevents", "eliminates".
-- PostHog events: voice attempts, draft completion, PDFs generated, glossary opens, failed voice attempts, manual-entry usage.
-- Visual polish: British green / warm cream / foil green palette.
+- Done in code:
+  - Tone pass applied across the public, auth, and invoice flows without using the banned claims from spec Section 10.
+  - PostHog hooks added for `voice_invoice_attempt`, `invoice_draft_completion`, `pdf_invoices_generated`, `glossary_term_opened`, `failed_voice_attempt`, and `manual_entry_usage`.
+  - Small visual pass pushed the main cards and panels further into the British green / warm cream direction.
+
+### Phase 2 note — MTD changes the roadmap
+
+- `knowledge-base/making-tax-digital.md` now captures the verified HMRC position as
+  of 27 May 2026.
+- MTD should no longer sit as a vague Phase 3 awareness note.
+- Phase 2 should start the **MTD-ready records** work:
+  - structured income / expense records
+  - spreadsheet import
+  - privacy-first bank statement PDF import
+  - quarterly summaries
+  - threshold tracking
+  - tax estimate support
+  - plain-English Self Assessment prep for SA103S / SA103F
+- Direct HMRC submission should remain later until the records model and user
+  workflow are proven.
+- `knowledge-base/bank-statement-import.md` captures the bank PDF idea:
+  extract transactions, redact before LLM/database use, suggest categories, and
+  commit only user-approved rows into records.
+- `knowledge-base/self-assessment-plain-english.md` captures the tax return prep
+  idea: map HMRC sole trader questions to simple language, VibeCount data
+  sources, and exportable accountant review packs before attempting filing.
+
+### Phase 4 note — agentic tax copilot
+
+- `knowledge-base/agentic-tax-copilot.md` captures the later agent idea.
+- Treat Hermes-style autonomy as inspiration, not the immediate architecture.
+- The first agentic version should be read-only: inspect approved records, explain
+  issues, and create a review queue.
+- Later versions can suggest draft actions and write only after explicit user
+  approval.
+- Hard boundary: no silent HMRC submission, invoice sending, expense approval,
+  or record changes.
 
 ---
 

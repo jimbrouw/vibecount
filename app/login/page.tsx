@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import GoogleAuthButton from "@/app/auth/GoogleAuthButton";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -39,7 +40,18 @@ export default function LoginPage() {
           Sign in to your account
         </p>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm p-8 space-y-5">
+        <div className="bg-white rounded-2xl shadow-sm p-8 space-y-5">
+          <GoogleAuthButton label="Sign in with Google" />
+
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-[#e5e0d8]" />
+            <span className="text-xs font-medium uppercase tracking-[0.12em] text-[#6f7f73]">
+              or
+            </span>
+            <div className="h-px flex-1 bg-[#e5e0d8]" />
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
           {error && (
             <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-3">
               {error}
@@ -85,7 +97,8 @@ export default function LoginPage() {
           >
             {loading ? "Signing in…" : "Sign in"}
           </button>
-        </form>
+          </form>
+        </div>
 
         <p className="text-center text-sm text-[#4a6a5a] mt-6">
           No account?{" "}
