@@ -45,6 +45,31 @@ html[data-spacing="relaxed"] .dashboard-shell textarea {
   line-height: 1.6;
 }
 
+.dashboard-content > div > main {
+  min-height: auto;
+  background: transparent;
+}
+
+.dashboard-content > div > main > header {
+  display: none;
+}
+
+.dashboard-content > div > main > div {
+  max-width: none;
+  padding: 0;
+}
+
+.dashboard-content section,
+.dashboard-content article,
+.dashboard-content details,
+.dashboard-content input,
+.dashboard-content textarea,
+.dashboard-content select,
+.dashboard-content button,
+.dashboard-content a {
+  border-radius: 0.5rem;
+}
+
 /* Smooth focus rings */
 *:focus-visible {
   outline: 2px solid #16a34a;

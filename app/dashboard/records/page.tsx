@@ -97,6 +97,7 @@ export default async function RecordsPage({
   const currentTaxYearStart = getCurrentTaxYearStart();
   const resolvedSearchParams = await searchParams;
   const pageMessage = getPageMessage(resolvedSearchParams);
+  const activeTab = getRecordsTab(resolvedSearchParams);
   const selectedTaxYearStart = getSelectedTaxYearStart(
     resolvedSearchParams,
     currentTaxYearStart
@@ -261,11 +262,11 @@ export default async function RecordsPage({
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-[#14532d]">
-              MTD-ready records
+              Records
             </h1>
             <p className="mt-1 text-sm text-[#166534]">
-              Income and expense totals for the{" "}
-              {getTaxYearLabel(selectedTaxYearStart)} tax year.
+              Income, expenses, imports, and export packs for{" "}
+              {getTaxYearLabel(selectedTaxYearStart)}.
             </p>
             <div className="mt-3 max-w-2xl">
               <PlainLanguageNote>
@@ -297,22 +298,51 @@ export default async function RecordsPage({
           </div>
         )}
 
-        <section className="mb-6 grid gap-4 sm:grid-cols-3">
+        <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <SummaryTile
-            label={`${getTaxYearLabel(selectedTaxYearStart)} income`}
+            label="Income"
             value={formatPounds(annualIncomePence)}
           />
           <SummaryTile
-            label={`${getTaxYearLabel(selectedTaxYearStart)} expenses`}
+            label="Expenses"
             value={formatPounds(annualExpensePence)}
           />
           <SummaryTile
-            label={`${getTaxYearLabel(selectedTaxYearStart)} net`}
+            label="Net"
             value={formatPounds(annualIncomePence - annualExpensePence)}
+          />
+          <SummaryTile
+            label="Approved records"
+            value={String(recordsResult.count ?? 0)}
           />
         </section>
 
-        <section className="mb-6 rounded-xl border border-[#bbf7d0] bg-white p-5 shadow-sm">
+        <nav className="mb-6 flex flex-wrap gap-2 border-b border-[#dfe5df]">
+          {[
+            ["records", "Records"],
+            ["csv", "CSV import"],
+            ["bank", "Bank import"],
+            ["exports", "Exports"],
+          ].map(([tab, label]) => (
+            <Link
+              key={tab}
+              href={`/dashboard/records?taxYearStart=${selectedTaxYearStart}&tab=${tab}`}
+              className={`-mb-px rounded-t-md border border-b-0 px-4 py-2 text-sm font-semibold ${
+                activeTab === tab
+                  ? "border-[#dfe5df] bg-white text-[#17251d]"
+                  : "border-transparent text-[#66756b] hover:bg-white hover:text-[#17251d]"
+              }`}
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
+
+        <section
+          className={`mb-6 rounded-xl border border-[#bbf7d0] bg-white p-5 shadow-sm ${
+            activeTab === "exports" ? "" : "hidden"
+          }`}
+        >
           <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
             <div>
               <h2 className="text-base font-semibold text-[#14532d]">
@@ -364,15 +394,23 @@ export default async function RecordsPage({
           </div>
         </section>
 
-        <section className="mb-6 grid gap-6 lg:grid-cols-[0.95fr_1.25fr]">
+        <section
+          className={`mb-6 grid gap-6 lg:grid-cols-[0.95fr_1.25fr] ${
+            activeTab === "records" ? "" : "hidden"
+          }`}
+        >
           <ManualRecordForm categories={categories} />
           <ManualRecordsList records={manualRecords} categories={categories} />
         </section>
 
-        <CsvImportPanel rows={csvRows} />
-        <BankStatementPanel rows={bankRows} />
+        {activeTab === "csv" ? <CsvImportPanel rows={csvRows} /> : null}
+        {activeTab === "bank" ? <BankStatementPanel rows={bankRows} /> : null}
 
-        <section className="mb-6 rounded-xl border border-[#bbf7d0] bg-white p-5 shadow-sm">
+        <section
+          className={`mb-6 rounded-xl border border-[#bbf7d0] bg-white p-5 shadow-sm ${
+            activeTab === "records" ? "" : "hidden"
+          }`}
+        >
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-base font-semibold text-[#14532d]">
@@ -443,7 +481,11 @@ export default async function RecordsPage({
           </div>
         </section>
 
-        <section className="rounded-xl border border-[#bbf7d0] bg-white shadow-sm">
+        <section
+          className={`rounded-xl border border-[#bbf7d0] bg-white shadow-sm ${
+            activeTab === "records" ? "" : "hidden"
+          }`}
+        >
           <div className="border-b border-[#f0fdf4] px-5 py-3">
             <h2 className="text-sm font-semibold text-[#14532d]">
               Quarter summaries for {getTaxYearLabel(selectedTaxYearStart)}
@@ -1147,6 +1189,13 @@ function getSelectedTaxYearStart(
   }
 
   return fallback;
+}
+
+function getRecordsTab(params: { [key: string]: string | string[] | undefined }) {
+  const requested = getSingleParam(params.tab) ?? "";
+  return ["records", "csv", "bank", "exports"].includes(requested)
+    ? requested
+    : "records";
 }
 
 function buildTaxYearOptions(currentTaxYearStart: number, rows: TaxYearRow[]) {
