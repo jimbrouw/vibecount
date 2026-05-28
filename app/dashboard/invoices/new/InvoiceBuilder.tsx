@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { amountToWords, formatPounds, parseAmountToPence } from "@/lib/invoices/money";
 import type { UserSettings } from "@/lib/settings";
+import { buildInvoiceEmailDraft } from "@/lib/invoices/reminders";
 import {
   DEFAULT_PAYMENT_TERMS,
   parseInvoiceDateToIso,
@@ -12,6 +13,10 @@ import { trackEvent } from "@/lib/analytics";
 import { useAccessibility } from "@/app/dashboard/AccessibilityProvider";
 import ExplainTerm from "@/app/dashboard/ExplainTerm";
 import ReadAloudButton from "@/app/dashboard/ReadAloudButton";
+import {
+  enableInvoiceReminders,
+  markInvoiceSent,
+} from "@/app/dashboard/invoices/actions";
 
 type ClientOption = {
   id: string;
@@ -37,11 +42,20 @@ type Props = {
 
 type FormState = {
   clientName: string;
+  clientEmail: string;
   invoiceDate: string;
   description: string;
   amount: string;
   paymentTerms: string;
   vatEnabled: boolean;
+};
+
+type GeneratedInvoice = {
+  id: string;
+  number: string;
+  dueDate: string;
+  subject: string;
+  body: string;
 };
 
 export default function InvoiceBuilder({
@@ -53,6 +67,7 @@ export default function InvoiceBuilder({
   const { plainLanguage } = useAccessibility();
   const [form, setForm] = useState<FormState>({
     clientName: initialDraft.clientName,
+    clientEmail: "",
     invoiceDate: initialDate,
     description: initialDraft.description,
     amount: initialDraft.amount,
@@ -62,6 +77,8 @@ export default function InvoiceBuilder({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [lastInvoice, setLastInvoice] = useState("");
+  const [generatedInvoice, setGeneratedInvoice] = useState<GeneratedInvoice | null>(null);
+  const [copyStatus, setCopyStatus] = useState("");
   const hasTrackedManualEntry = useRef(false);
 
   const amountPence = useMemo(() => parseAmountToPence(form.amount), [form.amount]);
@@ -101,6 +118,9 @@ export default function InvoiceBuilder({
     if (userDefaults.bank_details) {
       parts.push(`Payment details ${userDefaults.bank_details}.`);
     }
+    if (userDefaults.payment_link_url) {
+      parts.push(`Online payment link ${userDefaults.payment_link_url}.`);
+    }
 
     return parts.join(" ");
   }, [
@@ -112,6 +132,7 @@ export default function InvoiceBuilder({
     totalFigure,
     userDefaults.bank_details,
     userDefaults.legal_name,
+    userDefaults.payment_link_url,
   ]);
 
   useEffect(() => {
@@ -128,6 +149,8 @@ export default function InvoiceBuilder({
     setIsSubmitting(true);
     setError("");
     setLastInvoice("");
+    setGeneratedInvoice(null);
+    setCopyStatus("");
 
     const response = await fetch("/api/invoices/pdf", {
       method: "POST",
@@ -143,7 +166,9 @@ export default function InvoiceBuilder({
     }
 
     const blob = await response.blob();
+    const invoiceId = response.headers.get("X-Invoice-Id") ?? "";
     const invoiceNumber = response.headers.get("X-Invoice-Number") ?? "invoice";
+    const dueDate = response.headers.get("X-Invoice-Due-Date") ?? "";
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -154,6 +179,20 @@ export default function InvoiceBuilder({
     URL.revokeObjectURL(url);
 
     setLastInvoice(invoiceNumber);
+    setGeneratedInvoice({
+      id: invoiceId,
+      number: invoiceNumber,
+      dueDate,
+      ...buildInvoiceEmailDraft({
+        invoiceNumber,
+        clientName: form.clientName.trim(),
+        amountPence: totalPence ?? 0,
+        dueDate,
+        paymentTerms: form.paymentTerms.trim() || DEFAULT_PAYMENT_TERMS,
+        paymentLinkUrl: userDefaults.payment_link_url,
+        senderName: userDefaults.legal_name,
+      }),
+    });
     trackEvent("pdf_invoices_generated", {
       source: initialDraft.source === "voice" ? "voice_to_typed" : "typed",
       vat_enabled: form.vatEnabled,
@@ -163,6 +202,13 @@ export default function InvoiceBuilder({
 
   function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function copyEmailDraft() {
+    if (!generatedInvoice) return;
+    const text = `Subject: ${generatedInvoice.subject}\n\n${generatedInvoice.body}`;
+    await navigator.clipboard.writeText(text);
+    setCopyStatus("Copied");
   }
 
   return (
@@ -262,6 +308,27 @@ export default function InvoiceBuilder({
               </datalist>
             </label>
 
+            <label className="block">
+              <span className="text-sm font-medium text-[#1a3a2a]">
+                Client email
+              </span>
+              <input
+                name="clientEmail"
+                type="email"
+                value={form.clientEmail}
+                onChange={(event) => updateField("clientEmail", event.target.value)}
+                className={inputCls}
+                placeholder="client@example.com"
+              />
+              {plainLanguage ? (
+                <p className="mt-2 text-xs text-[#4a6a5a]">
+                  Used for automatic reminders only after you enable them.
+                </p>
+              ) : null}
+            </label>
+          </div>
+
+          <div className="grid gap-5 sm:grid-cols-2">
             <label className="block">
               <span className="text-sm font-medium text-[#1a3a2a]">Invoice date</span>
               <input
@@ -399,6 +466,67 @@ export default function InvoiceBuilder({
             {isSubmitting ? "Creating PDF…" : "Confirm and download PDF"}
           </button>
         </form>
+
+        {generatedInvoice ? (
+          <section className="mt-6 rounded-xl border border-[#b9d2bd] bg-[#f1f8f2] p-5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-[#1a3a2a]">
+                  Email draft for {generatedInvoice.number}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-[#4a6a5a]">
+                  Send this from your own email app, then mark the invoice as sent.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={copyEmailDraft}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-[#b9d2bd] bg-white px-4 text-sm font-semibold text-[#1a3a2a] transition hover:bg-[#eef6ef]"
+              >
+                {copyStatus || "Copy email"}
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-[#d7d1c3] bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#4a6a5a]">
+                Subject
+              </p>
+              <p className="mt-1 text-sm text-[#1a3a2a]">{generatedInvoice.subject}</p>
+              <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-[#4a6a5a]">
+                Body
+              </p>
+              <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[#1a3a2a]">
+                {generatedInvoice.body}
+              </p>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <form action={markInvoiceSent} className="space-y-3">
+                <input type="hidden" name="invoiceId" value={generatedInvoice.id} />
+                <input type="hidden" name="clientEmail" value={form.clientEmail} />
+                <input type="hidden" name="redirectTo" value="/dashboard" />
+                <button
+                  type="submit"
+                  className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-[#1a3a2a] px-4 text-sm font-semibold text-white transition hover:bg-[#2d6a4a]"
+                >
+                  I’ve sent this invoice
+                </button>
+              </form>
+
+              <form action={enableInvoiceReminders} className="space-y-3">
+                <input type="hidden" name="invoiceId" value={generatedInvoice.id} />
+                <input type="hidden" name="clientEmail" value={form.clientEmail} />
+                <input type="hidden" name="redirectTo" value="/dashboard" />
+                <button
+                  type="submit"
+                  className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-[#b9d2bd] bg-white px-4 text-sm font-semibold text-[#1a3a2a] transition hover:bg-[#eef6ef]"
+                >
+                  Enable automatic reminders
+                </button>
+              </form>
+            </div>
+          </section>
+        ) : null}
       </section>
 
       <aside
@@ -506,6 +634,18 @@ export default function InvoiceBuilder({
             </div>
           ) : null}
 
+          {userDefaults.payment_link_url ? (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#4a6a5a]">
+                Pay online
+              </p>
+              <p className="mt-1.5 break-all text-sm leading-6 text-[#1a3a2a]">
+                {paymentProviderLabel(userDefaults.payment_link_provider)}:{" "}
+                {userDefaults.payment_link_url}
+              </p>
+            </div>
+          ) : null}
+
           {userDefaults.late_payment_wording ? (
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#4a6a5a]">
@@ -538,3 +678,10 @@ function formatPreviewDate(value: string) {
 
 const inputCls =
   "mt-2 h-12 w-full rounded-lg border border-[#d5d0c8] bg-white px-3 text-base text-[#1a3a2a] outline-none transition focus:border-[#2d6a4a] focus:ring-2 focus:ring-[#b9d2bd]";
+
+function paymentProviderLabel(provider: string) {
+  if (provider === "sumup") return "SumUp";
+  if (provider === "stripe") return "Stripe Checkout";
+  if (provider === "paypal") return "PayPal";
+  return "Payment link";
+}

@@ -160,24 +160,36 @@ compatibility too early.
 
 ### Phase 2 — MTD-ready records and routines
 
-- [ ] Spreadsheet / CSV import for income and expense records
-- [ ] Bank statement PDF import prototype with redaction before LLM/database use
-- [ ] Digital record-keeping model for income, expenses, categories, and source imports
-- [ ] Quarter-aware summaries for self-employment records
-- [ ] MTD threshold tracking against GBP50,000 / GBP30,000 / GBP20,000 entry points
-- [ ] Running tax estimate and quarterly habit prompts
-- [ ] Audit-friendly edit history on record changes
-- [ ] Plain-English Self Assessment prep checklist for SA103S / SA103F fields
-- [ ] Export tax prep pack for user/accountant review
+- [x] Digital record-keeping model for income, expenses, categories, and source imports
+- [x] Quarter-aware summaries for self-employment records
+- [x] MTD threshold tracking against GBP50,000 / GBP30,000 / GBP20,000 entry points
+- [x] Audit-friendly edit history on record changes
+- [x] Secure cloud record storage: per-user access, signed file URLs, exportable backups,
+      and no raw bank statement storage by default
+- [x] Spreadsheet / CSV import for income and expense records
+- [x] Running tax estimate and quarterly habit prompts
+- [x] Plain-English Self Assessment prep checklist for SA103S / SA103F fields
+- [x] Export tax prep pack for user/accountant review
+- [x] Bank statement PDF import prototype with redaction before LLM/database use
 
 ### First task in Phase 2
 
-- [ ] **Digital records foundation** — create the structured record model and
+- [x] **Digital records foundation** — create the structured record model and
       quarter summaries needed before any HMRC-facing workflow is attempted.
-- [ ] **Bank statement import prototype** — after the records foundation, parse
+- [x] **Secure records storage** — store approved records, attachments, and change
+      history behind row-level security with export and deletion paths. Position this
+      as "MTD-ready records", not "HMRC-recognised MTD software".
+- [x] **Manual income / expense entry** — let users add, edit, categorise, and review
+      records before import automation exists.
+- [x] **Quarter summary and threshold tracker** — show self-employment totals by tax
+      year and quarter, plus progress towards the GBP50,000 / GBP30,000 / GBP20,000
+      MTD entry points.
+- [x] **CSV import** — import spreadsheet rows into a review table, then commit only
+      approved rows into income / expense records.
+- [x] **Bank statement import prototype** — after the records foundation, parse
       bank statement PDFs, redact account-level personal data, suggest categories,
       and let the user approve rows into income / expense records.
-- [ ] **Self Assessment plain-English map** — map SA103S / SA103F boxes to
+- [x] **Self Assessment plain-English map** — map SA103S / SA103F boxes to
       simple explanations and VibeCount data sources, then show what can be
       suggested versus what needs user/accountant input.
 
@@ -187,10 +199,35 @@ Reference: [knowledge-base/self-assessment-plain-english.md](knowledge-base/self
 
 ---
 
+## Phase 3 direction
+
+Phase 3 can make the invoice product competitive with lightweight sole-trader
+tools without turning VibeCount into a full studio operating system.
+
+- [x] Branded invoice and quote templates: logo, colours, footer copy, payment terms
+- [x] Quote creation, quote status, and quote-to-invoice conversion
+- [x] Saved services / line items that can flow into quotes and invoices
+- [x] Payment links on invoices, starting with Stripe Checkout or an equivalent hosted flow
+- [x] Repeating invoice templates that create drafts on a schedule
+- [ ] User-approved invoice sending and automated payment follow-up reminders
+- [x] Shared document data model so future proposals/contracts can inherit client,
+      service, scope, price, and payment terms without copy-paste
+
+First Phase 3 task:
+
+- [x] **Quotes and reusable services** — add saved services / line items, branded
+      quote PDFs, and quote-to-invoice conversion. This is the smallest useful step
+      towards smart documents.
+
+Reference: [knowledge-base/freelancer-operating-system.md](knowledge-base/freelancer-operating-system.md)
+
+---
+
 ## Phase 4 direction
 
-Phase 4 can add an agentic tax copilot once the records, import, tax-prep, and
-integration foundations are stable.
+Phase 4 can add an agentic tax copilot and selected freelancer operating system
+features once the records, import, tax-prep, payments, and document foundations
+are stable. The Creators Base-style feature set belongs here, not in Phase 2.
 
 - [ ] Read-only review agent for missing receipts, uncategorised transactions,
       overdue reviews, and likely invoice/payment matches
@@ -198,6 +235,11 @@ integration foundations are stable.
       and accountant questions
 - [ ] Approval-action agent that writes only after explicit user confirmation
 - [ ] Scheduled quarterly readiness checks with audit logs
+- [ ] Proposals that inherit client, service, price, scope, and timeline data
+- [ ] Contracts generated from approved proposal data
+- [ ] E-signatures via a specialist provider rather than a home-grown signature system
+- [ ] Lightweight project / scope tracking only where it improves invoicing, payment,
+      or tax records
 
 First Phase 4 task:
 

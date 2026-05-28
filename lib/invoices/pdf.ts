@@ -14,6 +14,8 @@ export type InvoicePdfData = {
   freelancerAddress: string;
   freelancerContact: string;
   bankDetails: string;
+  paymentLinkProvider: string;
+  paymentLinkUrl: string;
   vatNumber: string;
   vatRate: number | null;
   latePaymentWording: string;
@@ -173,6 +175,14 @@ export async function createInvoicePdf(data: InvoicePdfData) {
     drawSmallWrappedText(data.bankDetails, 48, y, 480, 9, page, font, INK);
   }
 
+  if (data.paymentLinkUrl) {
+    y -= data.bankDetails ? 52 : 52;
+    const provider = paymentProviderLabel(data.paymentLinkProvider);
+    page.drawText("Pay online", { x: 48, y, size: 8, font: bold, color: MUTED });
+    y -= 14;
+    drawSmallWrappedText(`${provider}: ${data.paymentLinkUrl}`, 48, y, 480, 9, page, font, INK);
+  }
+
   // Footer
   const footerY = 56;
   page.drawLine({ start: { x: 48, y: footerY + 16 }, end: { x: width - 48, y: footerY + 16 }, thickness: 0.5, color: RULE });
@@ -237,6 +247,13 @@ function drawSmallWrappedText(
 function capitalise(s: string) {
   if (!s) return s;
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function paymentProviderLabel(provider: string) {
+  if (provider === "sumup") return "SumUp";
+  if (provider === "stripe") return "Stripe Checkout";
+  if (provider === "paypal") return "PayPal";
+  return "Payment link";
 }
 
 function formatDate(value: string) {

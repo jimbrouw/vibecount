@@ -3,12 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 import { createInvoicePdf } from "@/lib/invoices/pdf";
 import { validateInvoiceInput } from "@/lib/invoices/validation";
 import { normaliseClientName } from "@/lib/invoices/money";
+import { inferDueDate, isValidEmail } from "@/lib/invoices/reminders";
 
 export const runtime = "nodejs";
 
 type ClientRow = {
   id: string;
   name: string;
+  email: string;
 };
 
 type InvoiceRow = {
@@ -41,18 +43,24 @@ export async function POST(request: Request) {
   }
 
   const vatPence = typeof body?.vatPence === "number" ? Math.round(body.vatPence) : 0;
+  const clientEmail = String(body?.clientEmail ?? "").trim();
+  if (clientEmail && !isValidEmail(clientEmail)) {
+    return NextResponse.json({ error: "Use a valid client email address." }, { status: 400 });
+  }
+
   const input = parsed.value;
+  const dueDate = inferDueDate(input.invoiceDate, input.paymentTerms);
 
   // Load user settings for PDF personalisation
   const { data: settings } = await supabase
     .from("user_settings")
     .select(
-      "legal_name, address, contact_details, bank_details, vat_registered, vat_number, vat_rate, invoice_number_prefix, late_payment_wording"
+      "legal_name, address, contact_details, bank_details, payment_link_provider, payment_link_url, vat_registered, vat_number, vat_rate, invoice_number_prefix, late_payment_wording"
     )
     .eq("id", user.id)
     .maybeSingle();
 
-  const client = await findOrCreateClient(supabase, user.id, input.clientName);
+  const client = await findOrCreateClient(supabase, user.id, input.clientName, clientEmail);
   if (!client.ok) {
     return NextResponse.json({ error: client.error }, { status: 500 });
   }
@@ -61,6 +69,7 @@ export async function POST(request: Request) {
 
   const invoice = await createFinalInvoice(supabase, user.id, client.value.id, prefix, {
     invoiceDate: input.invoiceDate,
+    dueDate,
     description: input.description,
     amountPence: input.amountPence + vatPence,
     paymentTerms: input.paymentTerms,
@@ -83,6 +92,8 @@ export async function POST(request: Request) {
     freelancerAddress: settings?.address ?? "",
     freelancerContact: settings?.contact_details ?? "",
     bankDetails: settings?.bank_details ?? "",
+    paymentLinkProvider: settings?.payment_link_provider ?? "",
+    paymentLinkUrl: settings?.payment_link_url ?? "",
     vatNumber: settings?.vat_number ?? "",
     vatRate: settings?.vat_rate ?? null,
     latePaymentWording: settings?.late_payment_wording ?? "",
@@ -97,6 +108,7 @@ export async function POST(request: Request) {
       "Content-Disposition": `attachment; filename="${filename}"`,
       "X-Invoice-Id": invoice.value.id,
       "X-Invoice-Number": invoice.value.number,
+      "X-Invoice-Due-Date": dueDate,
     },
   });
 }
@@ -104,12 +116,13 @@ export async function POST(request: Request) {
 async function findOrCreateClient(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
-  clientName: string
+  clientName: string,
+  clientEmail: string
 ): Promise<{ ok: true; value: ClientRow } | { ok: false; error: string }> {
   const normalised = normaliseClientName(clientName);
   const { data: clients, error: readError } = await supabase
     .from("clients")
-    .select("id, name")
+    .select("id, name, email")
     .eq("user_id", userId);
 
   if (readError) {
@@ -121,13 +134,21 @@ async function findOrCreateClient(
   );
 
   if (existing) {
+    if (clientEmail && existing.email !== clientEmail) {
+      await supabase
+        .from("clients")
+        .update({ email: clientEmail })
+        .eq("id", existing.id)
+        .eq("user_id", userId);
+      return { ok: true, value: { ...existing, email: clientEmail } };
+    }
     return { ok: true, value: existing };
   }
 
   const { data: inserted, error: insertError } = await supabase
     .from("clients")
-    .insert({ user_id: userId, name: normalised })
-    .select("id, name")
+    .insert({ user_id: userId, name: normalised, email: clientEmail })
+    .select("id, name, email")
     .single();
 
   if (!insertError && inserted) {
@@ -137,7 +158,7 @@ async function findOrCreateClient(
   if (insertError?.code === "23505") {
     const { data: retryClients } = await supabase
       .from("clients")
-      .select("id, name")
+      .select("id, name, email")
       .eq("user_id", userId);
     const retry = (retryClients as ClientRow[] | null)?.find(
       (client) =>
@@ -156,8 +177,9 @@ async function createFinalInvoice(
   userId: string,
   clientId: string,
   prefix: string,
-  input: {
+    input: {
     invoiceDate: string;
+    dueDate: string;
     description: string;
     amountPence: number;
     paymentTerms: string;
@@ -172,6 +194,7 @@ async function createFinalInvoice(
         client_id: clientId,
         number,
         invoice_date: input.invoiceDate,
+        due_date: input.dueDate,
         description: input.description,
         amount: input.amountPence / 100,
         payment_terms: input.paymentTerms,

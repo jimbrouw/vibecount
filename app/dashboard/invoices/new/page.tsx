@@ -36,7 +36,7 @@ export default async function NewInvoicePage({
   const { data: settingsRow } = await supabase
     .from("user_settings")
     .select(
-      "legal_name, address, contact_details, default_payment_terms, bank_details, vat_registered, vat_number, vat_rate, invoice_number_prefix, late_payment_wording, utr"
+      "legal_name, address, contact_details, default_payment_terms, bank_details, payment_link_provider, payment_link_url, vat_registered, vat_number, vat_rate, invoice_number_prefix, late_payment_wording, utr"
     )
     .eq("id", user.id)
     .maybeSingle();
@@ -76,6 +76,18 @@ export default async function NewInvoicePage({
               className="rounded-lg px-3 py-1.5 text-sm text-[#4a6a5a] transition hover:bg-[#f0ece4] hover:text-[#1a3a2a]"
             >
               Invoices
+            </Link>
+            <Link
+              href="/dashboard/quotes"
+              className="rounded-lg px-3 py-1.5 text-sm text-[#4a6a5a] transition hover:bg-[#f0ece4] hover:text-[#1a3a2a]"
+            >
+              Quotes
+            </Link>
+            <Link
+              href="/dashboard/records"
+              className="rounded-lg px-3 py-1.5 text-sm text-[#4a6a5a] transition hover:bg-[#f0ece4] hover:text-[#1a3a2a]"
+            >
+              Records
             </Link>
             <Link
               href="/dashboard/glossary"

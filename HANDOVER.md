@@ -250,8 +250,11 @@ Done when: speak an invoice → ambiguous amounts force a choice → lands in Ta
 - `knowledge-base/making-tax-digital.md` now captures the verified HMRC position as
   of 27 May 2026.
 - MTD should no longer sit as a vague Phase 3 awareness note.
-- Phase 2 should start the **MTD-ready records** work:
+- Phase 2 should start the **MTD-ready records** work without claiming
+  HMRC-recognised compliance:
   - structured income / expense records
+  - secure per-user cloud record storage
+  - attachment storage with signed access and export/deletion paths
   - spreadsheet import
   - privacy-first bank statement PDF import
   - quarterly summaries
@@ -267,6 +270,22 @@ Done when: speak an invoice → ambiguous amounts force a choice → lands in Ta
   idea: map HMRC sole trader questions to simple language, VibeCount data
   sources, and exportable accountant review packs before attempting filing.
 
+### Phase 3 note — commercial workflow
+
+- Phase 3 should add the lightweight Xero/SoloPad-style workflow around the
+  current invoice product:
+  - branded quotes and invoices
+  - saved services / line items
+  - quote-to-invoice conversion
+  - hosted payment links
+  - repeating invoice drafts
+  - user-approved payment follow-up reminders
+- Keep the data model reusable so proposal and contract documents can inherit
+  client, service, scope, price, and payment-term data later.
+- `knowledge-base/freelancer-operating-system.md` captures the smart document
+  direction and the guardrail against becoming a full project-management suite
+  too early.
+
 ### Phase 4 note — agentic tax copilot
 
 - `knowledge-base/agentic-tax-copilot.md` captures the later agent idea.
@@ -277,6 +296,9 @@ Done when: speak an invoice → ambiguous amounts force a choice → lands in Ta
   approval.
 - Hard boundary: no silent HMRC submission, invoice sending, expense approval,
   or record changes.
+- Creators Base-style proposals, contracts, e-signatures, client portals, and
+  scope tracking belong here unless they directly support Phase 3 quotes,
+  invoices, payments, or records.
 
 ---
 
@@ -287,6 +309,8 @@ Done when: speak an invoice → ambiguous amounts force a choice → lands in Ta
 - **No LLM-generated glossary content** — static, human-written, accountant-reviewed only.
 - **No auto-sending invoices, no payment processing, no reminders** — user sends the PDF themselves.
 - The spec's NO list: no bookkeeping, no banking integrations, no expense OCR, no tax filing, no CRM, no spreadsheet migration, no AI finance checking, no payment chasing, no automated delivery tracking, no LLM-generated glossary.
+- Phase 2 can now introduce bookkeeping-adjacent digital records, but keep the
+  claim as **MTD-ready records**, not HMRC-recognised MTD software.
 
 ---
 

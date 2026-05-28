@@ -334,6 +334,41 @@ export default function SettingsForm() {
             />
           </Field>
         </div>
+        <div className="mt-5 grid gap-5 sm:grid-cols-2">
+          <Field
+            label="Hosted payment provider"
+            hint="Use SumUp now, or Stripe/other later."
+            id="payment_link_provider"
+          >
+            <select
+              id="payment_link_provider"
+              value={settings.payment_link_provider}
+              onChange={(e) => update("payment_link_provider", e.target.value)}
+              className={inputCls}
+            >
+              <option value="">No hosted payment link</option>
+              <option value="sumup">SumUp</option>
+              <option value="stripe">Stripe Checkout</option>
+              <option value="paypal">PayPal</option>
+              <option value="other">Other hosted link</option>
+            </select>
+          </Field>
+          <Field
+            label="Hosted payment link"
+            hint="Must start with https://. Printed on invoices as a pay-online option."
+            id="payment_link_url"
+          >
+            <input
+              id="payment_link_url"
+              type="url"
+              inputMode="url"
+              value={settings.payment_link_url}
+              onChange={(e) => update("payment_link_url", e.target.value)}
+              placeholder="https://pay.sumup.com/..."
+              className={inputCls}
+            />
+          </Field>
+        </div>
       </fieldset>
 
       {/* VAT settings */}
