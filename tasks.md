@@ -171,6 +171,11 @@ compatibility too early.
 - [x] Plain-English Self Assessment prep checklist for SA103S / SA103F fields
 - [x] Export tax prep pack for user/accountant review
 - [x] Bank statement PDF import prototype with redaction before LLM/database use
+- [ ] Agent-native browser-use hardening: stable `data-testid` selectors,
+      semantic task surfaces, and explicit draft/review/confirm states across
+      invoices, records, imports, tax prep, settings, and navigation
+- [ ] Verify every tax estimate UI/API/export includes caveat copy and says
+      "estimate"; use net profit language, never gross profit
 
 ### First task in Phase 2
 
@@ -192,10 +197,18 @@ compatibility too early.
 - [x] **Self Assessment plain-English map** — map SA103S / SA103F boxes to
       simple explanations and VibeCount data sources, then show what can be
       suggested versus what needs user/accountant input.
+- [ ] **Agent-native selector pass** — add stable `data-testid` attributes to
+      critical nav links, invoice fields, login fields, record forms, import
+      review controls, tax-prep export controls, and confirmation gates so
+      external browser-use agents can operate the app without guessing.
+- [ ] **Review-gate audit** — verify assisted flows never silently finalise
+      invoices, approve financial records, send reminders, process payments, or
+      change tax-prep outputs without explicit human confirmation.
 
 Reference: [knowledge-base/making-tax-digital.md](knowledge-base/making-tax-digital.md)
 Reference: [knowledge-base/bank-statement-import.md](knowledge-base/bank-statement-import.md)
 Reference: [knowledge-base/self-assessment-plain-english.md](knowledge-base/self-assessment-plain-english.md)
+Reference: [AGENTS.md](AGENTS.md)
 
 ---
 
@@ -229,6 +242,11 @@ Phase 4 can add an agentic tax copilot and selected freelancer operating system
 features once the records, import, tax-prep, payments, and document foundations
 are stable. The Creators Base-style feature set belongs here, not in Phase 2.
 
+- [ ] Browser-agent login with short-lived scoped sessions
+- [ ] External-agent access model where users bring their own agent/provider
+      tokens; VibeCount does not store BYO provider keys in the first version
+- [ ] MCP/tool layer only after Phase 2/3 review gates are verified; no MCP work
+      should be merged into the current hardening branch
 - [ ] Read-only review agent for missing receipts, uncategorised transactions,
       overdue reviews, and likely invoice/payment matches
 - [ ] Draft-action agent for suggested categories, Self Assessment prep answers,
@@ -245,5 +263,9 @@ First Phase 4 task:
 
 - [ ] **Read-only review agent** — inspect approved records and explain what needs
       attention without writing to the database or triggering external actions.
+- [ ] **Parked MCP acceptance criteria** — future tools such as `get_pl_summary`,
+      `list_expenses`, and `finalise_invoice` must require scoped auth, audit
+      logging, ownership checks, idempotency, valid status transitions, and
+      explicit human confirmation before any write-like action.
 
 Reference: [knowledge-base/agentic-tax-copilot.md](knowledge-base/agentic-tax-copilot.md)
