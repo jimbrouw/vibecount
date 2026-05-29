@@ -171,11 +171,17 @@ compatibility too early.
 - [x] Plain-English Self Assessment prep checklist for SA103S / SA103F fields
 - [x] Export tax prep pack for user/accountant review
 - [x] Bank statement PDF import prototype with redaction before LLM/database use
-- [ ] Agent-native browser-use hardening: stable `data-testid` selectors,
+- [x] Agent-native browser-use hardening: stable `data-testid` selectors,
       semantic task surfaces, and explicit draft/review/confirm states across
       invoices, records, imports, tax prep, settings, and navigation
-- [ ] Verify every tax estimate UI/API/export includes caveat copy and says
+      Verification: selector pass and review-gate audit completed; `npm run lint`,
+      `npm test`, targeted selector/guardrail searches, and `npm run build` pass.
+- [x] Verify every tax estimate UI/API/export includes caveat copy and says
       "estimate"; use net profit language, never gross profit
+      Verification: tax-prep UI now labels the estimate base as net profit,
+      shows estimate-only caveat copy, and the CSV export includes an
+      estimate/review-pack caveat row. Targeted searches, `npm run lint`,
+      `npm test`, and `npm run build` pass.
 
 ### First task in Phase 2
 

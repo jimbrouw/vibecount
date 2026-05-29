@@ -46,7 +46,7 @@ export function estimateSelfAssessmentTax(profitPence: number): TaxEstimate {
     notes: [
       "Estimate uses England/Wales/Northern Ireland income tax bands and standard Personal Allowance.",
       "It does not include student loans, pension relief, payments on account already made, capital allowances, losses, other income, or Scottish tax bands.",
-      "Class 4 National Insurance is estimated from self-employment profit only.",
+      "Class 4 National Insurance is estimated from self-employment net profit only.",
     ],
   };
 }

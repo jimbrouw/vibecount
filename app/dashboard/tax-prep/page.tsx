@@ -163,18 +163,23 @@ export default async function TaxPrepPage({
         <section className="mb-6 grid gap-4 sm:grid-cols-3">
           <SummaryTile label="Income" value={formatPounds(checklist.incomeTotal)} />
           <SummaryTile label="Expenses" value={formatPounds(checklist.expenseTotal)} />
-          <SummaryTile label="Profit before review" value={formatPounds(checklist.profitTotal)} />
+          <SummaryTile label="Net profit before review" value={formatPounds(checklist.profitTotal)} />
         </section>
 
         <section className="mb-6 rounded-xl border border-[#bbf7d0] bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <h2 className="text-base font-semibold text-[#14532d]">
-                Running estimate and quarter habits
+                Running tax estimate and quarter habits
               </h2>
               <p className="mt-1 text-sm leading-6 text-[#4b8068]">
-                A rough planning estimate from approved self-employment records. Use
-                it as a prompt to review, not as a final bill.
+                A rough planning estimate from approved self-employment records,
+                using net profit: income minus expenses. Use it as a prompt to
+                review, not as a final bill.
+              </p>
+              <p className="mt-2 rounded-lg border border-[#facc15] bg-[#fefce8] px-3 py-2 text-xs leading-5 text-[#713f12]">
+                Estimate only. This is not tax advice, not a filing calculation,
+                and not a tax return submission.
               </p>
               <ul className="mt-3 space-y-1 text-xs text-[#4b8068]">
                 <li>Quarter habit: review records after each tax quarter closes.</li>
@@ -188,7 +193,7 @@ export default async function TaxPrepPage({
               <EstimateTile label="Income Tax estimate" value={formatPounds(taxEstimate.incomeTaxPence)} />
               <EstimateTile label="Class 4 NI estimate" value={formatPounds(taxEstimate.class4NiPence)} />
               <EstimateTile label="Total rough estimate" value={formatPounds(taxEstimate.totalEstimatePence)} />
-              <EstimateTile label="Payment on account prompt" value={formatPounds(taxEstimate.paymentOnAccountPence)} />
+              <EstimateTile label="Payment on account estimate prompt" value={formatPounds(taxEstimate.paymentOnAccountPence)} />
             </div>
           </div>
           <a

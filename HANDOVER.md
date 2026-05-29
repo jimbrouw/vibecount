@@ -250,6 +250,16 @@ Latest review-gate audit:
 - `npm run lint`, `npm test`, targeted guardrail searches, and `npm run build`
   pass after the audit changes.
 
+Latest tax estimate verification:
+
+- Tax-prep UI labels the calculation base as net profit and shows visible
+  estimate-only caveat copy: not tax advice, not a filing calculation, and not
+  a tax return submission.
+- Tax-prep CSV export now includes an estimate/review-pack caveat row and
+  `suggested_value_estimate` header wording.
+- Targeted searches confirm no app/lib usage of gross-profit wording in tax
+  estimate surfaces; `npm run lint`, `npm test`, and `npm run build` pass.
+
 ### ✅ Phase 3 — Commercial invoice workflow groundwork
 
 Implemented on the current branch:
