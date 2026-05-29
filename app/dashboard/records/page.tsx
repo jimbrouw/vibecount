@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatPounds } from "@/lib/invoices/money";
+import { ensureRecordCategories } from "@/lib/records/categories";
 import {
   buildQuarterSummaries,
   getCurrentTaxYearStart,
@@ -32,7 +33,7 @@ type CategoryOption = {
   id: string;
   name: string;
   record_type: "income" | "expense";
-  is_default: boolean;
+  is_default?: boolean;
 };
 
 type ManualRecordRow = {
@@ -103,13 +104,14 @@ export default async function RecordsPage({
     currentTaxYearStart
   );
 
+  const categories = await ensureRecordCategories(supabase, user.id);
+
   const [
     summaryResult,
     categoryResult,
     recordsResult,
     attachmentResult,
     exportResult,
-    categoriesResult,
     manualRecordsResult,
     taxYearsResult,
     csvRowsResult,
@@ -142,12 +144,6 @@ export default async function RecordsPage({
         .order("requested_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
-      supabase
-        .from("record_categories")
-        .select("id, name, record_type, is_default")
-        .or(`user_id.eq.${user.id},is_default.eq.true`)
-        .order("record_type", { ascending: true })
-        .order("name", { ascending: true }),
       supabase
         .from("financial_records")
         .select(
@@ -184,7 +180,6 @@ export default async function RecordsPage({
         .limit(20),
     ]);
 
-  const categories = (categoriesResult.data ?? []) as CategoryOption[];
   const manualRecords = (manualRecordsResult.data ?? []) as unknown as ManualRecordRow[];
   const csvRows = (csvRowsResult.data ?? []) as unknown as CsvImportReviewRow[];
   const bankRows = (bankRowsResult.data ?? []) as unknown as BankStatementReviewRow[];
@@ -787,25 +782,33 @@ function CsvImportPanel({ rows }: { rows: CsvImportReviewRow[] }) {
             income or expense records.
           </p>
           <p className="mt-2 text-xs text-[#166534]">
-            Headers: type, date, description, amount, category.
+            Accepted headers include date, description/details, amount, debit/credit,
+            paid in/paid out, and category. Rows are staged for review before they
+            affect tax prep.
           </p>
         </div>
-        <form action={uploadRecordsCsv} className="flex flex-col gap-3 sm:flex-row" data-testid="csv-import-upload-form">
+        <form action={uploadRecordsCsv} className="flex flex-col gap-3" data-testid="csv-import-upload-form">
+          <label htmlFor="csvFile" className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
+            Choose CSV file
+          </label>
           <input
+            id="csvFile"
             name="csvFile"
             data-testid="csv-import-file-input"
             type="file"
             accept=".csv,text/csv"
-            className="min-h-11 flex-1 rounded-lg border border-[#bbf7d0] bg-white px-3 py-2 text-sm text-[#14532d]"
+            className={fileInputCls}
             required
           />
-          <button
-            type="submit"
-            data-testid="csv-import-upload-button"
-            className="inline-flex h-11 items-center justify-center rounded-lg bg-[#15803d] px-5 text-sm font-semibold text-white transition hover:bg-[#14532d]"
-          >
-            Upload CSV
-          </button>
+          <div>
+            <button
+              type="submit"
+              data-testid="csv-import-upload-button"
+              className="inline-flex h-11 items-center justify-center rounded-lg bg-[#15803d] px-5 text-sm font-semibold text-white transition hover:bg-[#14532d]"
+            >
+              Upload CSV
+            </button>
+          </div>
         </form>
       </div>
 
@@ -924,27 +927,33 @@ function BankStatementPanel({ rows }: { rows: BankStatementReviewRow[] }) {
             Bank statement prototype
           </h2>
           <p className="mt-1 text-sm leading-6 text-[#4b8068]">
-            Upload statement text or a simple text-readable PDF. VibeCount redacts
+            Upload statement text or a text-readable PDF. VibeCount redacts
             account-like numbers before staging rows, and does not store the raw
-            statement file.
+            statement file. Scanned image-only PDFs still need CSV or text export.
           </p>
         </div>
-        <form action={uploadBankStatement} className="flex flex-col gap-3 sm:flex-row" data-testid="bank-import-upload-form">
+        <form action={uploadBankStatement} className="flex flex-col gap-3" data-testid="bank-import-upload-form">
+          <label htmlFor="statementFile" className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
+            Choose statement PDF or text file
+          </label>
           <input
+            id="statementFile"
             name="statementFile"
             data-testid="bank-import-file-input"
             type="file"
             accept=".pdf,.txt,text/plain,application/pdf"
-            className="min-h-11 flex-1 rounded-lg border border-[#bbf7d0] bg-white px-3 py-2 text-sm text-[#14532d]"
+            className={fileInputCls}
             required
           />
-          <button
-            type="submit"
-            data-testid="bank-import-upload-button"
-            className="inline-flex h-11 items-center justify-center rounded-lg bg-[#15803d] px-5 text-sm font-semibold text-white transition hover:bg-[#14532d]"
-          >
-            Upload statement
-          </button>
+          <div>
+            <button
+              type="submit"
+              data-testid="bank-import-upload-button"
+              className="inline-flex h-11 items-center justify-center rounded-lg bg-[#15803d] px-5 text-sm font-semibold text-white transition hover:bg-[#14532d]"
+            >
+              Upload statement
+            </button>
+          </div>
         </form>
       </div>
 
@@ -1051,6 +1060,9 @@ function BankRowButton({
     </form>
   );
 }
+
+const fileInputCls =
+  "min-h-14 w-full cursor-pointer rounded-xl border-2 border-dashed border-[#86efac] bg-[#f7fef9] px-3 py-3 text-sm font-medium text-[#14532d] file:mr-4 file:cursor-pointer file:rounded-lg file:border-0 file:bg-[#15803d] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:bg-[#f0fdf4]";
 
 function CategorySelect({
   categories,

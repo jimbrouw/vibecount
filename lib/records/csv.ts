@@ -26,8 +26,11 @@ export function parseRecordsCsv(text: string, categories: CsvCategory[]) {
   }
 
   const headers = rows[0].map(normaliseHeader);
-  const requiredHeaders = ["type", "date", "description", "amount"];
-  const missing = requiredHeaders.filter((header) => !headers.includes(header));
+  const missing = [
+    headers.includes("date") ? null : "date",
+    headers.includes("description") ? null : "description",
+    hasAmountHeader(headers) ? null : "amount",
+  ].filter(Boolean);
 
   if (missing.length > 0) {
     return {
@@ -60,10 +63,11 @@ function parseRecordRow(
   rawRow: Record<string, string>,
   categories: CsvCategory[]
 ): ParsedCsvRow {
-  const recordType = rawRow.type?.toLowerCase() === "expense" ? "expense" : "income";
+  const amountText = readAmount(rawRow);
+  const recordType = readRecordType(rawRow, amountText);
   const recordDate = parseInvoiceDateToIso(rawRow.date ?? "");
   const description = rawRow.description?.trim() ?? "";
-  const amountPence = parseAmountToPence(rawRow.amount ?? "");
+  const amountPence = parseAmountToPence(amountText.replace("-", ""));
   const categoryId = matchCategory(rawRow.category ?? "", recordType, categories);
   const errors = [
     recordDate ? null : "date",
@@ -107,8 +111,92 @@ function normaliseCategory(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+function readRecordType(rawRow: Record<string, string>, amountText: string): RecordType {
+  const explicitType = rawRow.type?.toLowerCase();
+  if (explicitType === "expense" || explicitType === "debit" || explicitType === "out") {
+    return "expense";
+  }
+  if (explicitType === "income" || explicitType === "credit" || explicitType === "in") {
+    return "income";
+  }
+  if (rawRow.debit || rawRow.paid_out || rawRow.money_out || rawRow.withdrawal) {
+    return "expense";
+  }
+  if (rawRow.credit || rawRow.paid_in || rawRow.money_in || rawRow.deposit) {
+    return "income";
+  }
+  return amountText.trim().startsWith("-") ? "expense" : "income";
+}
+
+function readAmount(rawRow: Record<string, string>) {
+  return (
+    rawRow.amount ||
+    rawRow.value ||
+    rawRow.debit ||
+    rawRow.credit ||
+    rawRow.paid_out ||
+    rawRow.paid_in ||
+    rawRow.money_out ||
+    rawRow.money_in ||
+    rawRow.withdrawal ||
+    rawRow.deposit ||
+    ""
+  );
+}
+
+function hasAmountHeader(headers: string[]) {
+  return [
+    "amount",
+    "value",
+    "debit",
+    "credit",
+    "paid_out",
+    "paid_in",
+    "money_out",
+    "money_in",
+    "withdrawal",
+    "deposit",
+  ].some((header) => headers.includes(header));
+}
+
 function normaliseHeader(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, "_");
+  const key = value
+    .trim()
+    .toLowerCase()
+    .replace(/£|gbp|\(.*?\)/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
+
+  const aliases: Record<string, string> = {
+    transaction_date: "date",
+    posted_date: "date",
+    date_paid: "date",
+    details: "description",
+    detail: "description",
+    narrative: "description",
+    reference: "description",
+    transaction_description: "description",
+    transaction_details: "description",
+    name: "description",
+    payee: "description",
+    merchant: "description",
+    value: "amount",
+    transaction_amount: "amount",
+    debit_amount: "debit",
+    credit_amount: "credit",
+    paid_out: "paid_out",
+    money_out: "money_out",
+    withdrawals: "withdrawal",
+    withdrawal: "withdrawal",
+    paid_in: "paid_in",
+    money_in: "money_in",
+    deposits: "deposit",
+    deposit: "deposit",
+    income_expense: "type",
+    record_type: "type",
+  };
+
+  return aliases[key] ?? key;
 }
 
 function parseCsv(text: string) {

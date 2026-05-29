@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { parseBankStatementText } from "@/lib/records/bank-statement";
-import { parseRecordsCsv, type CsvCategory } from "@/lib/records/csv";
+import { ensureRecordCategories } from "@/lib/records/categories";
+import { parseRecordsCsv } from "@/lib/records/csv";
 import {
   normaliseRecordStatus,
   validateManualRecordInput,
@@ -158,7 +159,7 @@ export async function uploadRecordsCsv(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const categories = await getCategories(supabase, userId);
+  const categories = await ensureRecordCategories(supabase, userId);
   const parsed = parseRecordsCsv(await file.text(), categories);
 
   if (!parsed.ok) {
@@ -332,16 +333,15 @@ export async function uploadBankStatement(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const categories = await getCategories(supabase, userId);
-  const text = await file.text().catch(async () => {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    return new TextDecoder("latin1").decode(bytes);
-  });
+  const categories = await ensureRecordCategories(supabase, userId);
+  const text = await readImportFileText(file);
   const rows = parseBankStatementText(text, categories);
 
   if (rows.length === 0) {
     redirect(
-      `/dashboard/records?error=${encodeURIComponent("No transaction-like rows found after redaction.")}`
+      `/dashboard/records?error=${encodeURIComponent(
+        "No transaction-like rows found. Try a text-readable PDF, a bank CSV export, or a statement text file."
+      )}`
     );
   }
 
@@ -493,16 +493,23 @@ function readRecordForm(formData: FormData) {
   };
 }
 
-async function getCategories(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string
-): Promise<CsvCategory[]> {
-  const { data } = await supabase
-    .from("record_categories")
-    .select("id, name, record_type")
-    .or(`user_id.eq.${userId},is_default.eq.true`);
+async function readImportFileText(file: File) {
+  if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+    const { PDFParse } = await import("pdf-parse");
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const parser = new PDFParse({ data: buffer });
+    try {
+      const parsed = await parser.getText();
+      return parsed.text;
+    } finally {
+      await parser.destroy();
+    }
+  }
 
-  return (data ?? []) as CsvCategory[];
+  return file.text().catch(async () => {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    return new TextDecoder("latin1").decode(bytes);
+  });
 }
 
 async function requireUserId() {

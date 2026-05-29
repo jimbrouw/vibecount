@@ -260,6 +260,18 @@ Latest tax estimate verification:
 - Targeted searches confirm no app/lib usage of gross-profit wording in tax
   estimate surfaces; `npm run lint`, `npm test`, and `npm run build` pass.
 
+Latest records/import QA fixes:
+
+- Records now self-heal missing category seed data by creating user-owned
+  fallback income and expense categories when no usable categories are present.
+- CSV import accepts common bank/spreadsheet headers such as details,
+  debit/credit, paid in/paid out, and stages rows for review.
+- Bank statement import now extracts text from text-readable PDFs before
+  redaction/parsing; scanned image-only PDFs still need CSV or text export.
+- CSV and bank file inputs are styled as explicit choose-file controls.
+- Payment reminders page now explains that VibeCount prepares reminder drafts
+  for human review rather than silently emailing clients.
+
 ### ✅ Phase 3 — Commercial invoice workflow groundwork
 
 Implemented on the current branch:

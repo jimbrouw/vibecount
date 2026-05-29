@@ -40,6 +40,16 @@ type DashboardInvoice = {
     | null;
 };
 
+type ReminderDraft = {
+  id: string;
+  invoice_id: string;
+  recipient_email: string;
+  subject: string;
+  message: string;
+  status: string;
+  created_at: string;
+};
+
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -63,19 +73,29 @@ export default async function DashboardPage({
 
   const needsOnboarding = !settingsRow?.legal_name;
 
-  // Recent invoices
-  const { data: recentInvoices } = await supabase
-    .from("invoices")
-    .select(
-      "id, number, invoice_date, due_date, amount, status, delivery_status, sent_at, paid_at, reminder_enabled, next_reminder_at, clients(name, email)"
-    )
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(10);
-
   const resolvedSearchParams = await searchParams;
   const flash = flashMessage(resolvedSearchParams);
+  const showReminderInfo = Boolean(resolvedSearchParams.reminders);
+
+  const [{ data: recentInvoices }, { data: reminderDrafts }] = await Promise.all([
+    supabase
+      .from("invoices")
+      .select(
+        "id, number, invoice_date, due_date, amount, status, delivery_status, sent_at, paid_at, reminder_enabled, next_reminder_at, clients(name, email)"
+      )
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(10),
+    supabase
+      .from("invoice_reminders")
+      .select("id, invoice_id, recipient_email, subject, message, status, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(5),
+  ]);
+
   const invoices = (recentInvoices ?? []) as unknown as DashboardInvoice[];
+  const reminders = (reminderDrafts ?? []) as ReminderDraft[];
 
   return (
     <main className="min-h-screen bg-[#f0fdf4]">
@@ -243,6 +263,44 @@ export default async function DashboardPage({
           >
             {flash.text}
           </p>
+        ) : null}
+
+        {showReminderInfo ? (
+          <section className="mb-6 rounded-xl border border-[#bbf7d0] bg-white p-5 shadow-sm">
+            <h2 className="text-base font-semibold text-[#14532d]">
+              Payment reminder drafts
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-[#4b8068]">
+              VibeCount does not send payment reminders silently. Use the invoice
+              actions to schedule a reminder draft. When a reminder becomes due, the
+              app prepares copy for review instead of emailing the client directly.
+            </p>
+            {reminders.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                {reminders.map((reminder) => (
+                  <div key={reminder.id} className="rounded-lg border border-[#dcfce7] bg-[#f7fef9] p-4">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-[#14532d]">{reminder.subject}</p>
+                        <p className="mt-1 text-xs text-[#4b8068]">
+                          To: {reminder.recipient_email} · Status: {reminder.status}
+                        </p>
+                      </div>
+                      <p className="text-xs text-[#4b8068]">{formatDateTime(reminder.created_at)}</p>
+                    </div>
+                    <p className="mt-3 whitespace-pre-wrap text-xs leading-5 text-[#4b8068]">
+                      {reminder.message}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 rounded-lg border border-dashed border-[#bbf7d0] bg-[#f7fef9] px-4 py-3 text-sm text-[#4b8068]">
+                No reminder drafts yet. Mark an invoice as sent, add the client email,
+                then choose Draft reminder.
+              </p>
+            )}
+          </section>
         ) : null}
 
         {/* Recent invoices */}

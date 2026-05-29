@@ -42,7 +42,9 @@ function parseStatementLine(
   rowNumber: number,
   categories: CsvCategory[]
 ): BankStatementCandidate | null {
-  const dateMatch = line.match(/\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})\b/);
+  const dateMatch = line.match(
+    /\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2}|\d{1,2}\s+[A-Za-z]{3,9}\s+\d{2,4})\b/
+  );
   const amountMatches = [...line.matchAll(/-?£?\d{1,3}(?:,\d{3})*(?:\.\d{2})|-?£?\d+\.\d{2}/g)];
   const amountText = amountMatches.at(-1)?.[0];
 
@@ -52,7 +54,7 @@ function parseStatementLine(
 
   const normalisedDate = normaliseDate(dateMatch[1]);
   const amountPence = parseAmountToPence(amountText.replace("-", ""));
-  const isExpense = amountText.trim().startsWith("-") || /\b(debit|paid|payment|card)\b/i.test(line);
+  const isExpense = amountText.trim().startsWith("-") || /\b(debit|card)\b/i.test(line);
   const recordType = isExpense ? "expense" : "income";
   const categoryId = categories.find((category) => category.record_type === recordType)?.id ?? null;
   const description = line
@@ -85,6 +87,13 @@ function normaliseDate(value: string) {
   }
 
   const parts = value.split(/[/-]/);
+  const monthName = value.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{2,4})$/);
+  if (monthName) {
+    const month = monthNameToNumber(monthName[2]);
+    const year = monthName[3].length === 2 ? `20${monthName[3]}` : monthName[3];
+    return month ? parseInvoiceDateToIso(`${monthName[1]}/${month}/${year}`) : null;
+  }
+
   if (parts.length !== 3) {
     return null;
   }
@@ -92,4 +101,10 @@ function normaliseDate(value: string) {
   const [day, month, year] = parts;
   const fullYear = year.length === 2 ? `20${year}` : year;
   return parseInvoiceDateToIso(`${day}/${month}/${fullYear}`);
+}
+
+function monthNameToNumber(value: string) {
+  const month = value.slice(0, 3).toLowerCase();
+  const index = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"].indexOf(month);
+  return index === -1 ? null : String(index + 1).padStart(2, "0");
 }
