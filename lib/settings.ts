@@ -10,7 +10,12 @@ export type UserSettings = {
   invoice_number_prefix: string;
   late_payment_wording: string;
   utr: string;
+  agent_provider: "anthropic" | "openai";
+  // Write-only: GET returns "••••••••" if a key is stored, never the raw value.
+  agent_api_key: string;
 };
+
+export const AGENT_KEY_MASK = "••••••••";
 
 export const DEFAULT_LATE_PAYMENT_WORDING =
   "Payment is due within 30 days of the invoice date. We reserve the right to charge statutory interest at 8% above the Bank of England base rate, plus statutory debt recovery costs, under the Late Payment of Commercial Debts (Interest) Act 1998.";
@@ -27,6 +32,8 @@ export const EMPTY_SETTINGS: UserSettings = {
   invoice_number_prefix: "VC",
   late_payment_wording: DEFAULT_LATE_PAYMENT_WORDING,
   utr: "",
+  agent_provider: "anthropic",
+  agent_api_key: "",
 };
 
 export function sanitizeUserSettings(body: unknown): UserSettings | null {
@@ -52,5 +59,8 @@ export function sanitizeUserSettings(body: unknown): UserSettings | null {
     late_payment_wording:
       String(input.late_payment_wording ?? "").trim() || EMPTY_SETTINGS.late_payment_wording,
     utr: String(input.utr ?? "").trim(),
+    agent_provider:
+      String(input.agent_provider ?? "").trim() === "openai" ? "openai" : "anthropic",
+    agent_api_key: String(input.agent_api_key ?? "").trim(),
   };
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { EMPTY_SETTINGS, sanitizeUserSettings } from "@/lib/settings";
+import { AGENT_KEY_MASK, EMPTY_SETTINGS, sanitizeUserSettings } from "@/lib/settings";
 
 export const runtime = "nodejs";
 
@@ -26,7 +26,15 @@ export async function GET() {
     return NextResponse.json({ error: settingsErrorMessage(error) }, { status: 500 });
   }
 
-  return NextResponse.json(data ?? { id: user.id, ...EMPTY_SETTINGS });
+  const row = data ?? { id: user.id, ...EMPTY_SETTINGS };
+
+  // Never return the raw agent API key — return the mask if one is stored.
+  const masked = {
+    ...row,
+    agent_api_key: row.agent_api_key ? AGENT_KEY_MASK : "",
+  };
+
+  return NextResponse.json(masked);
 }
 
 export async function PUT(request: Request) {
@@ -46,16 +54,24 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
+  // If the client sent the mask sentinel back, exclude agent_api_key from the update
+  // so the stored key is not overwritten.
+  const { agent_api_key, ...rest } = settings;
+  const upsertPayload: Record<string, unknown> = { id: user.id, ...rest };
+  if (agent_api_key !== AGENT_KEY_MASK) {
+    upsertPayload.agent_api_key = agent_api_key;
+  }
+
   const { error } = await supabase
     .from("user_settings")
-    .upsert({ id: user.id, ...settings }, { onConflict: "id" });
+    .upsert(upsertPayload, { onConflict: "id" });
 
   if (error) {
     console.error("Could not save user settings", error);
     return NextResponse.json({ error: settingsErrorMessage(error) }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, settings });
+  return NextResponse.json({ ok: true, settings: { ...settings, agent_api_key: agent_api_key !== AGENT_KEY_MASK ? (agent_api_key ? AGENT_KEY_MASK : "") : AGENT_KEY_MASK } });
 }
 
 function settingsErrorMessage(error: { code?: string; message?: string }) {

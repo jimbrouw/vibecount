@@ -56,6 +56,12 @@ export default async function DashboardPage() {
               Explain Simply
             </Link>
             <Link
+              href="/dashboard/agent"
+              className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white"
+            >
+              Agent
+            </Link>
+            <Link
               href="/dashboard/settings"
               className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white"
             >

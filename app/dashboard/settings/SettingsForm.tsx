@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import ExplainTerm from "@/app/dashboard/ExplainTerm";
 import {
+  AGENT_KEY_MASK,
   DEFAULT_LATE_PAYMENT_WORDING,
   EMPTY_SETTINGS,
   type UserSettings,
@@ -429,6 +430,75 @@ export default function SettingsForm() {
         </Field>
       </fieldset>
 
+      {/* Agent settings */}
+      <fieldset className="rounded-xl border border-[#e5e0d8] bg-white p-6 shadow-sm">
+        <legend className="mb-1 -ml-1 px-1 text-xs font-semibold uppercase tracking-widest text-[#4a6a5a]">
+          Agent
+        </legend>
+        <p className="mb-4 text-xs text-[#7a9a87]">
+          Bring your own LLM key to power the in-app agent. Your key is stored
+          securely and used only for your own account. It is never shown again
+          after saving.
+        </p>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="AI provider" id="agent_provider">
+            <select
+              id="agent_provider"
+              value={settings.agent_provider}
+              onChange={(e) =>
+                update("agent_provider", e.target.value as "anthropic" | "openai")
+              }
+              className={`${inputCls} cursor-pointer`}
+            >
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="openai">OpenAI (GPT-4o)</option>
+            </select>
+          </Field>
+          <Field
+            label="API key"
+            hint={
+              settings.agent_api_key === AGENT_KEY_MASK
+                ? "A key is saved. Enter a new one to replace it, or clear to remove."
+                : "Paste your Anthropic or OpenAI API key."
+            }
+            id="agent_api_key"
+          >
+            <input
+              id="agent_api_key"
+              type="password"
+              autoComplete="off"
+              value={settings.agent_api_key}
+              onChange={(e) => update("agent_api_key", e.target.value)}
+              placeholder={
+                settings.agent_api_key === AGENT_KEY_MASK
+                  ? "••••••••  (key is saved)"
+                  : "sk-ant-api03-… or sk-…"
+              }
+              className={inputCls}
+            />
+          </Field>
+        </div>
+
+        <div className="mt-6 border-t border-[#f0ece4] pt-5">
+          <p className="mb-2 text-xs font-medium text-[#1a3a2a]">
+            VibeCount API key — for external agents
+          </p>
+          <p className="mb-3 text-xs text-[#7a9a87]">
+            Connect Claude Code, Codex, or any MCP-compatible agent to your
+            VibeCount account. Send requests to{" "}
+            <code className="rounded bg-[#f0ece4] px-1 py-0.5 font-mono text-[10px] text-[#1a3a2a]">
+              POST /api/mcp
+            </code>{" "}
+            with{" "}
+            <code className="rounded bg-[#f0ece4] px-1 py-0.5 font-mono text-[10px] text-[#1a3a2a]">
+              Authorization: Bearer &lt;key&gt;
+            </code>
+            .
+          </p>
+          <VibecountApiKey />
+        </div>
+      </fieldset>
+
       {/* Status feedback + submit */}
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
         <button
@@ -460,6 +530,133 @@ export default function SettingsForm() {
         )}
       </div>
     </form>
+  );
+}
+
+function VibecountApiKey() {
+  const [keyState, setKeyState] = useState<
+    | { status: "loading" }
+    | { status: "none" }
+    | { status: "exists"; preview: string }
+    | { status: "generated"; key: string }
+    | { status: "error"; message: string }
+  >({ status: "loading" });
+  const [generating, setGenerating] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/agent/key")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.set) {
+          setKeyState({ status: "exists", preview: data.preview });
+        } else {
+          setKeyState({ status: "none" });
+        }
+      })
+      .catch(() => setKeyState({ status: "error", message: "Could not load key status." }));
+  }, []);
+
+  async function generate() {
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/agent/key", { method: "POST" });
+      const data = await res.json();
+      if (data.key) {
+        setKeyState({ status: "generated", key: data.key });
+      } else {
+        setKeyState({ status: "error", message: data.error ?? "Generation failed." });
+      }
+    } catch {
+      setKeyState({ status: "error", message: "Could not generate key." });
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function revoke() {
+    await fetch("/api/agent/key", { method: "DELETE" });
+    setKeyState({ status: "none" });
+  }
+
+  async function copyKey(key: string) {
+    await navigator.clipboard.writeText(key).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  if (keyState.status === "loading") {
+    return <p className="text-xs text-[#7a9a87]">Loading…</p>;
+  }
+
+  if (keyState.status === "error") {
+    return <p className="text-xs text-red-600">{keyState.message}</p>;
+  }
+
+  if (keyState.status === "generated") {
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+        <p className="mb-1 text-xs font-semibold text-amber-800">
+          Copy your key now — it will not be shown again.
+        </p>
+        <div className="flex items-center gap-2">
+          <code className="flex-1 rounded bg-white px-3 py-2 font-mono text-xs text-[#1a3a2a] break-all border border-amber-200">
+            {keyState.key}
+          </code>
+          <button
+            type="button"
+            onClick={() => copyKey(keyState.key)}
+            className="shrink-0 rounded-lg bg-amber-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-800"
+          >
+            {copied ? "Copied!" : "Copy"}
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={() => setKeyState({ status: "exists", preview: `vc_live_...${keyState.key.slice(-8)}` })}
+          className="mt-2 text-xs text-amber-700 underline"
+        >
+          I have saved it
+        </button>
+      </div>
+    );
+  }
+
+  if (keyState.status === "none") {
+    return (
+      <button
+        type="button"
+        onClick={generate}
+        disabled={generating}
+        className="inline-flex h-9 items-center rounded-lg border border-[#d5d0c8] bg-white px-4 text-xs font-semibold text-[#1a3a2a] transition hover:bg-[#f5f2ee] disabled:opacity-50"
+      >
+        {generating ? "Generating…" : "Generate API key"}
+      </button>
+    );
+  }
+
+  // exists
+  return (
+    <div className="flex items-center gap-3">
+      <code className="rounded bg-[#f0ece4] px-3 py-1.5 font-mono text-xs text-[#1a3a2a]">
+        {keyState.preview}
+      </code>
+      <button
+        type="button"
+        onClick={generate}
+        disabled={generating}
+        className="text-xs font-medium text-[#4a6a5a] underline decoration-[#7a9a87] underline-offset-2 hover:text-[#1a3a2a] disabled:opacity-50"
+      >
+        {generating ? "Regenerating…" : "Regenerate"}
+      </button>
+      <button
+        type="button"
+        onClick={revoke}
+        className="text-xs font-medium text-[#7a271a] underline underline-offset-2 hover:text-red-700"
+      >
+        Revoke
+      </button>
+    </div>
   );
 }
 
