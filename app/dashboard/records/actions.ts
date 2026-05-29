@@ -337,7 +337,16 @@ export async function uploadBankStatement(formData: FormData) {
 
   const supabase = await createClient();
   const categories = await ensureRecordCategories(supabase, userId);
-  const text = await readImportFileText(file);
+  const text = await readImportFileText(file).catch(() => null);
+
+  if (text === null) {
+    redirect(
+      `/dashboard/records?error=${encodeURIComponent(
+        "Could not read this bank statement. Try a text-readable PDF, a bank CSV export, or a statement text file."
+      )}`
+    );
+  }
+
   const rows = parseBankStatementText(text, categories);
 
   if (rows.length === 0) {
@@ -498,6 +507,7 @@ function readRecordForm(formData: FormData) {
 
 async function readImportFileText(file: File) {
   if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+    await installPdfCanvasGlobals();
     const { PDFParse } = await import("pdf-parse");
     const buffer = Buffer.from(await file.arrayBuffer());
     const parser = new PDFParse({ data: buffer });
@@ -513,6 +523,55 @@ async function readImportFileText(file: File) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     return new TextDecoder("latin1").decode(bytes);
   });
+}
+
+async function installPdfCanvasGlobals() {
+  const target = globalThis as unknown as Record<string, unknown>;
+
+  target.DOMMatrix ??= MinimalDOMMatrix;
+  target.Path2D ??= MinimalPath2D;
+  target.ImageData ??= MinimalImageData;
+}
+
+class MinimalDOMMatrix {
+  a = 1;
+  b = 0;
+  c = 0;
+  d = 1;
+  e = 0;
+  f = 0;
+
+  constructor(init?: string | number[]) {
+    if (Array.isArray(init) && init.length >= 6) {
+      [this.a, this.b, this.c, this.d, this.e, this.f] = init;
+    }
+  }
+
+  multiplySelf() {
+    return this;
+  }
+
+  translateSelf() {
+    return this;
+  }
+
+  scaleSelf() {
+    return this;
+  }
+}
+
+class MinimalPath2D {}
+
+class MinimalImageData {
+  data: Uint8ClampedArray;
+  width: number;
+  height: number;
+
+  constructor(width: number, height: number) {
+    this.width = width;
+    this.height = height;
+    this.data = new Uint8ClampedArray(width * height * 4);
+  }
 }
 
 async function requireUserId() {
