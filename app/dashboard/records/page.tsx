@@ -2,7 +2,10 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatPounds } from "@/lib/invoices/money";
-import { ensureRecordCategories } from "@/lib/records/categories";
+import {
+  ensureRecordCategories,
+  withFallbackRecordCategories,
+} from "@/lib/records/categories";
 import {
   buildQuarterSummaries,
   getCurrentTaxYearStart,
@@ -105,6 +108,7 @@ export default async function RecordsPage({
   );
 
   const categories = await ensureRecordCategories(supabase, user.id);
+  const manualCategoryOptions = withFallbackRecordCategories(categories);
 
   const [
     summaryResult,
@@ -276,7 +280,11 @@ export default async function RecordsPage({
               {recordsResult.count ?? 0} approved records
             </p>
             <p className="mt-0.5 text-xs text-[#4b8068]">
-              {categoryResult.count ?? 0} categories ready
+              {Math.max(
+                categoryResult.count ?? 0,
+                categories.length,
+                manualCategoryOptions.length
+              )} categories ready
             </p>
           </div>
         </div>
@@ -396,8 +404,8 @@ export default async function RecordsPage({
             activeTab === "records" ? "" : "hidden"
           }`}
         >
-          <ManualRecordForm categories={categories} />
-          <ManualRecordsList records={manualRecords} categories={categories} />
+          <ManualRecordForm categories={manualCategoryOptions} />
+          <ManualRecordsList records={manualRecords} categories={manualCategoryOptions} />
         </section>
 
         {activeTab === "csv" ? <CsvImportPanel rows={csvRows} /> : null}

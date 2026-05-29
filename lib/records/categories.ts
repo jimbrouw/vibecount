@@ -16,7 +16,9 @@ type SupabaseClient = {
   from: (table: string) => CategoryTable;
 };
 
-const DEFAULT_RECORD_CATEGORIES: Array<{
+export const FALLBACK_CATEGORY_PREFIX = "fallback-record-category:";
+
+export const DEFAULT_RECORD_CATEGORIES: Array<{
   name: string;
   record_type: RecordType;
   sa103_box: string;
@@ -91,6 +93,55 @@ export async function ensureRecordCategories(
   }
 
   return readRecordCategories(supabase, userId);
+}
+
+export function withFallbackRecordCategories(categories: CsvCategory[]) {
+  const hasIncome = categories.some((category) => category.record_type === "income");
+  const hasExpense = categories.some((category) => category.record_type === "expense");
+
+  if (hasIncome && hasExpense) {
+    return categories;
+  }
+
+  return [
+    ...categories,
+    ...DEFAULT_RECORD_CATEGORIES.filter((category) => {
+      if (category.record_type === "income") return !hasIncome;
+      return !hasExpense;
+    }).map((category) => ({
+      id: getFallbackCategoryId(category.record_type, category.name),
+      name: category.name,
+      record_type: category.record_type,
+    })),
+  ];
+}
+
+export function getFallbackCategoryId(recordType: RecordType, name: string) {
+  return `${FALLBACK_CATEGORY_PREFIX}${recordType}:${encodeURIComponent(name)}`;
+}
+
+export function parseFallbackCategoryId(categoryId: string) {
+  if (!categoryId.startsWith(FALLBACK_CATEGORY_PREFIX)) {
+    return null;
+  }
+
+  const value = categoryId.slice(FALLBACK_CATEGORY_PREFIX.length);
+  const separatorIndex = value.indexOf(":");
+  if (separatorIndex === -1) {
+    return null;
+  }
+
+  const recordType = value.slice(0, separatorIndex);
+  if (recordType !== "income" && recordType !== "expense") {
+    return null;
+  }
+
+  const name = decodeURIComponent(value.slice(separatorIndex + 1));
+  const fallback = DEFAULT_RECORD_CATEGORIES.find(
+    (category) => category.record_type === recordType && category.name === name
+  );
+
+  return fallback ?? null;
 }
 
 async function readRecordCategories(supabase: SupabaseClient, userId: string) {

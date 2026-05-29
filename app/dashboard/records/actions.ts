@@ -4,7 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { parseBankStatementText } from "@/lib/records/bank-statement";
-import { ensureRecordCategories } from "@/lib/records/categories";
+import {
+  ensureRecordCategories,
+  parseFallbackCategoryId,
+} from "@/lib/records/categories";
 import { parseRecordsCsv } from "@/lib/records/csv";
 import {
   normaliseRecordStatus,
@@ -24,7 +27,7 @@ export async function createManualRecord(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const category = await getOwnedCategory(
+  const category = await resolveOwnedCategory(
     supabase,
     userId,
     parsed.value.categoryId,
@@ -43,7 +46,7 @@ export async function createManualRecord(formData: FormData) {
     record_date: parsed.value.recordDate,
     description: parsed.value.description,
     amount: parsed.value.amountPence / 100,
-    category_id: parsed.value.categoryId,
+    category_id: category.id,
     source_type: "manual",
     status: "review",
     approved_at: null,
@@ -75,7 +78,7 @@ export async function updateManualRecord(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const category = await getOwnedCategory(
+  const category = await resolveOwnedCategory(
     supabase,
     userId,
     parsed.value.categoryId,
@@ -95,7 +98,7 @@ export async function updateManualRecord(formData: FormData) {
       record_date: parsed.value.recordDate,
       description: parsed.value.description,
       amount: parsed.value.amountPence / 100,
-      category_id: parsed.value.categoryId,
+      category_id: category.id,
       status: parsed.value.status,
       approved_at:
         parsed.value.status === "approved" ? new Date().toISOString() : null,
@@ -535,6 +538,59 @@ async function getOwnedCategory(
     .from("record_categories")
     .select("id")
     .eq("id", categoryId)
+    .eq("record_type", recordType)
+    .or(`user_id.eq.${userId},is_default.eq.true`)
+    .maybeSingle();
+
+  return data;
+}
+
+async function resolveOwnedCategory(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  categoryId: string,
+  recordType: RecordType
+) {
+  const fallback = parseFallbackCategoryId(categoryId);
+  if (!fallback) {
+    return getOwnedCategory(supabase, userId, categoryId, recordType);
+  }
+
+  if (fallback.record_type !== recordType) {
+    return null;
+  }
+
+  const existing = await getOwnedCategoryByName(
+    supabase,
+    userId,
+    fallback.name,
+    recordType
+  );
+  if (existing) {
+    return existing;
+  }
+
+  await supabase.from("record_categories").insert({
+    user_id: userId,
+    name: fallback.name,
+    record_type: recordType,
+    sa103_box: fallback.sa103_box,
+    is_default: false,
+  });
+
+  return getOwnedCategoryByName(supabase, userId, fallback.name, recordType);
+}
+
+async function getOwnedCategoryByName(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  name: string,
+  recordType: RecordType
+) {
+  const { data } = await supabase
+    .from("record_categories")
+    .select("id")
+    .eq("name", name)
     .eq("record_type", recordType)
     .or(`user_id.eq.${userId},is_default.eq.true`)
     .maybeSingle();

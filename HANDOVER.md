@@ -411,6 +411,15 @@ Done when: speak an invoice → ambiguous amounts force a choice → lands in Ta
   direction and the guardrail against becoming a full project-management suite
   too early.
 
+### Records QA note — category fallback
+
+- The records page now self-heals missing category seeds and also renders
+  fallback manual category options if production still returns no category rows.
+- Saving a manual record from a fallback option creates the real user-owned
+  category before inserting the review record.
+- CSV and bank import still rely on real category rows so imported review rows
+  keep valid UUID category references.
+
 ### Phase 4 note — agentic tax copilot
 
 - `knowledge-base/agentic-tax-copilot.md` captures the later agent idea.
@@ -470,4 +479,4 @@ To deploy production: `vercel deploy --prod` or push to `main` if the project is
 configured to auto-deploy production from `main`.
 
 Latest preview deployed on 2026-05-29:
-`https://vibecount-nrdh9zfjq-jims-projects-b7cb6c2e.vercel.app`
+`https://vibecount-7jwohqc5e-jims-projects-b7cb6c2e.vercel.app`
