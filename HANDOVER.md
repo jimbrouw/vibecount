@@ -239,6 +239,17 @@ Latest selector-pass verification:
 - Local Playwright check against `http://localhost:3002/login` and
   `/signup` confirmed the auth selectors render in the browser.
 
+Latest review-gate audit:
+
+- Invoice PDF creation now requires the invoice UI to send
+  `humanConfirmed: true` after the review button is pressed.
+- Manual financial records are created with `status = review`; approval happens
+  only from the review list/import review controls.
+- Due invoice reminder automation now writes pending reminder drafts and disables
+  the due reminder rather than sending email from the cron route.
+- `npm run lint`, `npm test`, targeted guardrail searches, and `npm run build`
+  pass after the audit changes.
+
 ### ✅ Phase 3 — Commercial invoice workflow groundwork
 
 Implemented on the current branch:

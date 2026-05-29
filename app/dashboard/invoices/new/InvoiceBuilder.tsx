@@ -155,7 +155,7 @@ export default function InvoiceBuilder({
     const response = await fetch("/api/invoices/pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, vatPence }),
+      body: JSON.stringify({ ...form, vatPence, humanConfirmed: true }),
     });
 
     if (!response.ok) {
@@ -326,7 +326,7 @@ export default function InvoiceBuilder({
               />
               {plainLanguage ? (
                 <p className="mt-2 text-xs text-[#4a6a5a]">
-                  Used for automatic reminders only after you enable them.
+                  Used only when you choose to prepare reminder drafts.
                 </p>
               ) : null}
             </label>
@@ -534,7 +534,7 @@ export default function InvoiceBuilder({
                   data-testid="invoice-enable-reminders-button"
                   className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-[#b9d2bd] bg-white px-4 text-sm font-semibold text-[#1a3a2a] transition hover:bg-[#eef6ef]"
                 >
-                  Enable automatic reminders
+                  Prepare reminder drafts
                 </button>
               </form>
             </div>

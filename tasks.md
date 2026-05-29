@@ -203,9 +203,14 @@ compatibility too early.
       external browser-use agents can operate the app without guessing.
       Verification: `npm run lint`, `npm test`, and `npm run build` pass;
       local browser check confirmed login/signup selectors render.
-- [ ] **Review-gate audit** — verify assisted flows never silently finalise
+- [x] **Review-gate audit** — verify assisted flows never silently finalise
       invoices, approve financial records, send reminders, process payments, or
       change tax-prep outputs without explicit human confirmation.
+      Changes: invoice PDF creation now requires an explicit reviewed-confirmed
+      request from the UI; new manual records always enter review before approval;
+      due reminder automation now creates pending reminder drafts instead of
+      sending email. Verification: `npm run lint`, `npm test`, targeted guardrail
+      search, and `npm run build` pass.
 
 Reference: [knowledge-base/making-tax-digital.md](knowledge-base/making-tax-digital.md)
 Reference: [knowledge-base/bank-statement-import.md](knowledge-base/bank-statement-import.md)

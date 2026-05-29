@@ -329,7 +329,7 @@ export default async function DashboardPage({
                             placeholder="client@example.com"
                             className="min-w-0 flex-1 rounded-lg border border-[#bbf7d0] px-3 text-xs text-[#14532d] outline-none focus:border-[#15803d]"
                           />
-                          <button data-testid={`dashboard-invoice-enable-reminders-button-${inv.id}`} className={smallOutlineButtonCls}>Remind</button>
+                          <button data-testid={`dashboard-invoice-enable-reminders-button-${inv.id}`} className={smallOutlineButtonCls}>Draft reminder</button>
                         </form>
                       ) : null}
 
@@ -555,7 +555,7 @@ function flashMessage(searchParams: { [key: string]: string | string[] | undefin
   if (error) return { kind: "error", text: error };
   if (searchParams.invoiceSent) return { kind: "success", text: "Invoice marked as sent." };
   if (searchParams.invoicePaid) return { kind: "success", text: "Invoice marked as paid." };
-  if (searchParams.remindersEnabled) return { kind: "success", text: "Automatic reminders enabled." };
+  if (searchParams.remindersEnabled) return { kind: "success", text: "Reminder drafts enabled." };
   if (searchParams.remindersDisabled) return { kind: "success", text: "Automatic reminders stopped." };
   return null;
 }

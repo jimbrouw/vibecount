@@ -30,6 +30,13 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => null);
+  if (body?.humanConfirmed !== true) {
+    return NextResponse.json(
+      { error: "Confirm the invoice review before creating the PDF." },
+      { status: 400 }
+    );
+  }
+
   const parsed = validateInvoiceInput({
     clientName: String(body?.clientName ?? ""),
     invoiceDate: String(body?.invoiceDate ?? ""),

@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   buildReminderEmail,
-  nextReminderAtFrom,
   parseReminderSchedule,
 } from "@/lib/invoices/reminders";
 
@@ -46,11 +44,10 @@ export async function POST(request: Request) {
 
   const supabase = createAdminClient();
   const fromEmail = process.env.RESEND_FROM_EMAIL;
-  const apiKey = process.env.RESEND_API_KEY;
 
-  if (!supabase || !fromEmail || !apiKey) {
+  if (!supabase || !fromEmail) {
     return NextResponse.json(
-      { error: "Reminder email environment is not configured." },
+      { error: "Reminder draft environment is not configured." },
       { status: 500 }
     );
   }
@@ -72,10 +69,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Could not read due reminders." }, { status: 500 });
   }
 
-  const resend = new Resend(apiKey);
   const results = {
     checked: invoices?.length ?? 0,
-    sent: 0,
+    drafted: 0,
     failed: 0,
     skipped: 0,
   };
@@ -134,49 +130,23 @@ export async function POST(request: Request) {
       reminderCount: sentCount + 1,
     });
 
-    const reminder = await insertReminderAudit(supabase, invoice, {
+    await insertReminderAudit(supabase, invoice, {
       recipientEmail: recipient,
       subject: email.subject,
       message: email.text,
       status: "pending",
     });
 
-    try {
-      const response = await resend.emails.send({
-        from: fromEmail,
-        to: recipient,
-        subject: email.subject,
-        text: email.text,
-      });
+    await supabase
+      .from("invoices")
+      .update({
+        reminder_enabled: false,
+        next_reminder_at: null,
+      })
+      .eq("id", invoice.id)
+      .eq("user_id", invoice.user_id);
 
-      await supabase
-        .from("invoice_reminders")
-        .update({
-          status: "sent",
-          provider_message_id: response.data?.id ?? "",
-          sent_at: new Date().toISOString(),
-        })
-        .eq("id", reminder.id);
-
-      const reachedMax = sentCount + 1 >= schedule.maxReminders;
-      await supabase
-        .from("invoices")
-        .update({
-          reminder_enabled: !reachedMax,
-          next_reminder_at: reachedMax ? null : nextReminderAtFrom(undefined, schedule.repeatEveryDays),
-        })
-        .eq("id", invoice.id)
-        .eq("user_id", invoice.user_id);
-
-      results.sent += 1;
-    } catch (sendError) {
-      const message = sendError instanceof Error ? sendError.message : "Resend failed.";
-      await supabase
-        .from("invoice_reminders")
-        .update({ status: "failed", error: message })
-        .eq("id", reminder.id);
-      results.failed += 1;
-    }
+    results.drafted += 1;
   }
 
   return NextResponse.json({ ok: true, ...results });

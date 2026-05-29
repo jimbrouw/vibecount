@@ -607,8 +607,10 @@ function ManualRecordForm({ categories }: { categories: CategoryOption[] }) {
             defaultValue="review"
           >
             <option value="review">Needs review</option>
-            <option value="approved">Approved</option>
           </select>
+          <span className="mt-1 block text-xs text-[#4b8068]">
+            New records are saved for review first. Approve them from the review list.
+          </span>
         </label>
         <button
           type="submit"

@@ -13,7 +13,10 @@ import {
 
 export async function createManualRecord(formData: FormData) {
   const userId = await requireUserId();
-  const parsed = validateManualRecordInput(readRecordForm(formData));
+  const parsed = validateManualRecordInput({
+    ...readRecordForm(formData),
+    status: "review",
+  });
 
   if (!parsed.ok) {
     redirect(`/dashboard/records?error=${encodeURIComponent(parsed.error)}`);
@@ -41,9 +44,8 @@ export async function createManualRecord(formData: FormData) {
     amount: parsed.value.amountPence / 100,
     category_id: parsed.value.categoryId,
     source_type: "manual",
-    status: parsed.value.status,
-    approved_at:
-      parsed.value.status === "approved" ? new Date().toISOString() : null,
+    status: "review",
+    approved_at: null,
   });
 
   if (error) {
