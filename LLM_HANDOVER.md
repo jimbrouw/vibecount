@@ -1,6 +1,6 @@
 # VibeCount LLM Coder Handover
 
-Last updated: 2026-05-29 18:00 BST
+Last updated: 2026-05-29 18:46 BST
 
 ## Start Here
 
@@ -160,6 +160,77 @@ Verified tables:
 
 Verified default categories: 10.
 
+Release QA found the live database was missing the committed Phase 3 schema
+migrations. Applied on 2026-05-29 using the Supabase connector:
+
+- `phase_3_quotes_services`
+- `add_invoice_payment_links`
+- `repeating_invoice_templates`
+- `invoice_delivery_reminders`
+
+This fixed settings save failures caused by missing `payment_link_provider` /
+`payment_link_url` columns and aligned production schema with the current branch.
+
+## Release QA Pass — 2026-05-29 18:46 BST
+
+Scope:
+
+- Branch `codex/phase-3-invoice-reminders` at latest pushed state before fixes.
+- Local dev server: `http://localhost:3002`.
+- Authenticated QA user created with Supabase admin for the pass.
+- Browser runtime fallback: in-app Browser plugin was listed but unavailable
+  (`iab` could not be acquired), so Playwright Chromium was used.
+
+Commands passed after fixes:
+
+```bash
+npm run lint
+npm test
+npm run build
+```
+
+Browser/API flows verified:
+
+- Login/auth reaches the protected dashboard.
+- Settings loads and saves successfully.
+- Typed invoice shows figures and words, requires confirm, downloads PDF, and
+  exposes reminder preparation rather than sending.
+- Voice transcript extraction works; continue remains disabled until mandatory
+  spoken read-back completes, then routes into the normal invoice preview.
+- Manual record creation starts in `Needs review`, then Approve changes status.
+- CSV import stages rows for review; one income row and one expense row were
+  approved and committed.
+- Bank statement text import redacts account identifiers, stages rows for
+  review, and commits only approved rows.
+- Tax prep shows estimate/net-profit/caveat wording and exports a CSV containing
+  the caveat and net-profit wording.
+- Due reminder route writes a pending `invoice_reminders` draft with
+  `sent_at = null` and no provider message id.
+
+Release blockers fixed:
+
+- Manual record category default selected the first sorted category, which could
+  be an expense while the record type default was income. The default now uses
+  the first income category when no explicit value is supplied.
+- Server-action review buttons used button `name/value`, which React warned
+  could be overridden for function actions. Review/import status now travels in
+  hidden inputs, and manual Approve/Exclude buttons are standalone forms.
+
+Vercel status checked:
+
+- Latest preview before this fix was Ready:
+  `https://vibecount-qtzitagjd-jims-projects-b7cb6c2e.vercel.app`
+- Latest production deployment before this fix was Ready:
+  `https://vibecount-h6me6bn5z-jims-projects-b7cb6c2e.vercel.app`
+- Preview URL returned HTTP 401 due to Vercel deployment protection.
+- Stable production alias `https://vibecount-teal.vercel.app` returned HTTP 200.
+
+Phase 4 exclusion check:
+
+- Targeted search found no `/api/mcp`, `get_pl_summary`, `list_expenses`,
+  `finalise_invoice`, browser-agent login, or stored BYO provider key
+  implementation on this branch.
+
 ## Verification Commands
 
 Run before committing meaningful changes:
@@ -188,18 +259,18 @@ Known audit issue:
    - If extraction still fails, recommend CSV/text export for Phase 2.
 
 2. CSV review flow:
-   - User has staged CSV rows successfully.
-   - Next test should approve one income row and one expense row.
-   - Then commit approved rows and confirm summary cards/tax prep update.
+   - Verified in release QA: staged rows can be approved and committed for one
+     income row and one expense row.
 
 3. Tax prep:
-   - Verify approved records appear in tax prep.
-   - Confirm caveat/estimate wording remains visible.
-   - Confirm net profit language.
+   - Verified in release QA: approved records feed tax prep, caveat/estimate
+     wording remains visible, net profit language is present, and export includes
+     caveat/net-profit wording.
 
 4. Payment reminders:
-   - Current behavior creates pending reminder drafts/explanation, not sends.
-   - UX may still be confusing; keep human approval gate.
+   - Verified in release QA: enabling reminders prepares draft follow-up, and
+     the due-reminder route creates pending reminder draft rows rather than
+     sending email.
 
 5. Voice:
    - User says sign-in, voice invoice, playback, and PDF download work.

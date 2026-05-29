@@ -764,10 +764,12 @@ function ManualRecordsList({
                     >
                       Save changes
                     </button>
-                    <ReviewButton recordId={record.id} status="approved" label="Approve" />
-                    <ReviewButton recordId={record.id} status="excluded" label="Exclude" />
                   </div>
                 </form>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <ReviewButton recordId={record.id} status="approved" label="Approve" />
+                  <ReviewButton recordId={record.id} status="excluded" label="Exclude" />
+                </div>
               </div>
             </details>
           ))}
@@ -911,10 +913,9 @@ function CsvRowButton({
   return (
     <form action={setCsvImportRowStatus} data-testid={`csv-import-row-form-${rowId}`}>
       <input type="hidden" name="rowId" value={rowId} />
+      <input type="hidden" name="status" value={status} />
       <button
         type="submit"
-        name="status"
-        value={status}
         data-testid={`csv-import-row-${status}-button-${rowId}`}
         className="inline-flex h-9 items-center rounded-lg border border-[#bbf7d0] bg-white px-3 text-xs font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
       >
@@ -1056,10 +1057,9 @@ function BankRowButton({
   return (
     <form action={setBankStatementRowStatus} data-testid={`bank-import-row-form-${rowId}`}>
       <input type="hidden" name="rowId" value={rowId} />
+      <input type="hidden" name="status" value={status} />
       <button
         type="submit"
-        name="status"
-        value={status}
         data-testid={`bank-import-row-${status}-button-${rowId}`}
         className="inline-flex h-9 items-center rounded-lg border border-[#bbf7d0] bg-white px-3 text-xs font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
       >
@@ -1083,13 +1083,14 @@ function CategorySelect({
 }) {
   const income = categories.filter((category) => category.record_type === "income");
   const expenses = categories.filter((category) => category.record_type === "expense");
+  const selectedValue = defaultValue ?? income[0]?.id ?? categories[0]?.id ?? "";
 
   return (
     <select
       name="categoryId"
       data-testid={testId}
       className="mt-1 h-11 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
-      defaultValue={defaultValue ?? categories[0]?.id ?? ""}
+      defaultValue={selectedValue}
       required
     >
       <optgroup label="Income">
@@ -1120,16 +1121,17 @@ function ReviewButton({
   label: string;
 }) {
   return (
-    <button
-      type="submit"
-      formAction={setManualRecordStatus}
-      name="status"
-      value={status}
-      data-testid={`record-review-${status}-button-${recordId}`}
-      className="inline-flex h-10 items-center rounded-lg border border-[#bbf7d0] bg-white px-4 text-sm font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
-    >
-      {label}
-    </button>
+    <form action={setManualRecordStatus} data-testid={`record-review-${status}-form-${recordId}`}>
+      <input type="hidden" name="recordId" value={recordId} />
+      <input type="hidden" name="status" value={status} />
+      <button
+        type="submit"
+        data-testid={`record-review-${status}-button-${recordId}`}
+        className="inline-flex h-10 items-center rounded-lg border border-[#bbf7d0] bg-white px-4 text-sm font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
+      >
+        {label}
+      </button>
+    </form>
   );
 }
 

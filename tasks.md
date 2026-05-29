@@ -176,6 +176,11 @@ compatibility too early.
       invoices, records, imports, tax prep, settings, and navigation
       Verification: selector pass and review-gate audit completed; `npm run lint`,
       `npm test`, targeted selector/guardrail searches, and `npm run build` pass.
+      Release QA 2026-05-29: authenticated Playwright pass verified login,
+      settings save, typed invoice PDF download, voice transcript extraction
+      and mandatory read-back gate, manual record review, CSV import review and
+      commit, bank statement text import redaction/review/commit, tax-prep
+      caveats/export, and reminder draft gating.
 - [x] Verify every tax estimate UI/API/export includes caveat copy and says
       "estimate"; use net profit language, never gross profit
       Verification: tax-prep UI now labels the estimate base as net profit,
@@ -215,8 +220,11 @@ compatibility too early.
       Changes: invoice PDF creation now requires an explicit reviewed-confirmed
       request from the UI; new manual records always enter review before approval;
       due reminder automation now creates pending reminder drafts instead of
-      sending email. Verification: `npm run lint`, `npm test`, targeted guardrail
-      search, and `npm run build` pass.
+      sending email. Release QA fix: record/import review action buttons now send
+      status through hidden form fields instead of server-action button
+      name/value, so Approve/Discard/Exclude controls submit deterministically.
+      Verification: `npm run lint`, `npm test`, targeted guardrail search,
+      authenticated Playwright review-gate pass, and `npm run build` pass.
 
 Reference: [knowledge-base/making-tax-digital.md](knowledge-base/making-tax-digital.md)
 Reference: [knowledge-base/bank-statement-import.md](knowledge-base/bank-statement-import.md)
