@@ -225,6 +225,7 @@ export default function InvoiceBuilder({
             <div className="mt-3">
               <Link
                 href="/dashboard/invoices/voice"
+                data-testid="invoice-switch-to-voice-link"
                 className="text-sm font-medium text-[#1a3a2a] underline decoration-[#9bb49f] underline-offset-4"
               >
                 Prefer to speak it instead?
@@ -265,6 +266,7 @@ export default function InvoiceBuilder({
               Add your trading name and bank details in{" "}
               <Link
                 href="/dashboard/settings"
+                data-testid="invoice-settings-link"
                 className="font-semibold underline decoration-[#9bb49f] underline-offset-2"
               >
                 Settings
@@ -274,7 +276,7 @@ export default function InvoiceBuilder({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-5" data-testid="invoice-form">
           {plainLanguage ? (
             <p className="plain-language-note">
               Fill in who the invoice is for, what the work was, and how much to
@@ -294,6 +296,7 @@ export default function InvoiceBuilder({
               <span className="text-sm font-medium text-[#1a3a2a]">Client</span>
               <input
                 name="clientName"
+                data-testid="invoice-client-input"
                 list="saved-clients"
                 value={form.clientName}
                 onChange={(event) => updateField("clientName", event.target.value)}
@@ -314,6 +317,7 @@ export default function InvoiceBuilder({
               </span>
               <input
                 name="clientEmail"
+                data-testid="invoice-client-email-input"
                 type="email"
                 value={form.clientEmail}
                 onChange={(event) => updateField("clientEmail", event.target.value)}
@@ -333,6 +337,7 @@ export default function InvoiceBuilder({
               <span className="text-sm font-medium text-[#1a3a2a]">Invoice date</span>
               <input
                 name="invoiceDate"
+                data-testid="invoice-date-input"
                 type="text"
                 inputMode="numeric"
                 value={form.invoiceDate}
@@ -348,6 +353,7 @@ export default function InvoiceBuilder({
             <span className="text-sm font-medium text-[#1a3a2a]">What is this for?</span>
             <textarea
               name="description"
+              data-testid="invoice-description-input"
               value={form.description}
               onChange={(event) => updateField("description", event.target.value)}
               required
@@ -366,6 +372,7 @@ export default function InvoiceBuilder({
                 </span>
                 <input
                   name="amount"
+                  data-testid="invoice-amount-input"
                   inputMode="decimal"
                   value={form.amount}
                   onChange={(event) => updateField("amount", event.target.value)}
@@ -382,6 +389,7 @@ export default function InvoiceBuilder({
               </span>
               <input
                 name="paymentTerms"
+                data-testid="invoice-payment-terms-input"
                 value={form.paymentTerms}
                 onChange={(event) => updateField("paymentTerms", event.target.value)}
                 className={inputCls}
@@ -401,6 +409,7 @@ export default function InvoiceBuilder({
                 <div className="relative">
                   <input
                     type="checkbox"
+                    data-testid="invoice-vat-toggle"
                     checked={form.vatEnabled}
                     onChange={(e) => updateField("vatEnabled", e.target.checked)}
                     className="sr-only"
@@ -460,6 +469,7 @@ export default function InvoiceBuilder({
 
           <button
             type="submit"
+            data-testid="invoice-confirm-download-button"
             disabled={isSubmitting}
             className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#1a3a2a] px-5 text-sm font-semibold text-white transition hover:bg-[#2d6a4a] disabled:cursor-not-allowed disabled:bg-[#8a9a91] sm:w-auto"
           >
@@ -480,6 +490,7 @@ export default function InvoiceBuilder({
               </div>
               <button
                 type="button"
+                data-testid="invoice-copy-email-button"
                 onClick={copyEmailDraft}
                 className="inline-flex h-10 items-center justify-center rounded-lg border border-[#b9d2bd] bg-white px-4 text-sm font-semibold text-[#1a3a2a] transition hover:bg-[#eef6ef]"
               >
@@ -501,24 +512,26 @@ export default function InvoiceBuilder({
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <form action={markInvoiceSent} className="space-y-3">
+              <form action={markInvoiceSent} className="space-y-3" data-testid="invoice-mark-sent-form">
                 <input type="hidden" name="invoiceId" value={generatedInvoice.id} />
                 <input type="hidden" name="clientEmail" value={form.clientEmail} />
                 <input type="hidden" name="redirectTo" value="/dashboard" />
                 <button
                   type="submit"
+                  data-testid="invoice-mark-sent-button"
                   className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-[#1a3a2a] px-4 text-sm font-semibold text-white transition hover:bg-[#2d6a4a]"
                 >
                   I’ve sent this invoice
                 </button>
               </form>
 
-              <form action={enableInvoiceReminders} className="space-y-3">
+              <form action={enableInvoiceReminders} className="space-y-3" data-testid="invoice-enable-reminders-form">
                 <input type="hidden" name="invoiceId" value={generatedInvoice.id} />
                 <input type="hidden" name="clientEmail" value={form.clientEmail} />
                 <input type="hidden" name="redirectTo" value="/dashboard" />
                 <button
                   type="submit"
+                  data-testid="invoice-enable-reminders-button"
                   className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-[#b9d2bd] bg-white px-4 text-sm font-semibold text-[#1a3a2a] transition hover:bg-[#eef6ef]"
                 >
                   Enable automatic reminders
@@ -531,6 +544,7 @@ export default function InvoiceBuilder({
 
       <aside
         id="invoice-preview"
+        data-testid="invoice-preview"
         className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-[#e5e0d8] sm:p-6 lg:sticky lg:top-6 lg:self-start"
       >
         <p className="text-sm font-medium uppercase tracking-[0.12em] text-[#4a6a5a]">

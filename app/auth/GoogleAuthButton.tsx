@@ -5,9 +5,10 @@ import { createClient } from "@/lib/supabase/client";
 
 type Props = {
   label: string;
+  testId?: string;
 };
 
-export default function GoogleAuthButton({ label }: Props) {
+export default function GoogleAuthButton({ label, testId }: Props) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -33,6 +34,7 @@ export default function GoogleAuthButton({ label }: Props) {
     <div className="space-y-3">
       <button
         type="button"
+        data-testid={testId}
         onClick={signInWithGoogle}
         disabled={loading}
         className="flex w-full items-center justify-center gap-3 rounded-lg border border-[#d5d0c8] bg-white px-4 py-2.5 text-sm font-medium text-[#1a3a2a] transition-colors hover:bg-[#f8f5ef] disabled:cursor-not-allowed disabled:opacity-60"

@@ -36,6 +36,7 @@ export default function DashboardShell({ children, userEmail }: Props) {
     <div className="min-h-screen bg-[#f6f8f5] text-[#17251d]">
       <button
         type="button"
+        data-testid="mobile-nav-open-button"
         onClick={() => setMobileOpen(true)}
         className="fixed left-4 top-4 z-30 inline-flex h-10 items-center gap-2 rounded-md border border-[#d9ded8] bg-white px-3 text-sm font-semibold text-[#17251d] shadow-sm lg:hidden"
       >
@@ -47,6 +48,7 @@ export default function DashboardShell({ children, userEmail }: Props) {
         <button
           type="button"
           aria-label="Close navigation"
+          data-testid="mobile-nav-backdrop"
           onClick={() => setMobileOpen(false)}
           className="fixed inset-0 z-40 bg-black/30 lg:hidden"
         />
@@ -59,7 +61,12 @@ export default function DashboardShell({ children, userEmail }: Props) {
       >
         <div className="border-b border-[#edf0ec] px-4 py-4">
           <div className="flex items-center justify-between gap-3">
-            <Link href="/dashboard" className="flex items-center gap-3" onClick={() => setMobileOpen(false)}>
+            <Link
+              href="/dashboard"
+              data-testid="nav-brand-link"
+              className="flex items-center gap-3"
+              onClick={() => setMobileOpen(false)}
+            >
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#15803d] text-sm font-bold text-white">
                 V
               </span>
@@ -75,6 +82,7 @@ export default function DashboardShell({ children, userEmail }: Props) {
             <button
               type="button"
               aria-label="Close navigation"
+              data-testid="mobile-nav-close-button"
               onClick={() => setMobileOpen(false)}
               className="rounded-md p-2 text-[#66756b] hover:bg-[#f2f5f1] lg:hidden"
             >
@@ -120,6 +128,7 @@ export default function DashboardShell({ children, userEmail }: Props) {
           <NavGroup title="Support">
             <button
               type="button"
+              data-testid="nav-help-button"
               onClick={() => {
                 setHelpOpen(true);
                 setMobileOpen(false);
@@ -176,6 +185,7 @@ function HelpDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
       <button
         type="button"
         aria-label="Close help"
+        data-testid="help-drawer-backdrop"
         onClick={() => {
           glossary.close();
           onClose();
@@ -190,6 +200,7 @@ function HelpDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
           </div>
           <button
             type="button"
+            data-testid="help-drawer-close-button"
             onClick={() => {
               glossary.close();
               onClose();
@@ -242,6 +253,7 @@ function HelpDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
                 <button
                   key={term.id}
                   type="button"
+                  data-testid={`help-glossary-term-${term.id}`}
                   onClick={() => glossary.open(term.id)}
                   className="rounded-md border border-[#dfe5df] px-3 py-2 text-left text-sm font-medium text-[#17251d] hover:border-[#a7c5ad] hover:bg-[#f6fbf7]"
                 >
@@ -258,16 +270,19 @@ function HelpDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
             <div className="mt-3 space-y-3">
               <ToggleRow
                 label="Large text"
+                testId="accessibility-large-text-toggle"
                 checked={accessibility.textSize === "large"}
                 onChange={(checked) => accessibility.setTextSize(checked ? "large" : "default")}
               />
               <ToggleRow
                 label="Relaxed spacing"
+                testId="accessibility-relaxed-spacing-toggle"
                 checked={accessibility.spacing === "relaxed"}
                 onChange={(checked) => accessibility.setSpacing(checked ? "relaxed" : "default")}
               />
               <ToggleRow
                 label="Plain language notes"
+                testId="accessibility-plain-language-toggle"
                 checked={accessibility.plainLanguage}
                 onChange={accessibility.setPlainLanguage}
               />
@@ -281,10 +296,12 @@ function HelpDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
 
 function ToggleRow({
   label,
+  testId,
   checked,
   onChange,
 }: {
   label: string;
+  testId: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
 }) {
@@ -293,6 +310,7 @@ function ToggleRow({
       {label}
       <input
         type="checkbox"
+        data-testid={testId}
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
         className="h-4 w-4 accent-[#15803d]"
@@ -330,6 +348,7 @@ function NavLink({
   return (
     <Link
       href={href}
+      data-testid={`nav-${slugifyTestId(label)}-link`}
       onClick={onNavigate}
       className={`flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium transition ${
         active
@@ -341,6 +360,10 @@ function NavLink({
       {label}
     </Link>
   );
+}
+
+function slugifyTestId(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
 function isActive(pathname: string, href: string) {

@@ -381,12 +381,14 @@ export default async function RecordsPage({
           <div className="mt-5 flex flex-wrap gap-3">
             <a
               href={`/api/records/export?taxYearStart=${selectedTaxYearStart}&format=json`}
+              data-testid="records-export-json-link"
               className="inline-flex h-10 items-center rounded-lg bg-[#15803d] px-4 text-sm font-semibold text-white transition hover:bg-[#14532d]"
             >
               Export JSON
             </a>
             <a
               href={`/api/records/export?taxYearStart=${selectedTaxYearStart}&format=csv`}
+              data-testid="records-export-csv-link"
               className="inline-flex h-10 items-center rounded-lg border border-[#bbf7d0] bg-white px-4 text-sm font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
             >
               Export CSV
@@ -430,6 +432,7 @@ export default async function RecordsPage({
               <select
                 id="taxYearStart"
                 name="taxYearStart"
+                data-testid="records-tax-year-select"
                 className="h-10 rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm font-semibold text-[#14532d]"
                 defaultValue={selectedTaxYearStart}
               >
@@ -441,6 +444,7 @@ export default async function RecordsPage({
               </select>
               <button
                 type="submit"
+                data-testid="records-tax-year-submit-button"
                 className="inline-flex h-10 items-center rounded-lg bg-[#15803d] px-4 text-sm font-semibold text-white transition hover:bg-[#14532d]"
               >
                 Show
@@ -528,7 +532,7 @@ function ManualRecordForm({ categories }: { categories: CategoryOption[] }) {
       <p className="mt-1 text-sm text-[#4b8068]">
         Enter income or expenses now. Imports can use the same record model later.
       </p>
-      <form action={createManualRecord} className="mt-5 space-y-4">
+      <form action={createManualRecord} className="mt-5 space-y-4" data-testid="record-create-form">
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
@@ -536,6 +540,7 @@ function ManualRecordForm({ categories }: { categories: CategoryOption[] }) {
             </span>
             <select
               name="recordType"
+              data-testid="record-type-select"
               className="mt-1 h-11 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
               defaultValue="income"
               required
@@ -550,6 +555,7 @@ function ManualRecordForm({ categories }: { categories: CategoryOption[] }) {
             </span>
             <input
               name="recordDate"
+              data-testid="record-date-input"
               type="date"
               className="mt-1 h-11 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
               defaultValue={today}
@@ -563,6 +569,7 @@ function ManualRecordForm({ categories }: { categories: CategoryOption[] }) {
           </span>
           <input
             name="description"
+            data-testid="record-description-input"
             className="mt-1 h-11 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
             placeholder="Client work, software, train fare"
             required
@@ -575,6 +582,7 @@ function ManualRecordForm({ categories }: { categories: CategoryOption[] }) {
             </span>
             <input
               name="amount"
+              data-testid="record-amount-input"
               inputMode="decimal"
               className="mt-1 h-11 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
               placeholder="125.00"
@@ -585,7 +593,7 @@ function ManualRecordForm({ categories }: { categories: CategoryOption[] }) {
             <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
               Category
             </span>
-            <CategorySelect categories={categories} />
+            <CategorySelect categories={categories} testId="record-category-select" />
           </label>
         </div>
         <label className="block">
@@ -594,6 +602,7 @@ function ManualRecordForm({ categories }: { categories: CategoryOption[] }) {
           </span>
           <select
             name="status"
+            data-testid="record-status-select"
             className="mt-1 h-11 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
             defaultValue="review"
           >
@@ -603,6 +612,7 @@ function ManualRecordForm({ categories }: { categories: CategoryOption[] }) {
         </label>
         <button
           type="submit"
+          data-testid="record-save-button"
           className="inline-flex h-11 items-center rounded-lg bg-[#15803d] px-5 text-sm font-semibold text-white transition hover:bg-[#14532d]"
         >
           Save record
@@ -661,7 +671,7 @@ function ManualRecordsList({
                 </div>
               </summary>
               <div className="border-t border-[#f0fdf4] bg-[#f7fef9] px-5 py-4">
-                <form action={updateManualRecord} className="grid gap-4">
+                <form action={updateManualRecord} className="grid gap-4" data-testid={`record-review-form-${record.id}`}>
                   <input type="hidden" name="recordId" value={record.id} />
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="block">
@@ -670,6 +680,7 @@ function ManualRecordsList({
                       </span>
                       <select
                         name="recordType"
+                        data-testid={`record-review-type-select-${record.id}`}
                         className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
                         defaultValue={record.record_type}
                       >
@@ -683,6 +694,7 @@ function ManualRecordsList({
                       </span>
                       <input
                         name="recordDate"
+                        data-testid={`record-review-date-input-${record.id}`}
                         type="date"
                         className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
                         defaultValue={record.record_date}
@@ -695,6 +707,7 @@ function ManualRecordsList({
                     </span>
                     <input
                       name="description"
+                      data-testid={`record-review-description-input-${record.id}`}
                       className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
                       defaultValue={record.description}
                     />
@@ -706,6 +719,7 @@ function ManualRecordsList({
                       </span>
                       <input
                         name="amount"
+                        data-testid={`record-review-amount-input-${record.id}`}
                         inputMode="decimal"
                         className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
                         defaultValue={Number(record.amount).toFixed(2)}
@@ -718,6 +732,7 @@ function ManualRecordsList({
                       <CategorySelect
                         categories={categories}
                         defaultValue={record.category_id ?? undefined}
+                        testId={`record-review-category-select-${record.id}`}
                       />
                     </label>
                   </div>
@@ -728,6 +743,7 @@ function ManualRecordsList({
                       </span>
                       <select
                         name="status"
+                        data-testid={`record-review-status-select-${record.id}`}
                         className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
                         defaultValue={record.status}
                       >
@@ -738,12 +754,13 @@ function ManualRecordsList({
                     </label>
                     <button
                       type="submit"
+                      data-testid={`record-review-save-button-${record.id}`}
                       className="inline-flex h-10 items-center rounded-lg bg-[#15803d] px-4 text-sm font-semibold text-white transition hover:bg-[#14532d]"
                     >
                       Save changes
                     </button>
-                    <ReviewButton status="approved" label="Approve" />
-                    <ReviewButton status="excluded" label="Exclude" />
+                    <ReviewButton recordId={record.id} status="approved" label="Approve" />
+                    <ReviewButton recordId={record.id} status="excluded" label="Exclude" />
                   </div>
                 </form>
               </div>
@@ -771,9 +788,10 @@ function CsvImportPanel({ rows }: { rows: CsvImportReviewRow[] }) {
             Headers: type, date, description, amount, category.
           </p>
         </div>
-        <form action={uploadRecordsCsv} className="flex flex-col gap-3 sm:flex-row">
+        <form action={uploadRecordsCsv} className="flex flex-col gap-3 sm:flex-row" data-testid="csv-import-upload-form">
           <input
             name="csvFile"
+            data-testid="csv-import-file-input"
             type="file"
             accept=".csv,text/csv"
             className="min-h-11 flex-1 rounded-lg border border-[#bbf7d0] bg-white px-3 py-2 text-sm text-[#14532d]"
@@ -781,6 +799,7 @@ function CsvImportPanel({ rows }: { rows: CsvImportReviewRow[] }) {
           />
           <button
             type="submit"
+            data-testid="csv-import-upload-button"
             className="inline-flex h-11 items-center justify-center rounded-lg bg-[#15803d] px-5 text-sm font-semibold text-white transition hover:bg-[#14532d]"
           >
             Upload CSV
@@ -851,9 +870,10 @@ function CsvImportPanel({ rows }: { rows: CsvImportReviewRow[] }) {
             <p className="text-sm text-[#4b8068]">
               {approvedCount} approved rows ready to commit.
             </p>
-            <form action={commitApprovedCsvRows}>
+            <form action={commitApprovedCsvRows} data-testid="csv-import-commit-form">
               <button
                 type="submit"
+                data-testid="csv-import-commit-approved-button"
                 className="inline-flex h-10 items-center rounded-lg bg-[#15803d] px-4 text-sm font-semibold text-white transition hover:bg-[#14532d]"
               >
                 Commit approved rows
@@ -876,12 +896,13 @@ function CsvRowButton({
   label: string;
 }) {
   return (
-    <form action={setCsvImportRowStatus}>
+    <form action={setCsvImportRowStatus} data-testid={`csv-import-row-form-${rowId}`}>
       <input type="hidden" name="rowId" value={rowId} />
       <button
         type="submit"
         name="status"
         value={status}
+        data-testid={`csv-import-row-${status}-button-${rowId}`}
         className="inline-flex h-9 items-center rounded-lg border border-[#bbf7d0] bg-white px-3 text-xs font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
       >
         {label}
@@ -906,9 +927,10 @@ function BankStatementPanel({ rows }: { rows: BankStatementReviewRow[] }) {
             statement file.
           </p>
         </div>
-        <form action={uploadBankStatement} className="flex flex-col gap-3 sm:flex-row">
+        <form action={uploadBankStatement} className="flex flex-col gap-3 sm:flex-row" data-testid="bank-import-upload-form">
           <input
             name="statementFile"
+            data-testid="bank-import-file-input"
             type="file"
             accept=".pdf,.txt,text/plain,application/pdf"
             className="min-h-11 flex-1 rounded-lg border border-[#bbf7d0] bg-white px-3 py-2 text-sm text-[#14532d]"
@@ -916,6 +938,7 @@ function BankStatementPanel({ rows }: { rows: BankStatementReviewRow[] }) {
           />
           <button
             type="submit"
+            data-testid="bank-import-upload-button"
             className="inline-flex h-11 items-center justify-center rounded-lg bg-[#15803d] px-5 text-sm font-semibold text-white transition hover:bg-[#14532d]"
           >
             Upload statement
@@ -986,9 +1009,10 @@ function BankStatementPanel({ rows }: { rows: BankStatementReviewRow[] }) {
             <p className="text-sm text-[#4b8068]">
               {approvedCount} approved bank rows ready to commit.
             </p>
-            <form action={commitApprovedBankRows}>
+            <form action={commitApprovedBankRows} data-testid="bank-import-commit-form">
               <button
                 type="submit"
+                data-testid="bank-import-commit-approved-button"
                 className="inline-flex h-10 items-center rounded-lg bg-[#15803d] px-4 text-sm font-semibold text-white transition hover:bg-[#14532d]"
               >
                 Commit approved bank rows
@@ -1011,12 +1035,13 @@ function BankRowButton({
   label: string;
 }) {
   return (
-    <form action={setBankStatementRowStatus}>
+    <form action={setBankStatementRowStatus} data-testid={`bank-import-row-form-${rowId}`}>
       <input type="hidden" name="rowId" value={rowId} />
       <button
         type="submit"
         name="status"
         value={status}
+        data-testid={`bank-import-row-${status}-button-${rowId}`}
         className="inline-flex h-9 items-center rounded-lg border border-[#bbf7d0] bg-white px-3 text-xs font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
       >
         {label}
@@ -1028,9 +1053,11 @@ function BankRowButton({
 function CategorySelect({
   categories,
   defaultValue,
+  testId,
 }: {
   categories: CategoryOption[];
   defaultValue?: string;
+  testId: string;
 }) {
   const income = categories.filter((category) => category.record_type === "income");
   const expenses = categories.filter((category) => category.record_type === "expense");
@@ -1038,6 +1065,7 @@ function CategorySelect({
   return (
     <select
       name="categoryId"
+      data-testid={testId}
       className="mt-1 h-11 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
       defaultValue={defaultValue ?? categories[0]?.id ?? ""}
       required
@@ -1061,9 +1089,11 @@ function CategorySelect({
 }
 
 function ReviewButton({
+  recordId,
   status,
   label,
 }: {
+  recordId: string;
   status: "approved" | "excluded";
   label: string;
 }) {
@@ -1073,6 +1103,7 @@ function ReviewButton({
       formAction={setManualRecordStatus}
       name="status"
       value={status}
+      data-testid={`record-review-${status}-button-${recordId}`}
       className="inline-flex h-10 items-center rounded-lg border border-[#bbf7d0] bg-white px-4 text-sm font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
     >
       {label}

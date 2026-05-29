@@ -218,6 +218,10 @@ Implemented on the current branch:
   are not stored by default and rows are reviewed before commit
 - `/dashboard/tax-prep` plain-English Self Assessment preparation page
 - `/api/tax-prep/export` accountant review export
+- Agent-native selector pass completed across auth, dashboard navigation,
+  invoice creation and voice confirmation, records/manual review, CSV and bank
+  import review controls, records exports, tax-prep export, settings, and
+  invoice status/reminder confirmation controls.
 
 Important implementation note:
 
@@ -226,6 +230,14 @@ Important implementation note:
   model is blocking the product.
 - Phase 2 is now a stabilisation and verification phase, not a from-scratch
   schema build.
+
+Latest selector-pass verification:
+
+- `npm run lint` passed
+- `npm test` passed
+- `npm run build` passed
+- Local Playwright check against `http://localhost:3002/login` and
+  `/signup` confirmed the auth selectors render in the browser.
 
 ### ✅ Phase 3 — Commercial invoice workflow groundwork
 

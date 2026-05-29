@@ -130,7 +130,7 @@ export default async function TaxPrepPage({
               </PlainLanguageNote>
             </div>
           </div>
-          <form className="flex items-center gap-2" action="/dashboard/tax-prep">
+          <form className="flex items-center gap-2" action="/dashboard/tax-prep" data-testid="tax-prep-year-form">
             <label
               htmlFor="taxYearStart"
               className="text-xs font-semibold uppercase tracking-widest text-[#166534]"
@@ -140,6 +140,7 @@ export default async function TaxPrepPage({
             <select
               id="taxYearStart"
               name="taxYearStart"
+              data-testid="tax-prep-year-select"
               className="h-10 rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm font-semibold text-[#14532d]"
               defaultValue={selectedTaxYearStart}
             >
@@ -151,6 +152,7 @@ export default async function TaxPrepPage({
             </select>
             <button
               type="submit"
+              data-testid="tax-prep-year-submit-button"
               className="inline-flex h-10 items-center rounded-lg bg-[#15803d] px-4 text-sm font-semibold text-white transition hover:bg-[#14532d]"
             >
               Show
@@ -191,6 +193,7 @@ export default async function TaxPrepPage({
           </div>
           <a
             href={`/api/tax-prep/export?taxYearStart=${selectedTaxYearStart}`}
+            data-testid="tax-prep-export-pack-link"
             className="mt-5 inline-flex h-10 items-center rounded-lg bg-[#15803d] px-4 text-sm font-semibold text-white transition hover:bg-[#14532d]"
           >
             Export tax prep pack

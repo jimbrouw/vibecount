@@ -198,12 +198,14 @@ export default async function DashboardPage({
           <div className="flex flex-wrap gap-3">
             <Link
               href="/dashboard/invoices/voice"
+              data-testid="dashboard-voice-invoice-link"
               className="inline-flex h-11 items-center gap-2 rounded-xl border border-[#bbf7d0] bg-white px-5 text-sm font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
             >
               Voice invoice
             </Link>
             <Link
               href="/dashboard/invoices/new"
+              data-testid="dashboard-new-invoice-link"
               className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#15803d] px-5 text-sm font-semibold text-white transition hover:bg-[#14532d]"
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -292,48 +294,50 @@ export default async function DashboardPage({
                   {inv.status === "finalised" ? (
                     <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                       {!inv.sent_at && !inv.paid_at ? (
-                        <form action={markInvoiceSent} className="flex gap-2">
+                        <form action={markInvoiceSent} className="flex gap-2" data-testid={`dashboard-invoice-mark-sent-form-${inv.id}`}>
                           <input type="hidden" name="invoiceId" value={inv.id} />
                           <input type="hidden" name="redirectTo" value="/dashboard" />
                           <input
                             name="clientEmail"
+                            data-testid={`dashboard-invoice-client-email-input-${inv.id}`}
                             type="email"
                             defaultValue={client?.email ?? ""}
                             placeholder="client@example.com"
                             className="min-w-0 flex-1 rounded-lg border border-[#bbf7d0] px-3 text-xs text-[#14532d] outline-none focus:border-[#15803d]"
                           />
-                          <button className={smallButtonCls}>Sent</button>
+                          <button data-testid={`dashboard-invoice-mark-sent-button-${inv.id}`} className={smallButtonCls}>Sent</button>
                         </form>
                       ) : null}
 
                       {!inv.paid_at ? (
-                        <form action={markInvoicePaid}>
+                        <form action={markInvoicePaid} data-testid={`dashboard-invoice-mark-paid-form-${inv.id}`}>
                           <input type="hidden" name="invoiceId" value={inv.id} />
                           <input type="hidden" name="redirectTo" value="/dashboard" />
-                          <button className={smallButtonCls}>Mark paid</button>
+                          <button data-testid={`dashboard-invoice-mark-paid-button-${inv.id}`} className={smallButtonCls}>Mark paid</button>
                         </form>
                       ) : null}
 
                       {!inv.paid_at && !inv.reminder_enabled ? (
-                        <form action={enableInvoiceReminders} className="flex gap-2">
+                        <form action={enableInvoiceReminders} className="flex gap-2" data-testid={`dashboard-invoice-enable-reminders-form-${inv.id}`}>
                           <input type="hidden" name="invoiceId" value={inv.id} />
                           <input type="hidden" name="redirectTo" value="/dashboard" />
                           <input
                             name="clientEmail"
+                            data-testid={`dashboard-invoice-reminder-email-input-${inv.id}`}
                             type="email"
                             defaultValue={client?.email ?? ""}
                             placeholder="client@example.com"
                             className="min-w-0 flex-1 rounded-lg border border-[#bbf7d0] px-3 text-xs text-[#14532d] outline-none focus:border-[#15803d]"
                           />
-                          <button className={smallOutlineButtonCls}>Remind</button>
+                          <button data-testid={`dashboard-invoice-enable-reminders-button-${inv.id}`} className={smallOutlineButtonCls}>Remind</button>
                         </form>
                       ) : null}
 
                       {inv.reminder_enabled ? (
-                        <form action={disableInvoiceReminders}>
+                        <form action={disableInvoiceReminders} data-testid={`dashboard-invoice-disable-reminders-form-${inv.id}`}>
                           <input type="hidden" name="invoiceId" value={inv.id} />
                           <input type="hidden" name="redirectTo" value="/dashboard" />
-                          <button className={smallOutlineButtonCls}>Stop reminders</button>
+                          <button data-testid={`dashboard-invoice-disable-reminders-button-${inv.id}`} className={smallOutlineButtonCls}>Stop reminders</button>
                         </form>
                       ) : null}
                     </div>

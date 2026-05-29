@@ -197,10 +197,12 @@ compatibility too early.
 - [x] **Self Assessment plain-English map** — map SA103S / SA103F boxes to
       simple explanations and VibeCount data sources, then show what can be
       suggested versus what needs user/accountant input.
-- [ ] **Agent-native selector pass** — add stable `data-testid` attributes to
+- [x] **Agent-native selector pass** — add stable `data-testid` attributes to
       critical nav links, invoice fields, login fields, record forms, import
       review controls, tax-prep export controls, and confirmation gates so
       external browser-use agents can operate the app without guessing.
+      Verification: `npm run lint`, `npm test`, and `npm run build` pass;
+      local browser check confirmed login/signup selectors render.
 - [ ] **Review-gate audit** — verify assisted flows never silently finalise
       invoices, approve financial records, send reminders, process payments, or
       change tax-prep outputs without explicit human confirmation.

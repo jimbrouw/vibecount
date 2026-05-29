@@ -207,6 +207,7 @@ export default function VoiceInvoiceBuilder() {
               {!isRecording ? (
                 <button
                   type="button"
+                  data-testid="voice-start-recording-button"
                   onClick={startRecording}
                   disabled={isSubmitting}
                   className="inline-flex h-12 items-center justify-center rounded-xl bg-[#1a3a2a] px-5 text-sm font-semibold text-white transition hover:bg-[#2d6a4a] disabled:cursor-not-allowed disabled:bg-[#8a9a91]"
@@ -216,6 +217,7 @@ export default function VoiceInvoiceBuilder() {
               ) : (
                 <button
                   type="button"
+                  data-testid="voice-stop-recording-button"
                   onClick={stopRecording}
                   className="inline-flex h-12 items-center justify-center rounded-xl bg-[#7a271a] px-5 text-sm font-semibold text-white transition hover:bg-[#923728]"
                 >
@@ -225,6 +227,7 @@ export default function VoiceInvoiceBuilder() {
 
               <Link
                 href="/dashboard/invoices/new"
+                data-testid="voice-use-typing-link"
                 className="inline-flex h-12 items-center justify-center rounded-xl border border-[#d5d0c8] bg-white px-5 text-sm font-semibold text-[#1a3a2a] transition hover:bg-[#f8f5ef]"
               >
                 Use typing instead
@@ -237,6 +240,7 @@ export default function VoiceInvoiceBuilder() {
               Transcript
             </span>
             <textarea
+              data-testid="voice-transcript-input"
               value={transcript}
               onChange={(event) => setTranscript(event.target.value)}
               rows={4}
@@ -247,6 +251,7 @@ export default function VoiceInvoiceBuilder() {
 
           <button
             type="button"
+            data-testid="voice-reextract-button"
             onClick={() => submitVoiceDraft({ transcriptOverride: transcript })}
             disabled={isSubmitting || transcript.trim() === ""}
             className="inline-flex h-12 items-center justify-center rounded-xl border border-[#d5d0c8] bg-white px-5 text-sm font-semibold text-[#1a3a2a] transition hover:bg-[#f8f5ef] disabled:cursor-not-allowed disabled:text-[#8a9a91]"
@@ -261,7 +266,7 @@ export default function VoiceInvoiceBuilder() {
           ) : null}
 
           {draft ? (
-            <div className="rounded-xl border border-[#d5d0c8] bg-[#f8f5ef] p-4">
+            <div className="rounded-xl border border-[#d5d0c8] bg-[#f8f5ef] p-4" data-testid="voice-draft-review">
               <p className="text-sm font-medium text-[#1a3a2a]">Voice draft</p>
               <div className="mt-4 space-y-4">
                 <div>
@@ -299,6 +304,7 @@ export default function VoiceInvoiceBuilder() {
                             >
                               <input
                                 type="radio"
+                                data-testid={`voice-amount-candidate-${candidatePence}`}
                                 name="voice-amount"
                                 checked={selectedAmount === candidate}
                                 onChange={() => setSelectedAmount(candidate)}
@@ -340,6 +346,7 @@ export default function VoiceInvoiceBuilder() {
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     <button
                       type="button"
+                      data-testid="voice-play-readback-button"
                       onClick={playReadback}
                       disabled={!readbackText}
                       className="inline-flex h-11 items-center justify-center rounded-xl bg-[#1a3a2a] px-4 text-sm font-semibold text-white transition hover:bg-[#2d6a4a] disabled:cursor-not-allowed disabled:bg-[#8a9a91]"
@@ -356,6 +363,7 @@ export default function VoiceInvoiceBuilder() {
 
                 <button
                   type="button"
+                  data-testid="voice-continue-preview-button"
                   onClick={continueToTypedPreview}
                   disabled={!draft || resolvedAmount === null || !hasPlayedReadback}
                   className="inline-flex h-12 items-center justify-center rounded-xl bg-[#1a3a2a] px-5 text-sm font-semibold text-white transition hover:bg-[#2d6a4a] disabled:cursor-not-allowed disabled:bg-[#8a9a91]"
