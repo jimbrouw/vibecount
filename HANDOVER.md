@@ -1,6 +1,6 @@
 # VibeCount — Handover Document
 
-_Last updated: 2026-05-26_
+_Last updated: 2026-05-29_
 
 ---
 
@@ -25,7 +25,7 @@ VibeCount is a freelancer invoicing tool built for people who find finance admin
 | Auth + database | Supabase (Auth + Postgres + Storage) |
 | AI extraction | Anthropic `claude-sonnet-4-6` — use `SYSTEM_PROMPT` from `validation_gate_v2.py` verbatim |
 | Speech (Task 6 only) | Whisper |
-| PDF | Server-side — library TBD at Task 3 |
+| PDF | Server-side with `pdf-lib` |
 | Hosting | Vercel (auto-deploys from `main`) |
 | Analytics | PostHog |
 
@@ -36,12 +36,34 @@ VibeCount is a freelancer invoicing tool built for people who find finance admin
 | Thing | URL |
 |---|---|
 | GitHub | https://github.com/jimbrouw/vibecount |
+| Snapshot repo for current Phase 2/3 work | https://github.com/jimbrouw/vibecount-phase-3-invoice-reminders |
 | Vercel project | https://vercel.com/jims-projects-b7cb6c2e/vibecount |
 | Live URL (stable alias) | https://vibecount-teal.vercel.app |
+| Latest Vercel Preview | https://vibecount-nrdh9zfjq-jims-projects-b7cb6c2e.vercel.app |
+| Latest Vercel Preview inspect | https://vercel.com/jims-projects-b7cb6c2e/vibecount/BxXVNTZ9HTF48cE2AZADoTWZjup8 |
 | Vercel env vars page | https://vercel.com/jims-projects-b7cb6c2e/vibecount/settings/environment-variables |
 | Supabase project | https://supabase.com/dashboard/project/lazorvlkgxgzdgflzhjm |
 
 ---
+
+## Current status as of 2026-05-29
+
+- Current working branch: `codex/phase-3-invoice-reminders`
+- Worktree was clean before deployment.
+- Current branch has been pushed to the existing repo as
+  `origin/codex/phase-3-invoice-reminders`.
+- A separate private snapshot repo was created and pushed with this branch as
+  `main`: https://github.com/jimbrouw/vibecount-phase-3-invoice-reminders
+- Vercel Preview deployment is ready:
+  https://vibecount-nrdh9zfjq-jims-projects-b7cb6c2e.vercel.app
+- Preview is behind Vercel deployment protection and returns `401` unless the
+  tester is authorised on the Vercel project.
+- Verification immediately before deployment:
+  - `npm run lint` passed
+  - `npm test` passed
+  - `npm run build` passed
+- Vercel CLI on this machine is outdated (`54.5.1`; latest seen `54.6.1`).
+  Upgrade with `npm i -g vercel@latest` or `pnpm add -g vercel@latest`.
 
 ## What's been built
 
@@ -172,6 +194,56 @@ Implemented locally:
 - PDF generation now uses saved sender identity, bank details, VAT details, invoice prefix, and late-payment wording
 - Private UTR storage is supported in settings but intentionally not shown on invoices
 
+### ✅ Phase 2 — MTD-ready records foundation
+
+Implemented on the current branch:
+
+- Unified `financial_records` model for income and expenses, not separate
+  `income_records` / `expenses` tables
+- Default and user record categories with SA103 mapping support
+- Source import tracking through `record_imports`
+- Generated `tax_year_start` and `tax_quarter` columns in the database
+- Quarter summary view: `financial_record_quarter_summaries`
+- Audit-friendly record change logging
+- Secure records storage support:
+  - record attachments
+  - private signed attachment URLs
+  - export history
+  - delete/export routes
+- `/dashboard/records` with manual record entry, review, tax-year selection,
+  threshold tracker, quarterly summaries, CSV import, bank import, and exports
+- CSV import staging via `csv_import_rows`; only approved rows are committed
+  into `financial_records`
+- Bank statement import prototype via `bank_statement_import_rows`; raw PDFs
+  are not stored by default and rows are reviewed before commit
+- `/dashboard/tax-prep` plain-English Self Assessment preparation page
+- `/api/tax-prep/export` accountant review export
+
+Important implementation note:
+
+- Do **not** add new `income_records` and `expenses` tables from older planning
+  notes unless a future migration plan proves the unified `financial_records`
+  model is blocking the product.
+- Phase 2 is now a stabilisation and verification phase, not a from-scratch
+  schema build.
+
+### ✅ Phase 3 — Commercial invoice workflow groundwork
+
+Implemented on the current branch:
+
+- Left-sidebar dashboard shell with centralised navigation in
+  `app/dashboard/DashboardShell.tsx`
+- Quotes and reusable services
+- Quote status flow and quote-to-invoice conversion
+- Payment link settings and invoice rendering support
+- Repeating invoice templates
+- Invoice delivery/reminder database support and reminder copy utilities
+
+Remaining Phase 3 caution:
+
+- User-approved invoice sending / automated follow-up reminders should remain
+  strictly user-approved. Do not silently send invoices or reminders.
+
 ---
 
 ## Incomplete / needs doing before moving forward
@@ -245,24 +317,31 @@ Done when: speak an invoice → ambiguous amounts force a choice → lands in Ta
   - PostHog hooks added for `voice_invoice_attempt`, `invoice_draft_completion`, `pdf_invoices_generated`, `glossary_term_opened`, `failed_voice_attempt`, and `manual_entry_usage`.
   - Small visual pass pushed the main cards and panels further into the British green / warm cream direction.
 
-### Phase 2 note — MTD changes the roadmap
+### Phase 2 note — MTD-ready records are now implemented and need verification
 
 - `knowledge-base/making-tax-digital.md` now captures the verified HMRC position as
   of 27 May 2026.
-- MTD should no longer sit as a vague Phase 3 awareness note.
-- Phase 2 should start the **MTD-ready records** work without claiming
-  HMRC-recognised compliance:
-  - structured income / expense records
+- MTD is no longer a vague Phase 3 awareness note.
+- Phase 2 now has the **MTD-ready records** foundation implemented without
+  claiming HMRC-recognised compliance:
+  - unified structured income / expense records
   - secure per-user cloud record storage
   - attachment storage with signed access and export/deletion paths
-  - spreadsheet import
-  - privacy-first bank statement PDF import
+  - CSV import with review before commit
+  - privacy-first bank statement PDF import prototype
   - quarterly summaries
   - threshold tracking
   - tax estimate support
   - plain-English Self Assessment prep for SA103S / SA103F
 - Direct HMRC submission should remain later until the records model and user
   workflow are proven.
+- Near-term Phase 2 work should focus on verification and hardening:
+  - add any missing `data-testid` selectors
+  - verify HMRC quarter boundaries with real test rows
+  - verify CSV approve/reject/commit behaviour
+  - verify bank statement redaction and no raw PDF persistence
+  - confirm every tax estimate UI/API/export includes disclaimer copy
+  - verify figures-and-words formatting on tax-prep money values
 - `knowledge-base/bank-statement-import.md` captures the bank PDF idea:
   extract transactions, redact before LLM/database use, suggest categories, and
   commit only user-approved rows into records.
@@ -270,16 +349,17 @@ Done when: speak an invoice → ambiguous amounts force a choice → lands in Ta
   idea: map HMRC sole trader questions to simple language, VibeCount data
   sources, and exportable accountant review packs before attempting filing.
 
-### Phase 3 note — commercial workflow
+### Phase 3 note — commercial workflow is partly implemented
 
-- Phase 3 should add the lightweight Xero/SoloPad-style workflow around the
-  current invoice product:
+- Phase 3 has started adding the lightweight Xero/SoloPad-style workflow around
+  the current invoice product:
   - branded quotes and invoices
   - saved services / line items
   - quote-to-invoice conversion
   - hosted payment links
   - repeating invoice drafts
-  - user-approved payment follow-up reminders
+- User-approved payment follow-up reminders are the remaining risky area:
+  keep reminder generation and sending explicitly user-approved.
 - Keep the data model reusable so proposal and contract documents can inherit
   client, service, scope, price, and payment-term data later.
 - `knowledge-base/freelancer-operating-system.md` captures the smart document
@@ -289,6 +369,8 @@ Done when: speak an invoice → ambiguous amounts force a choice → lands in Ta
 ### Phase 4 note — agentic tax copilot
 
 - `knowledge-base/agentic-tax-copilot.md` captures the later agent idea.
+- Agent/MCP work on branch `claude/vibecount-ai-agents-1i5ob` is Phase 4 work
+  and should stay parked until Phase 2 records are stable and verified.
 - Treat Hermes-style autonomy as inspiration, not the immediate architecture.
 - The first agentic version should be read-only: inspect approved records, explain
   issues, and create a review queue.
@@ -296,6 +378,12 @@ Done when: speak an invoice → ambiguous amounts force a choice → lands in Ta
   approval.
 - Hard boundary: no silent HMRC submission, invoice sending, expense approval,
   or record changes.
+- MCP tools such as `get_pl_summary`, `list_expenses`, browser-agent login, and
+  `finalise_invoice` are future Phase 4 acceptance criteria. Do not build or
+  merge them as part of Phase 2.
+- Any future `finalise_invoice` tool needs audit logging, ownership checks,
+  idempotency, valid status transitions, short-lived scoped tokens, permission
+  gating, and per-action confirmation before external testing.
 - Creators Base-style proposals, contracts, e-signatures, client portals, and
   scope tracking belong here unless they directly support Phase 3 quotes,
   invoices, payments, or records.
@@ -311,6 +399,13 @@ Done when: speak an invoice → ambiguous amounts force a choice → lands in Ta
 - The spec's NO list: no bookkeeping, no banking integrations, no expense OCR, no tax filing, no CRM, no spreadsheet migration, no AI finance checking, no payment chasing, no automated delivery tracking, no LLM-generated glossary.
 - Phase 2 can now introduce bookkeeping-adjacent digital records, but keep the
   claim as **MTD-ready records**, not HMRC-recognised MTD software.
+- Use **net profit**, not gross profit. VibeCount does not currently model
+  cost of sales.
+- Every tax estimate surface must include caveat/disclaimer copy. Treat tax
+  estimates as planning aids, not filing-accurate calculations.
+- Do not duplicate the records schema with separate `income_records` and
+  `expenses` tables unless there is a deliberate migration away from
+  `financial_records`.
 
 ---
 
@@ -324,4 +419,10 @@ npm run dev        # starts at http://localhost:3000
 
 `.env.local` is present with all keys. Do not commit it (it is gitignored).
 
-To deploy manually: `vercel --prod` or just push to `main` (Vercel auto-deploys).
+To deploy a preview manually: `vercel deploy --yes`.
+
+To deploy production: `vercel deploy --prod` or push to `main` if the project is
+configured to auto-deploy production from `main`.
+
+Latest preview deployed on 2026-05-29:
+`https://vibecount-nrdh9zfjq-jims-projects-b7cb6c2e.vercel.app`
