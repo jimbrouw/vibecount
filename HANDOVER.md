@@ -417,8 +417,13 @@ Done when: speak an invoice → ambiguous amounts force a choice → lands in Ta
   fallback manual category options if production still returns no category rows.
 - Saving a manual record from a fallback option creates the real user-owned
   category before inserting the review record.
-- CSV and bank import still rely on real category rows so imported review rows
-  keep valid UUID category references.
+- Production Supabase initially only had the older invoice/client schema, so CSV
+  import failed at `record_imports`. On 29 May 2026, the Phase 2 records
+  foundation, secure records storage, CSV import review, and bank statement
+  import migrations were applied to project `lazorvlkgxgzdgflzhjm`.
+- Verified live tables now exist for `record_imports`, `csv_import_rows`,
+  `bank_statement_import_rows`, `financial_records`, attachments, exports, and
+  10 default categories.
 
 ### Phase 4 note — agentic tax copilot
 
@@ -478,5 +483,5 @@ To deploy a preview manually: `vercel deploy --yes`.
 To deploy production: `vercel deploy --prod` or push to `main` if the project is
 configured to auto-deploy production from `main`.
 
-Latest preview deployed on 2026-05-29:
-`https://vibecount-7jwohqc5e-jims-projects-b7cb6c2e.vercel.app`
+Latest production deployment promoted on 2026-05-29:
+`https://vibecount-teal.vercel.app`
