@@ -337,12 +337,15 @@ export async function uploadBankStatement(formData: FormData) {
 
   const supabase = await createClient();
   const categories = await ensureRecordCategories(supabase, userId);
-  const text = await readImportFileText(file).catch(() => null);
+  const text = await readImportFileText(file).catch((error: unknown) => {
+    console.warn("Bank statement text extraction failed", summarisePdfReadError(error));
+    return null;
+  });
 
   if (text === null) {
     redirect(
       `/dashboard/records?error=${encodeURIComponent(
-        "Could not read this bank statement. Try a text-readable PDF, a bank CSV export, or a statement text file."
+        getBankStatementReadError(file)
       )}`
     );
   }
@@ -523,6 +526,25 @@ async function readImportFileText(file: File) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     return new TextDecoder("latin1").decode(bytes);
   });
+}
+
+function getBankStatementReadError(file: File) {
+  if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+    return "Could not extract text from this PDF. Some bank-exported PDFs are password-protected, image-only, or use locked text. Try a bank CSV export or statement text file.";
+  }
+
+  return "Could not read this bank statement. Try a bank CSV export or statement text file.";
+}
+
+function summarisePdfReadError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return { name: "UnknownError", message: "Unknown PDF read failure" };
+  }
+
+  return {
+    name: error.name,
+    message: error.message.slice(0, 180),
+  };
 }
 
 async function installPdfCanvasGlobals() {
