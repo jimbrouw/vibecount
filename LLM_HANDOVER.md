@@ -1,6 +1,6 @@
 # VibeCount LLM Coder Handover
 
-Last updated: 2026-05-30 (session 2)
+Last updated: 2026-05-30 (session 3)
 
 ## Start Here
 
@@ -45,6 +45,7 @@ Production is currently deployed and aliased to:
 
 Latest commits on this branch (most recent first):
 
+- `518d17a Add approval-action agent and scheduled quarterly readiness checks`
 - `a06280a Add Phase 4 draft-action agent: AI category suggestions for records`
 - `6801711 Mark Phase 3 reminder sending and Phase 4 first tasks complete in tasks.md`
 - `3ffee34 Add Phase 4 read-only review agent and MCP acceptance criteria`
@@ -98,6 +99,30 @@ endpoints, browser-agent login, or any DB writes.
   prompt from the summary (amounts, categories, dates, descriptions only) and
   calls Claude. Returns `{ suggestion: string }`. Never writes to the database.
   Shows a clear read-only caveat in the UI.
+
+### Phase 4 approval-action agent + quarterly readiness checks (session 3)
+
+**Approval-action agent (batch categorise):**
+- `app/api/records/batch-suggest-categories/route.ts` — `GET` reads all
+  uncategorised records (up to 50), sends them all in one Claude call,
+  returns `{ suggestions: [...] }` validated against real category IDs.
+- `app/dashboard/review/BatchCategorisePanel.tsx` — client component on
+  `/dashboard/review`. Shows a checkbox table (pre-ticked); user reviews
+  and unticks disagreements before clicking "Apply N categories".
+- `app/dashboard/records/actions.ts` `applyBatchCategories` — verifies
+  ownership and record_type match for every row; only applies ticked ones.
+
+**Quarterly readiness checks:**
+- `supabase/migrations/20260530100000_quarterly_readiness_checks.sql` —
+  new table with unique index per user/year/quarter. **Apply to production
+  Supabase before deploying this branch.**
+- `app/api/cron/quarterly-check/route.ts` — CRON_SECRET-authenticated
+  POST; uses admin client to sweep users with quarter records, upserts
+  status (`ok`/`needs_attention`) and plain-English notes per user/quarter.
+- `vercel.json` — cron schedules: reminders daily 08:00, repeating
+  invoices daily 07:00, quarterly check on the 6th of Jan/Apr/Jul/Oct.
+- `/dashboard/review` shows latest check result (green/amber).
+- `/dashboard` shows an amber banner when the latest check needs_attention.
 
 ### Phase 4 draft-action agent: category suggestions (session 2)
 
@@ -202,7 +227,13 @@ Known audit issue:
      accuracy test has not been run.
    - Not a blocker for current branch work.
 
-3. Category suggestion agent — not yet production-verified:
+3. **Production migration required** — `quarterly_readiness_checks` table
+   must be applied to Supabase before this branch is deployed. The review
+   page and dashboard both query this table; they will error without it.
+   Run the migration at:
+   `supabase/migrations/20260530100000_quarterly_readiness_checks.sql`
+
+4. Category suggestion agent — not yet production-verified:
    - `SuggestCategoryButton` appears on uncategorised records. Requires
      `ANTHROPIC_API_KEY` in Vercel env vars to work.
    - If the key is missing the button will show an error inline.
@@ -248,8 +279,6 @@ Production check after latest push:
 4. Test a pending reminder draft can be sent or discarded from the dashboard.
 
 Remaining Phase 4 tasks (see tasks.md Phase 4 direction):
-- Approval-action agent that writes only after explicit user confirmation.
-- Scheduled quarterly readiness checks with audit logs.
 - Browser-agent login with short-lived scoped sessions (parked — do not build here).
 - Proposals, contracts, e-signatures (parked — do not build here).
 - All write-like MCP tools remain parked until acceptance criteria are met

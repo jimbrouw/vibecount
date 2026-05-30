@@ -282,8 +282,20 @@ are stable. The Creators Base-style feature set belongs here, not in Phase 2.
       category_id only after explicit Accept. npm run lint, npm test, npm run
       build pass. Self Assessment prep answers and accountant questions remain
       as future iterations of this agent.
-- [ ] Approval-action agent that writes only after explicit user confirmation
-- [ ] Scheduled quarterly readiness checks with audit logs
+- [x] Approval-action agent that writes only after explicit user confirmation
+      Verification: BatchCategorisePanel on /dashboard/review calls
+      /api/records/batch-suggest-categories (one Claude call for all
+      uncategorised records), shows a checkbox table, applyBatchCategories
+      server action applies only ticked rows after ownership+type checks.
+      npm run lint, npm test, npm run build pass.
+- [x] Scheduled quarterly readiness checks with audit logs
+      Verification: quarterly_readiness_checks table migration added;
+      POST /api/cron/quarterly-check runs per-user sweep (admin client),
+      upserts status/notes per quarter; vercel.json cron schedules all
+      three cron endpoints; /dashboard/review shows latest check result;
+      /dashboard shows amber banner when needs_attention.
+      Migration must be applied to production Supabase before deploying.
+      npm run lint, npm test, npm run build pass.
 - [ ] Proposals that inherit client, service, price, scope, and timeline data
 - [ ] Contracts generated from approved proposal data
 - [ ] E-signatures via a specialist provider rather than a home-grown signature system
