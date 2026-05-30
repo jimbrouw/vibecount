@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatPounds } from "@/lib/invoices/money";
 import LogoutButton from "@/app/dashboard/LogoutButton";
 import { setContractStatus } from "./actions";
+import SignatureCanvas from "./SignatureCanvas";
 
 export const metadata = {
   title: "Contracts — VibeCount",
@@ -150,11 +151,7 @@ export default async function ContractsPage({
                     )}
 
                     {c.status === "sent" && (
-                      <form action={setContractStatus}>
-                        <input type="hidden" name="contractId" value={c.id} />
-                        <input type="hidden" name="status" value="signed" />
-                        <button type="submit" data-testid={`contract-mark-signed-${c.id}`} className={outlineBtn}>Mark signed</button>
-                      </form>
+                      <SignatureCanvas contractId={c.id} contractNumber={c.number} />
                     )}
                   </div>
                 </div>
