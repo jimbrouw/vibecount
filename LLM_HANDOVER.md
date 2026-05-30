@@ -1,6 +1,6 @@
 # VibeCount LLM Coder Handover
 
-Last updated: 2026-05-29 18:46 BST
+Last updated: 2026-05-30
 
 ## Start Here
 
@@ -20,6 +20,8 @@ Read these before making changes:
 - `HANDOVER.md`
 
 Important boundary: do not build Phase 4 MCP/browser-agent features on this branch.
+The Phase 4 read-only review agent and MCP acceptance criteria doc are already
+on this branch; they do not use MCP endpoints or browser-agent login and are safe.
 
 ## Non-Negotiable Product Rules
 
@@ -41,20 +43,72 @@ Production is currently deployed and aliased to:
 
 `https://vibecount-teal.vercel.app`
 
-Latest pushed commits on this branch:
+Latest commits on this branch (most recent first):
 
+- `6801711 Mark Phase 3 reminder sending and Phase 4 first tasks complete in tasks.md`
+- `3ffee34 Add Phase 4 read-only review agent and MCP acceptance criteria`
+- `ab64d2b Complete Phase 3: user-approved reminder sending via Resend`
+- `a67cc23 Fix records review QA blockers`
+- `be852ea Add LLM coder handover`
 - `c017c7d Clarify bank PDF extraction failures`
 - `b086a4e Prevent bank PDF import crash`
 - `378e035 Document production records schema migration`
-- `bc3b42b Add records category fallback`
-- `10761c5 Fix records import QA issues`
-- `9a5667c Clarify tax estimate caveats`
-- `de2075e Harden human review gates`
-- `6f1f85e Add agent-native selectors`
 
-Production has been promoted after the bank PDF crash fix.
+## What Was Built — 2026-05-30
 
-## What Was Verified By User
+### Phase 3 complete: User-approved reminder sending
+
+All Phase 3 tasks are now done.
+
+The cron job at `/api/reminders/due` already created `pending` reminder drafts in
+`invoice_reminders`. The missing piece was a user-facing UI to actually send or
+discard them.
+
+Changes:
+
+- `app/dashboard/invoices/actions.ts` — added `sendApprovedReminder` and
+  `discardReminderDraft` server actions.
+  - `sendApprovedReminder`: reads the pending draft, calls Resend to send the
+    email, marks status=`sent`, saves `provider_message_id`, and sets
+    `next_reminder_at` on the invoice for the next cycle.
+  - `discardReminderDraft`: deletes the pending row (no schema change needed).
+- `app/dashboard/page.tsx` — pending reminder drafts are now always visible on
+  the dashboard when they exist (no longer hidden behind `?reminders=1`). Each
+  draft shows the recipient, subject, message body, and two standalone forms:
+  **Send reminder** and **Discard**, both with `data-testid` attributes.
+
+### Phase 4 first tasks: Read-only review agent + MCP acceptance criteria
+
+These are the first Phase 4 tasks from `tasks.md`. They do NOT involve MCP
+endpoints, browser-agent login, or any DB writes.
+
+**Read-only review agent (`/dashboard/review`)**
+
+- New nav link: "Review" added to the header across all pages.
+- `app/dashboard/review/page.tsx` — server component that reads:
+  - Approved `financial_records` for the current tax year (last 20)
+  - `financial_record_quarter_summaries` for the current tax year
+  - Sent, unpaid invoices
+  - Count of records in `review` state
+  Builds a sanitised summary (no bank account numbers, no raw PDF content)
+  and passes it to the client component.
+- `app/dashboard/review/RecordsReviewAgent.tsx` — client component with
+  idle/loading/done/error states. On "Run review" it POSTs the summary to
+  `/api/review/suggest` and displays the bullet-point AI analysis.
+- `app/api/review/suggest/route.ts` — POST route that builds a plain-text
+  prompt from the summary (amounts, categories, dates, descriptions only) and
+  calls Claude. Returns `{ suggestion: string }`. Never writes to the database.
+  Shows a clear read-only caveat in the UI.
+
+**MCP acceptance criteria (`knowledge-base/mcp-acceptance-criteria.md`)**
+
+Documents the full checklist every future MCP tool must satisfy before being
+built: scoped auth, audit logging, ownership checks, idempotency, valid status
+transitions, and explicit human confirmation before any write-like action.
+Lists explicitly prohibited actions (finalise_invoice, silent email sending,
+HMRC submission, etc.) and parked tools for Phase 4.
+
+## What Was Previously Verified By User
 
 User confirmed:
 
@@ -65,131 +119,7 @@ User confirmed:
 - Records category dropdown works on production.
 - CSV import now stages rows correctly for review.
 
-Screenshots showed:
-
-- Category dropdown populated with income/expense categories.
-- Manual record review state now says `Needs review`.
-- CSV import shows rows staged as `Needs review` with Approve/Discard controls.
-
-## What Was Fixed Recently
-
-### Records Category Dropdown
-
-Problem:
-
-- Production had no record categories, so the category dropdown showed only grey optgroup labels.
-
-Fix:
-
-- Added `lib/records/categories.ts` fallback/self-heal helpers.
-- Records page now renders fallback options if Supabase returns no category rows.
-- Saving a fallback category creates the real user-owned category before inserting the review record.
-- Production Supabase now has the proper Phase 2 records migrations and 10 default categories.
-
-### Review Gates
-
-Fixes already made:
-
-- Invoice PDF route requires `humanConfirmed: true`.
-- Manual records are created as `review`, not directly approved.
-- Reminder automation creates pending drafts instead of sending emails.
-
-### CSV Import
-
-Problem:
-
-- CSV initially failed with `Could not create the CSV import.`
-- Cause: live Supabase was missing the Phase 2 records schema.
-
-Fix:
-
-- Applied production Supabase migrations for:
-  - `record_categories`
-  - `record_imports`
-  - `financial_records`
-  - `financial_record_changes`
-  - `record_attachments`
-  - `record_exports`
-  - `csv_import_rows`
-  - `bank_statement_import_rows`
-- Verified live tables exist and default category count is 10.
-- CSV parser supports common bank headers including `Transaction Date`, `Details`, `Paid In`, `Paid Out`, debit/credit aliases, and category fallback.
-
-### Bank PDF Import
-
-Problem:
-
-- Uploading a bank PDF crashed the page with a server error.
-- Vercel logs showed `ReferenceError: DOMMatrix...`.
-
-Fix:
-
-- `app/dashboard/records/actions.ts` now installs minimal server-side DOM globals before loading `pdf-parse`.
-- PDF extraction is caught and redirected to a normal Records error banner instead of crashing.
-- User-facing error now says:
-  `Could not extract text from this PDF. Some bank-exported PDFs are password-protected, image-only, or use locked text. Try a bank CSV export or statement text file.`
-- Sanitized warning logs include only error name/message, not statement contents.
-
-Current limitation:
-
-- Bank-exported PDFs can still be unreadable if they are password-protected, image-only, or use locked/custom text encoding.
-- CSV bank exports are the reliable Phase 2 path.
-- OCR is not implemented and should not be added casually; it has privacy/security implications and moves toward later-phase work.
-
-## Production Supabase Notes
-
-Live Supabase project `lazorvlkgxgzdgflzhjm` originally only had older invoice/client tables.
-
-On 2026-05-29 the Phase 2 records migrations were applied using the Supabase connector:
-
-- `phase_2_digital_records_foundation`
-- `phase_2_secure_records_storage`
-- `phase_2_csv_import_review`
-- `phase_2_bank_statement_import`
-
-Verified tables:
-
-- `record_categories`
-- `record_imports`
-- `financial_records`
-- `financial_record_changes`
-- `record_attachments`
-- `record_exports`
-- `csv_import_rows`
-- `bank_statement_import_rows`
-
-Verified default categories: 10.
-
-Release QA found the live database was missing the committed Phase 3 schema
-migrations. Applied on 2026-05-29 using the Supabase connector:
-
-- `phase_3_quotes_services`
-- `add_invoice_payment_links`
-- `repeating_invoice_templates`
-- `invoice_delivery_reminders`
-
-This fixed settings save failures caused by missing `payment_link_provider` /
-`payment_link_url` columns and aligned production schema with the current branch.
-
-## Release QA Pass — 2026-05-29 18:46 BST
-
-Scope:
-
-- Branch `codex/phase-3-invoice-reminders` at latest pushed state before fixes.
-- Local dev server: `http://localhost:3002`.
-- Authenticated QA user created with Supabase admin for the pass.
-- Browser runtime fallback: in-app Browser plugin was listed but unavailable
-  (`iab` could not be acquired), so Playwright Chromium was used.
-
-Commands passed after fixes:
-
-```bash
-npm run lint
-npm test
-npm run build
-```
-
-Browser/API flows verified:
+Release QA 2026-05-29 verified:
 
 - Login/auth reaches the protected dashboard.
 - Settings loads and saves successfully.
@@ -207,29 +137,24 @@ Browser/API flows verified:
 - Due reminder route writes a pending `invoice_reminders` draft with
   `sent_at = null` and no provider message id.
 
-Release blockers fixed:
+## Production Supabase Notes
 
-- Manual record category default selected the first sorted category, which could
-  be an expense while the record type default was income. The default now uses
-  the first income category when no explicit value is supplied.
-- Server-action review buttons used button `name/value`, which React warned
-  could be overridden for function actions. Review/import status now travels in
-  hidden inputs, and manual Approve/Exclude buttons are standalone forms.
+Live Supabase project `lazorvlkgxgzdgflzhjm`. Applied migrations:
 
-Vercel status checked:
+- `phase_2_digital_records_foundation`
+- `phase_2_secure_records_storage`
+- `phase_2_csv_import_review`
+- `phase_2_bank_statement_import`
+- `phase_3_quotes_services`
+- `add_invoice_payment_links`
+- `repeating_invoice_templates`
+- `invoice_delivery_reminders`
 
-- Latest preview before this fix was Ready:
-  `https://vibecount-qtzitagjd-jims-projects-b7cb6c2e.vercel.app`
-- Latest production deployment before this fix was Ready:
-  `https://vibecount-h6me6bn5z-jims-projects-b7cb6c2e.vercel.app`
-- Preview URL returned HTTP 401 due to Vercel deployment protection.
-- Stable production alias `https://vibecount-teal.vercel.app` returned HTTP 200.
+Verified tables: `record_categories`, `record_imports`, `financial_records`,
+`financial_record_changes`, `record_attachments`, `record_exports`,
+`csv_import_rows`, `bank_statement_import_rows`, `invoice_reminders`.
 
-Phase 4 exclusion check:
-
-- Targeted search found no `/api/mcp`, `get_pl_summary`, `list_expenses`,
-  `finalise_invoice`, browser-agent login, or stored BYO provider key
-  implementation on this branch.
+Default categories: 10.
 
 ## Verification Commands
 
@@ -248,33 +173,31 @@ Known build warning:
 
 Known audit issue:
 
-- `npm audit --omit=dev --audit-level=high` still reports vulnerabilities through `@vercel/config`/`path-to-regexp` and `next`/`postcss`.
+- `npm audit --omit=dev --audit-level=high` still reports vulnerabilities through
+  `@vercel/config`/`path-to-regexp` and `next`/`postcss`.
 - Do not run `npm audit fix --force`; it suggests breaking downgrades.
 
-## Current Known Issues / Next QA
+## Current Known Issues / Next Work
 
 1. Bank PDF import:
-   - Ask user to retry once after `c017c7d`.
-   - Then check Vercel logs for sanitized line `Bank statement text extraction failed`.
-   - If extraction still fails, recommend CSV/text export for Phase 2.
+   - Graceful error in place: "Could not extract text from this PDF."
+   - CSV/text export is the supported Phase 2 path.
 
-2. CSV review flow:
-   - Verified in release QA: staged rows can be approved and committed for one
-     income row and one expense row.
+2. Whisper sub-gate (Task 6, tasks.md):
+   - Voice invoice works in production but the formal 20-sample Whisper
+     accuracy test has not been run.
+   - Not a blocker for current branch work.
 
-3. Tax prep:
-   - Verified in release QA: approved records feed tax prep, caveat/estimate
-     wording remains visible, net profit language is present, and export includes
-     caveat/net-profit wording.
+3. Review agent — not yet production-verified:
+   - `/dashboard/review` is new on this branch and has not been tested against
+     production data yet. Deploy and do a quick check after pushing.
+   - If `ANTHROPIC_API_KEY` is missing from Vercel env vars, the route returns
+     a 503 with a clear user-facing error ("AI review is not configured.").
 
-4. Payment reminders:
-   - Verified in release QA: enabling reminders prepares draft follow-up, and
-     the due-reminder route creates pending reminder draft rows rather than
-     sending email.
-
-5. Voice:
-   - User says sign-in, voice invoice, playback, and PDF download work.
-   - Formal 20-sample Whisper sub-gate remains incomplete in `tasks.md`.
+4. Reminder sending — not yet production-verified:
+   - The Resend API key and from-address are in `.env.local`. Confirm
+     `RESEND_API_KEY` and `RESEND_FROM_EMAIL` are also set in Vercel env vars
+     before testing reminder sending on production.
 
 ## Do Not Do Next
 
@@ -282,27 +205,34 @@ Known audit issue:
 - Do not add browser-agent login.
 - Do not add `get_pl_summary`, `list_expenses`, or `finalise_invoice` MCP tools.
 - Do not wire autonomous bank/OCR processing into LLM prompts.
-- Do not send reminders automatically.
+- Do not send reminders automatically (always require human approval).
 - Do not bypass review states for records/imports.
 
 ## Useful URLs
 
 - Production: `https://vibecount-teal.vercel.app`
 - Records: `https://vibecount-teal.vercel.app/dashboard/records`
+- Review (new): `https://vibecount-teal.vercel.app/dashboard/review`
 - Vercel project: `https://vercel.com/jims-projects-b7cb6c2e/vibecount`
 - Supabase project: `https://supabase.com/dashboard/project/lazorvlkgxgzdgflzhjm`
 
 ## Suggested Next Prompt For Another LLM Coder
 
 ```text
-Continue VibeCount Phase 2/3 hardening on branch codex/phase-3-invoice-reminders.
+Continue VibeCount Phase 3/4 work on branch codex/phase-3-invoice-reminders.
 Read AGENTS.md, spec.md, tasks.md, HANDOVER.md, and LLM_HANDOVER.md first.
 
-Start with records QA:
-1. Check sanitized Vercel logs for the latest bank PDF import retry.
-2. If PDF extraction still fails, keep the graceful error and document CSV/text as the supported Phase 2 path.
-3. Verify CSV staged rows can be approved/committed and then appear in Records summaries and Tax prep.
-4. Keep all review gates: no silent invoice finalisation, record approval, reminder send, payment, or HMRC/tax-prep acceptance.
+Production check after latest push:
+1. Verify RESEND_API_KEY and RESEND_FROM_EMAIL are set in Vercel env vars.
+2. Verify ANTHROPIC_API_KEY is set in Vercel env vars.
+3. Test /dashboard/review loads and the AI review returns findings.
+4. Test a pending reminder draft can be sent or discarded from the dashboard.
+
+Remaining Phase 4 tasks (see tasks.md Phase 4 direction):
+- Browser-agent login with short-lived scoped sessions (parked — do not build here).
+- Proposals, contracts, e-signatures (parked — do not build here).
+- All write-like MCP tools remain parked until acceptance criteria are met
+  (see knowledge-base/mcp-acceptance-criteria.md).
 
 Do not build Phase 4 MCP/browser-agent features.
 Run npm test, npm run lint, npm run build before committing.
