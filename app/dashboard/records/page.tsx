@@ -26,6 +26,7 @@ import {
 } from "./actions";
 import LogoutButton from "../LogoutButton";
 import PlainLanguageNote from "../PlainLanguageNote";
+import SuggestCategoryButton from "./SuggestCategoryButton";
 
 export const metadata = {
   title: "Records — VibeCount",
@@ -661,11 +662,16 @@ function ManualRecordsList({
                     </p>
                     <StatusBadge status={record.status} />
                   </div>
-                  <p className="mt-1 text-xs text-[#4b8068]">
-                    {formatRecordDate(record.record_date)} ·{" "}
-                    {record.record_categories?.name ?? "No category"} · Quarter{" "}
-                    {record.tax_quarter}
-                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#4b8068]">
+                    <span>
+                      {formatRecordDate(record.record_date)} ·{" "}
+                      {record.record_categories?.name ?? "No category"} · Quarter{" "}
+                      {record.tax_quarter}
+                    </span>
+                    {!record.category_id && (
+                      <SuggestCategoryButton recordId={record.id} />
+                    )}
+                  </div>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold text-[#14532d]">
@@ -1188,6 +1194,10 @@ function getPageMessage(params: { [key: string]: string | string[] | undefined }
 
   if (params.reviewed) {
     return { type: "success" as const, text: "Record review state updated." };
+  }
+
+  if (params.categorised) {
+    return { type: "success" as const, text: "Category applied." };
   }
 
   const csvImported = getSingleParam(params.csvImported);

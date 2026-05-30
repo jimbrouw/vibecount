@@ -25,7 +25,6 @@ type ApprovedRecord = {
   record_categories: { name: string } | null;
 };
 
-type QuarterRow = Parameters<typeof buildQuarterSummaries>[1][number];
 
 type InvoiceRow = {
   number: string;

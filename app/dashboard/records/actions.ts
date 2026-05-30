@@ -147,6 +147,52 @@ export async function setManualRecordStatus(formData: FormData) {
   redirect("/dashboard/records?reviewed=1");
 }
 
+export async function applyRecordCategory(formData: FormData) {
+  const userId = await requireUserId();
+  const recordId = String(formData.get("recordId") ?? "");
+  const categoryId = String(formData.get("categoryId") ?? "");
+
+  if (!recordId || !categoryId) {
+    redirect(`/dashboard/records?error=${encodeURIComponent("Missing record or category.")}`);
+  }
+
+  const supabase = await createClient();
+
+  const { data: record } = await supabase
+    .from("financial_records")
+    .select("record_type")
+    .eq("id", recordId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!record) {
+    redirect(`/dashboard/records?error=${encodeURIComponent("Record not found.")}`);
+  }
+
+  const category = await resolveOwnedCategory(
+    supabase,
+    userId,
+    categoryId,
+    record.record_type as RecordType
+  );
+  if (!category) {
+    redirect(`/dashboard/records?error=${encodeURIComponent("Category not found.")}`);
+  }
+
+  const { error } = await supabase
+    .from("financial_records")
+    .update({ category_id: category.id })
+    .eq("id", recordId)
+    .eq("user_id", userId);
+
+  if (error) {
+    redirect(`/dashboard/records?error=${encodeURIComponent("Could not apply category.")}`);
+  }
+
+  revalidatePath("/dashboard/records");
+  redirect("/dashboard/records?categorised=1");
+}
+
 export async function uploadRecordsCsv(formData: FormData) {
   const userId = await requireUserId();
   const file = formData.get("csvFile");
