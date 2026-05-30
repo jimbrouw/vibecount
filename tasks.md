@@ -316,8 +316,12 @@ are stable. The Creators Base-style feature set belongs here, not in Phase 2.
       (Electronic Communications Act 2000 + retained eIDAS) for most freelance
       contracts. No third-party service needed. Upgrade path: DocuSeal (open source,
       self-hostable REST API) if certified audit trail is needed later.
-- [ ] Lightweight project / scope tracking only where it improves invoicing, payment,
+- [x] Lightweight project / scope tracking only where it improves invoicing, payment,
       or tax records
+      Verification: projects table + project_id FK on invoices and financial_records
+      migration applied to prod; /dashboard/projects create + list with invoiced
+      total, income, expenses, budget progress bar, tag-invoice/tag-record dropdowns,
+      status flow (active/completed/archived). npm run lint, npm run build pass.
 
 First Phase 4 task:
 
