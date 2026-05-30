@@ -311,7 +311,11 @@ are stable. The Creators Base-style feature set belongs here, not in Phase 2.
       PDF includes scope, deliverables, timeline, fee in figures+words,
       default plain-English terms, and signature blocks.
       npm run lint, npm test, npm run build pass.
-- [ ] E-signatures via a specialist provider rather than a home-grown signature system
+- [ ] E-signatures — canvas signature capture embedded into contract PDF via pdf-lib.
+      A drawn/typed signature is a valid simple electronic signature under UK law
+      (Electronic Communications Act 2000 + retained eIDAS) for most freelance
+      contracts. No third-party service needed. Upgrade path: DocuSeal (open source,
+      self-hostable REST API) if certified audit trail is needed later.
 - [ ] Lightweight project / scope tracking only where it improves invoicing, payment,
       or tax records
 
