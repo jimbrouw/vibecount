@@ -122,10 +122,14 @@ Read `spec.md` first. This file is the ordered work.
 
 ## Parallel track (start now, has an outside dependency)
 
-- [ ] **Glossary content** — founder writes 20–30 worst tax/accounting terms
+- [x] **Glossary content** — founder writes 20–30 worst tax/accounting terms
       (official → simple → example).
+      27 terms loaded into lib/glossary.ts. 5 flagged for accountant VERIFY:
+      Trading Allowance (£1,000 still current?), Class 2 NICs (voluntary rate),
+      Annual Investment Allowance (current cap), Use of home (flat rates),
+      VAT Flat Rate Scheme (sector %). All others are ready.
 - [ ] **Accountant reviews** the glossary for correctness. Explain Simply does not
-      launch until this review is done.
+      launch until this review is done. Specifically verify the 5 flagged terms above.
 
 ---
 
