@@ -132,6 +132,12 @@ export default async function DashboardPage({
               Quotes
             </Link>
             <Link
+              href="/dashboard/proposals"
+              className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white"
+            >
+              Proposals
+            </Link>
+            <Link
               href="/dashboard/invoices/repeating"
               className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white"
             >
@@ -664,6 +670,7 @@ function flashMessage(searchParams: { [key: string]: string | string[] | undefin
   if (searchParams.remindersEnabled) return { kind: "success", text: "Reminder drafts enabled." };
   if (searchParams.remindersDisabled) return { kind: "success", text: "Automatic reminders stopped." };
   if (searchParams.reminderSent) return { kind: "success", text: "Reminder sent to client." };
+  if (searchParams.proposalConverted) return { kind: "success", text: "Invoice created from proposal." };
   if (searchParams.reminderDiscarded) return { kind: "success", text: "Reminder draft discarded." };
   return null;
 }

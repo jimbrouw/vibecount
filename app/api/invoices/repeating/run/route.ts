@@ -4,7 +4,7 @@ import { nextRunDateFrom, type RepeatingFrequency } from "@/lib/repeating-invoic
 
 export const runtime = "nodejs";
 
-export async function GET(request: Request) {
+export async function GET() {
   return POST();
 }
 
