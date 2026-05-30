@@ -74,7 +74,8 @@ const GLOSSARY_TERMS: GlossaryTerm[] = [
     explanation: "The income tax bands: 20% / 40% / 45%.",
     example: "Profit above GBP 50,270 is taxed at 40%.",
   },
-  // VERIFY: confirm GBP 1,000 Trading Allowance is still current
+  // VERIFY (accountant decision): it's either/or with expenses — flat £1,000 or real costs, never both.
+  // If actual expenses exceed £1,000, claiming the allowance loses money. Check which way leaves the user better off.
   {
     id: "trading-allowance",
     term: "Trading Allowance",
@@ -90,7 +91,8 @@ const GLOSSARY_TERMS: GlossaryTerm[] = [
     example:
       "On GBP 39,000 profit, 6% applies to the slice above GBP 12,570.",
   },
-  // VERIFY: confirm Class 2 NIC voluntary rate and current rules
+  // VERIFY (accountant decision): no longer compulsory, but voluntary payment can cheaply protect State Pension in
+  // low-profit years. Whether it's worth it depends on the user's NI record — needs their State Pension forecast, not a generic rule.
   {
     id: "class-2-nics",
     term: "Class 2 NICs",
@@ -121,7 +123,8 @@ const GLOSSARY_TERMS: GlossaryTerm[] = [
       "Tax relief for buying bigger kit or equipment (capital items).",
     example: "A GBP 2,000 equipment purchase claimed as a capital allowance.",
   },
-  // VERIFY: confirm current Annual Investment Allowance cap
+  // VERIFY (accountant decision): cap is high so most freelancers never hit it, but cars don't qualify and timing
+  // across tax years matters. Accountant confirms the item is eligible and claimed in the right year.
   {
     id: "annual-investment-allowance",
     term: "Annual Investment Allowance (AIA)",
@@ -135,7 +138,8 @@ const GLOSSARY_TERMS: GlossaryTerm[] = [
     explanation: "Flat-rate shortcuts instead of working out exact costs.",
     example: "A fixed pence-per-mile rate instead of real car costs.",
   },
-  // VERIFY: confirm current use-of-home flat rates
+  // VERIFY (accountant decision): flat rate is often lower than claiming a proportion of actual bills (rent, heating,
+  // broadband). It's a choice between easy and bigger. Check which gives more relief for the user's specific setup.
   {
     id: "use-of-home",
     term: "Use of home (flat rate)",
@@ -184,7 +188,9 @@ const GLOSSARY_TERMS: GlossaryTerm[] = [
     explanation: "VAT paid on purchases that can be reclaimed.",
     example: "VAT paid on a work laptop.",
   },
-  // VERIFY: confirm applicable flat rate % for freelancer/creative sector
+  // VERIFY (accountant decision): the % depends on trade sector, and the "limited cost trader" rule can push to a
+  // worse rate if few goods are bought. For a service freelancer with low costs the scheme can cost more than
+  // standard VAT. Needs modelling against the user's real numbers before recommending it.
   {
     id: "vat-flat-rate",
     term: "VAT Flat Rate Scheme",
