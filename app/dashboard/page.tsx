@@ -78,7 +78,7 @@ export default async function DashboardPage({
   const resolvedSearchParams = await searchParams;
   const flash = flashMessage(resolvedSearchParams);
 
-  const [{ data: recentInvoices }, { data: reminderDrafts }] = await Promise.all([
+  const [{ data: recentInvoices }, { data: reminderDrafts }, { data: readinessCheck }] = await Promise.all([
     supabase
       .from("invoices")
       .select(
@@ -94,6 +94,14 @@ export default async function DashboardPage({
       .eq("status", "pending")
       .order("created_at", { ascending: false })
       .limit(10),
+    supabase
+      .from("quarterly_readiness_checks")
+      .select("status, notes, tax_quarter")
+      .eq("user_id", user.id)
+      .eq("status", "needs_attention")
+      .order("checked_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const invoices = (recentInvoices ?? []) as unknown as DashboardInvoice[];
@@ -202,6 +210,23 @@ export default async function DashboardPage({
                     strokeLinejoin="round"
                   />
                 </svg>
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {readinessCheck && (
+          <div className="mb-6 flex items-start gap-4 rounded-xl border border-[#fef08a] bg-[#fefce8] p-5" data-testid="readiness-alert-banner">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-[#713f12]">
+                Quarter {readinessCheck.tax_quarter} records need attention
+              </p>
+              <p className="mt-0.5 text-xs text-[#854d0e]">{readinessCheck.notes}</p>
+              <Link
+                href="/dashboard/review"
+                className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#713f12] underline underline-offset-2"
+              >
+                Review now
               </Link>
             </div>
           </div>

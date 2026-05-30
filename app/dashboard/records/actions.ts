@@ -147,6 +147,64 @@ export async function setManualRecordStatus(formData: FormData) {
   redirect("/dashboard/records?reviewed=1");
 }
 
+export async function applyBatchCategories(formData: FormData) {
+  const userId = await requireUserId();
+  const supabase = await createClient();
+
+  const entries: { recordId: string; categoryId: string }[] = [];
+  for (const [key, value] of formData.entries()) {
+    if (key.startsWith("apply-")) {
+      const recordId = key.slice("apply-".length);
+      const categoryId = String(value);
+      if (recordId && categoryId) {
+        entries.push({ recordId, categoryId });
+      }
+    }
+  }
+
+  if (entries.length === 0) {
+    redirect("/dashboard/review?batchApplied=0");
+  }
+
+  const { data: ownedRecords } = await supabase
+    .from("financial_records")
+    .select("id, record_type")
+    .eq("user_id", userId)
+    .in("id", entries.map((e) => e.recordId));
+
+  const recordTypeMap = new Map(
+    (ownedRecords ?? []).map((r: { id: string; record_type: string }) => [r.id, r.record_type as RecordType])
+  );
+
+  const { data: ownedCategories } = await supabase
+    .from("record_categories")
+    .select("id, record_type")
+    .or(`user_id.eq.${userId},is_default.eq.true`);
+
+  const categoryTypeMap = new Map(
+    (ownedCategories ?? []).map((c: { id: string; record_type: string }) => [c.id, c.record_type])
+  );
+
+  let applied = 0;
+  for (const { recordId, categoryId } of entries) {
+    const recordType = recordTypeMap.get(recordId);
+    const catType = categoryTypeMap.get(categoryId);
+    if (!recordType || !catType || recordType !== catType) continue;
+
+    const { error } = await supabase
+      .from("financial_records")
+      .update({ category_id: categoryId })
+      .eq("id", recordId)
+      .eq("user_id", userId);
+
+    if (!error) applied++;
+  }
+
+  revalidatePath("/dashboard/records");
+  revalidatePath("/dashboard/review");
+  redirect(`/dashboard/review?batchApplied=${applied}`);
+}
+
 export async function applyRecordCategory(formData: FormData) {
   const userId = await requireUserId();
   const recordId = String(formData.get("recordId") ?? "");

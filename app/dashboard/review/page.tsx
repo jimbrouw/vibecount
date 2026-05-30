@@ -10,6 +10,7 @@ import {
 import { formatPounds } from "@/lib/invoices/money";
 import LogoutButton from "@/app/dashboard/LogoutButton";
 import RecordsReviewAgent from "./RecordsReviewAgent";
+import BatchCategorisePanel from "./BatchCategorisePanel";
 
 export const metadata = {
   title: "Records Review — VibeCount",
@@ -34,19 +35,29 @@ type InvoiceRow = {
   clients: { name: string } | { name: string }[] | null;
 };
 
-export default async function ReviewPage() {
+export default async function ReviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const taxYearStart = getCurrentTaxYearStart();
   const taxYearLabel = getTaxYearLabel(taxYearStart);
+  const resolvedParams = await searchParams;
+  const batchApplied = resolvedParams.batchApplied !== undefined
+    ? Number(resolvedParams.batchApplied)
+    : null;
 
   const [
     { data: approvedRecords },
     { count: reviewCount },
     { data: quarterRows },
     { data: sentInvoices },
+    { count: uncategorisedCount },
+    { data: latestCheck },
   ] = await Promise.all([
     supabase
       .from("financial_records")
@@ -75,6 +86,19 @@ export default async function ReviewPage() {
       .is("paid_at", null)
       .order("due_date", { ascending: true })
       .limit(10),
+    supabase
+      .from("financial_records")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .in("status", ["review", "approved"])
+      .is("category_id", null),
+    supabase
+      .from("quarterly_readiness_checks")
+      .select("tax_year_start, tax_quarter, checked_at, status, notes, uncategorised_count, review_count, overdue_invoice_count, net_profit_pence")
+      .eq("user_id", user.id)
+      .order("checked_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const quarters = buildQuarterSummaries(
@@ -149,6 +173,14 @@ export default async function ReviewPage() {
           </p>
         </div>
 
+        {batchApplied !== null && (
+          <div className="mb-6 rounded-xl border border-[#bbf7d0] bg-[#dcfce7] px-5 py-3 text-sm font-medium text-[#14532d]">
+            {batchApplied > 0
+              ? `${batchApplied} categor${batchApplied === 1 ? "y" : "ies"} applied.`
+              : "No categories applied."}
+          </div>
+        )}
+
         {reviewStateCount > 0 && (
           <div className="mb-6 flex items-start gap-4 rounded-xl border border-[#fef08a] bg-[#fefce8] p-5">
             <div>
@@ -186,14 +218,49 @@ export default async function ReviewPage() {
           )}
         </div>
 
+        {latestCheck && (
+          <div
+            className={`mb-6 rounded-xl border p-5 ${
+              latestCheck.status === "needs_attention"
+                ? "border-[#fef08a] bg-[#fefce8]"
+                : "border-[#bbf7d0] bg-[#dcfce7]"
+            }`}
+            data-testid="readiness-check-result"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className={`text-sm font-semibold ${latestCheck.status === "needs_attention" ? "text-[#713f12]" : "text-[#14532d]"}`}>
+                  {latestCheck.status === "needs_attention" ? "Quarter check: needs attention" : "Quarter check: all clear"}
+                </p>
+                <p className={`mt-0.5 text-xs ${latestCheck.status === "needs_attention" ? "text-[#854d0e]" : "text-[#166534]"}`}>
+                  Quarter {latestCheck.tax_quarter} · {latestCheck.notes}
+                </p>
+              </div>
+              <p className="flex-shrink-0 text-xs text-[#86a88e]">
+                Checked {formatCheckDate(latestCheck.checked_at)}
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="rounded-xl border border-[#bbf7d0] bg-white p-5">
           <RecordsReviewAgent summary={summary} />
         </div>
 
+        <BatchCategorisePanel uncategorisedCount={uncategorisedCount ?? 0} />
+
         <p className="mt-6 text-center text-xs text-[#86a88e]">
-          The AI review reads your approved records only. It never writes to your database or triggers any external actions. Treat findings as suggestions — verify before acting.
+          The AI review reads your approved records only. Category suggestions write only after your explicit approval. Treat all findings as suggestions — verify before acting.
         </p>
       </div>
     </main>
   );
+}
+
+function formatCheckDate(value: string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
 }
