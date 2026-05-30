@@ -144,6 +144,12 @@ export default async function DashboardPage({
               Contracts
             </Link>
             <Link
+              href="/dashboard/projects"
+              className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white"
+            >
+              Projects
+            </Link>
+            <Link
               href="/dashboard/invoices/repeating"
               className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white"
             >
