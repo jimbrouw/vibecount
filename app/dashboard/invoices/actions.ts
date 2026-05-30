@@ -2,12 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
 import {
   DEFAULT_REMINDER_SCHEDULE,
   firstReminderAt,
   inferDueDate,
   isValidEmail,
+  nextReminderAtFrom,
 } from "@/lib/invoices/reminders";
 
 type InvoiceActionRow = {
@@ -175,6 +177,95 @@ async function updateClientEmail(
   }
 
   return { ok: true };
+}
+
+export async function sendApprovedReminder(formData: FormData) {
+  const { supabase, userId } = await requireUser();
+  const reminderId = String(formData.get("reminderId") ?? "");
+  const redirectTo = safeRedirect(String(formData.get("redirectTo") ?? "/dashboard"));
+
+  if (!reminderId) redirect(`${redirectTo}?error=${encodeURIComponent("Missing reminder ID.")}`);
+
+  const { data: reminder } = await supabase
+    .from("invoice_reminders")
+    .select("id, invoice_id, recipient_email, subject, message, status")
+    .eq("id", reminderId)
+    .eq("user_id", userId)
+    .eq("status", "pending")
+    .maybeSingle();
+
+  if (!reminder) redirect(`${redirectTo}?error=${encodeURIComponent("Reminder draft not found or already processed.")}`);
+
+  const resendKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.RESEND_FROM_EMAIL;
+
+  if (!resendKey || !fromEmail) {
+    redirect(`${redirectTo}?error=${encodeURIComponent("Email sending is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL to your environment.")}`);
+  }
+
+  const resend = new Resend(resendKey);
+  const { data: sent, error: sendError } = await resend.emails.send({
+    from: fromEmail,
+    to: reminder.recipient_email,
+    subject: reminder.subject,
+    text: reminder.message,
+  });
+
+  if (sendError || !sent?.id) {
+    await supabase
+      .from("invoice_reminders")
+      .update({ status: "failed", error: sendError?.message ?? "Unknown send error" })
+      .eq("id", reminderId)
+      .eq("user_id", userId);
+    redirect(`${redirectTo}?error=${encodeURIComponent("Could not send the reminder. Check your email settings.")}`);
+  }
+
+  const now = new Date();
+  await supabase
+    .from("invoice_reminders")
+    .update({ status: "sent", sent_at: now.toISOString(), provider_message_id: sent.id })
+    .eq("id", reminderId)
+    .eq("user_id", userId);
+
+  const { data: inv } = await supabase
+    .from("invoices")
+    .select("reminder_schedule")
+    .eq("id", reminder.invoice_id)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const schedule = inv?.reminder_schedule as { repeatEveryDays?: number } | null;
+  const repeatEveryDays = Number(schedule?.repeatEveryDays ?? DEFAULT_REMINDER_SCHEDULE.repeatEveryDays);
+
+  await supabase
+    .from("invoices")
+    .update({
+      reminder_enabled: true,
+      next_reminder_at: nextReminderAtFrom(now, repeatEveryDays),
+    })
+    .eq("id", reminder.invoice_id)
+    .eq("user_id", userId);
+
+  revalidatePath("/dashboard");
+  redirect(`${redirectTo}?reminderSent=1`);
+}
+
+export async function discardReminderDraft(formData: FormData) {
+  const { supabase, userId } = await requireUser();
+  const reminderId = String(formData.get("reminderId") ?? "");
+  const redirectTo = safeRedirect(String(formData.get("redirectTo") ?? "/dashboard"));
+
+  if (!reminderId) redirect(`${redirectTo}?error=${encodeURIComponent("Missing reminder ID.")}`);
+
+  await supabase
+    .from("invoice_reminders")
+    .delete()
+    .eq("id", reminderId)
+    .eq("user_id", userId)
+    .eq("status", "pending");
+
+  revalidatePath("/dashboard");
+  redirect(`${redirectTo}?reminderDiscarded=1`);
 }
 
 function safeRedirect(value: string) {

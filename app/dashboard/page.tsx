@@ -4,9 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { amountToWords, formatPounds } from "@/lib/invoices/money";
 import {
   disableInvoiceReminders,
+  discardReminderDraft,
   enableInvoiceReminders,
   markInvoicePaid,
   markInvoiceSent,
+  sendApprovedReminder,
 } from "@/app/dashboard/invoices/actions";
 import LogoutButton from "./LogoutButton";
 import PlainLanguageNote from "./PlainLanguageNote";
@@ -75,7 +77,6 @@ export default async function DashboardPage({
 
   const resolvedSearchParams = await searchParams;
   const flash = flashMessage(resolvedSearchParams);
-  const showReminderInfo = Boolean(resolvedSearchParams.reminders);
 
   const [{ data: recentInvoices }, { data: reminderDrafts }] = await Promise.all([
     supabase
@@ -90,8 +91,9 @@ export default async function DashboardPage({
       .from("invoice_reminders")
       .select("id, invoice_id, recipient_email, subject, message, status, created_at")
       .eq("user_id", user.id)
+      .eq("status", "pending")
       .order("created_at", { ascending: false })
-      .limit(5),
+      .limit(10),
   ]);
 
   const invoices = (recentInvoices ?? []) as unknown as DashboardInvoice[];
@@ -132,6 +134,12 @@ export default async function DashboardPage({
               className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white"
             >
               Tax prep
+            </Link>
+            <Link
+              href="/dashboard/review"
+              className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white"
+            >
+              Review
             </Link>
             <Link
               href="/dashboard/glossary"
@@ -265,41 +273,56 @@ export default async function DashboardPage({
           </p>
         ) : null}
 
-        {showReminderInfo ? (
-          <section className="mb-6 rounded-xl border border-[#bbf7d0] bg-white p-5 shadow-sm">
-            <h2 className="text-base font-semibold text-[#14532d]">
-              Payment reminder drafts
+        {reminders.length > 0 ? (
+          <section className="mb-6 rounded-xl border border-[#fef9c3] bg-white p-5 shadow-sm" data-testid="pending-reminders-section">
+            <h2 className="text-base font-semibold text-[#713f12]">
+              Payment reminders awaiting your approval
             </h2>
-            <p className="mt-1 text-sm leading-6 text-[#4b8068]">
-              VibeCount does not send payment reminders silently. Use the invoice
-              actions to schedule a reminder draft. When a reminder becomes due, the
-              app prepares copy for review instead of emailing the client directly.
+            <p className="mt-1 text-sm leading-6 text-[#854d0e]">
+              Review each draft below. Send it yourself or discard it — VibeCount
+              never emails your clients without your explicit approval.
             </p>
-            {reminders.length > 0 ? (
-              <div className="mt-4 space-y-3">
-                {reminders.map((reminder) => (
-                  <div key={reminder.id} className="rounded-lg border border-[#dcfce7] bg-[#f7fef9] p-4">
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-[#14532d]">{reminder.subject}</p>
-                        <p className="mt-1 text-xs text-[#4b8068]">
-                          To: {reminder.recipient_email} · Status: {reminder.status}
-                        </p>
-                      </div>
-                      <p className="text-xs text-[#4b8068]">{formatDateTime(reminder.created_at)}</p>
+            <div className="mt-4 space-y-3">
+              {reminders.map((reminder) => (
+                <div key={reminder.id} className="rounded-lg border border-[#fef08a] bg-[#fefce8] p-4" data-testid={`pending-reminder-${reminder.id}`}>
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-[#713f12]">{reminder.subject}</p>
+                      <p className="mt-1 text-xs text-[#854d0e]">
+                        To: {reminder.recipient_email} · Drafted {formatDateTime(reminder.created_at)}
+                      </p>
                     </div>
-                    <p className="mt-3 whitespace-pre-wrap text-xs leading-5 text-[#4b8068]">
-                      {reminder.message}
-                    </p>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-3 rounded-lg border border-dashed border-[#bbf7d0] bg-[#f7fef9] px-4 py-3 text-sm text-[#4b8068]">
-                No reminder drafts yet. Mark an invoice as sent, add the client email,
-                then choose Draft reminder.
-              </p>
-            )}
+                  <p className="mt-3 whitespace-pre-wrap text-xs leading-5 text-[#713f12]">
+                    {reminder.message}
+                  </p>
+                  <div className="mt-4 flex gap-2">
+                    <form action={sendApprovedReminder} data-testid={`send-reminder-form-${reminder.id}`}>
+                      <input type="hidden" name="reminderId" value={reminder.id} />
+                      <input type="hidden" name="redirectTo" value="/dashboard" />
+                      <button
+                        type="submit"
+                        data-testid={`send-reminder-button-${reminder.id}`}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#15803d] px-4 text-xs font-semibold text-white transition hover:bg-[#14532d]"
+                      >
+                        Send reminder
+                      </button>
+                    </form>
+                    <form action={discardReminderDraft} data-testid={`discard-reminder-form-${reminder.id}`}>
+                      <input type="hidden" name="reminderId" value={reminder.id} />
+                      <input type="hidden" name="redirectTo" value="/dashboard" />
+                      <button
+                        type="submit"
+                        data-testid={`discard-reminder-button-${reminder.id}`}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#fef08a] bg-white px-4 text-xs font-semibold text-[#713f12] transition hover:bg-[#fefce8]"
+                      >
+                        Discard
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              ))}
+            </div>
           </section>
         ) : null}
 
@@ -615,6 +638,8 @@ function flashMessage(searchParams: { [key: string]: string | string[] | undefin
   if (searchParams.invoicePaid) return { kind: "success", text: "Invoice marked as paid." };
   if (searchParams.remindersEnabled) return { kind: "success", text: "Reminder drafts enabled." };
   if (searchParams.remindersDisabled) return { kind: "success", text: "Automatic reminders stopped." };
+  if (searchParams.reminderSent) return { kind: "success", text: "Reminder sent to client." };
+  if (searchParams.reminderDiscarded) return { kind: "success", text: "Reminder draft discarded." };
   return null;
 }
 
