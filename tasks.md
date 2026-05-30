@@ -296,7 +296,13 @@ are stable. The Creators Base-style feature set belongs here, not in Phase 2.
       /dashboard shows amber banner when needs_attention.
       Migration must be applied to production Supabase before deploying.
       npm run lint, npm test, npm run build pass.
-- [ ] Proposals that inherit client, service, price, scope, and timeline data
+- [x] Proposals that inherit client, service, price, scope, and timeline data
+      Verification: proposals table + proposal_line_items migration; create,
+      status, and convert-to-invoice server actions; /dashboard/proposals page
+      with scope/deliverables/timeline fields, service picker, PDF download,
+      status flow (draft→sent→accepted/declined→convert to invoice).
+      Migration must be applied to prod Supabase. npm run lint, npm test,
+      npm run build pass.
 - [ ] Contracts generated from approved proposal data
 - [ ] E-signatures via a specialist provider rather than a home-grown signature system
 - [ ] Lightweight project / scope tracking only where it improves invoicing, payment,
