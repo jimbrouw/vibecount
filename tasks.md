@@ -243,7 +243,11 @@ tools without turning VibeCount into a full studio operating system.
 - [x] Saved services / line items that can flow into quotes and invoices
 - [x] Payment links on invoices, starting with Stripe Checkout or an equivalent hosted flow
 - [x] Repeating invoice templates that create drafts on a schedule
-- [ ] User-approved invoice sending and automated payment follow-up reminders
+- [x] User-approved invoice sending and automated payment follow-up reminders
+      Verification: sendApprovedReminder server action calls Resend and marks
+      status='sent'; discardReminderDraft deletes the pending row. Dashboard
+      now always shows pending reminder drafts with Send/Discard buttons.
+      npm run lint, npm test, npm run build pass.
 - [x] Shared document data model so future proposals/contracts can inherit client,
       service, scope, price, and payment terms without copy-paste
 
@@ -282,11 +286,16 @@ are stable. The Creators Base-style feature set belongs here, not in Phase 2.
 
 First Phase 4 task:
 
-- [ ] **Read-only review agent** — inspect approved records and explain what needs
+- [x] **Read-only review agent** — inspect approved records and explain what needs
       attention without writing to the database or triggering external actions.
-- [ ] **Parked MCP acceptance criteria** — future tools such as `get_pl_summary`,
+      Verification: /dashboard/review page reads approved financial_records and
+      sent invoices, passes sanitised summary (no bank details) to
+      /api/review/suggest which calls Claude. Client component shows findings
+      with explicit read-only caveat. npm run lint, npm test, npm run build pass.
+- [x] **Parked MCP acceptance criteria** — future tools such as `get_pl_summary`,
       `list_expenses`, and `finalise_invoice` must require scoped auth, audit
       logging, ownership checks, idempotency, valid status transitions, and
       explicit human confirmation before any write-like action.
+      Reference: knowledge-base/mcp-acceptance-criteria.md
 
 Reference: [knowledge-base/agentic-tax-copilot.md](knowledge-base/agentic-tax-copilot.md)
