@@ -7,6 +7,10 @@ import {
 
 export const runtime = "nodejs";
 
+export async function GET(request: Request) {
+  return POST(request);
+}
+
 type DueInvoiceRow = {
   id: string;
   user_id: string;

@@ -7,10 +7,6 @@
     {
       "path": "/api/invoices/repeating/run",
       "schedule": "0 7 * * *"
-    },
-    {
-      "path": "/api/cron/quarterly-check",
-      "schedule": "0 9 6 1,4,7,10 *"
     }
   ]
 }

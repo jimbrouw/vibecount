@@ -4,6 +4,10 @@ import { nextRunDateFrom, type RepeatingFrequency } from "@/lib/repeating-invoic
 
 export const runtime = "nodejs";
 
+export async function GET(request: Request) {
+  return POST();
+}
+
 type TemplateRow = {
   id: string;
   user_id: string;

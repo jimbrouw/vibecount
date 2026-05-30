@@ -4,6 +4,10 @@ import { getCurrentTaxYearStart, getQuarterDates, type TaxQuarter } from "@/lib/
 
 export const runtime = "nodejs";
 
+export async function GET(request: Request) {
+  return POST(request);
+}
+
 function getCurrentQuarter(today = new Date()): TaxQuarter {
   const taxYearStart = getCurrentTaxYearStart(today);
   const quarters: TaxQuarter[] = [1, 2, 3, 4];
