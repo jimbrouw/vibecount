@@ -303,7 +303,14 @@ are stable. The Creators Base-style feature set belongs here, not in Phase 2.
       status flow (draft→sent→accepted/declined→convert to invoice).
       Migration must be applied to prod Supabase. npm run lint, npm test,
       npm run build pass.
-- [ ] Contracts generated from approved proposal data
+- [x] Contracts generated from approved proposal data
+      Verification: contracts table + migration applied to prod; generateContract
+      action reads accepted proposals and creates CTR-YYYY-NNNN contract;
+      /dashboard/contracts lists with Download PDF/Mark sent/Mark signed;
+      proposals page shows Generate contract for accepted proposals; contract
+      PDF includes scope, deliverables, timeline, fee in figures+words,
+      default plain-English terms, and signature blocks.
+      npm run lint, npm test, npm run build pass.
 - [ ] E-signatures via a specialist provider rather than a home-grown signature system
 - [ ] Lightweight project / scope tracking only where it improves invoicing, payment,
       or tax records
