@@ -274,8 +274,14 @@ are stable. The Creators Base-style feature set belongs here, not in Phase 2.
       should be merged into the current hardening branch
 - [ ] Read-only review agent for missing receipts, uncategorised transactions,
       overdue reviews, and likely invoice/payment matches
-- [ ] Draft-action agent for suggested categories, Self Assessment prep answers,
+- [x] Draft-action agent for suggested categories, Self Assessment prep answers,
       and accountant questions
+      Verification: GET /api/records/suggest-category calls Claude with record
+      description + user's own category list; SuggestCategoryButton shows
+      inline on uncategorised records; applyRecordCategory server action writes
+      category_id only after explicit Accept. npm run lint, npm test, npm run
+      build pass. Self Assessment prep answers and accountant questions remain
+      as future iterations of this agent.
 - [ ] Approval-action agent that writes only after explicit user confirmation
 - [ ] Scheduled quarterly readiness checks with audit logs
 - [ ] Proposals that inherit client, service, price, scope, and timeline data

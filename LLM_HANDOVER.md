@@ -1,6 +1,6 @@
 # VibeCount LLM Coder Handover
 
-Last updated: 2026-05-30
+Last updated: 2026-05-30 (session 2)
 
 ## Start Here
 
@@ -45,14 +45,13 @@ Production is currently deployed and aliased to:
 
 Latest commits on this branch (most recent first):
 
+- `a06280a Add Phase 4 draft-action agent: AI category suggestions for records`
 - `6801711 Mark Phase 3 reminder sending and Phase 4 first tasks complete in tasks.md`
 - `3ffee34 Add Phase 4 read-only review agent and MCP acceptance criteria`
 - `ab64d2b Complete Phase 3: user-approved reminder sending via Resend`
 - `a67cc23 Fix records review QA blockers`
 - `be852ea Add LLM coder handover`
 - `c017c7d Clarify bank PDF extraction failures`
-- `b086a4e Prevent bank PDF import crash`
-- `378e035 Document production records schema migration`
 
 ## What Was Built — 2026-05-30
 
@@ -99,6 +98,21 @@ endpoints, browser-agent login, or any DB writes.
   prompt from the summary (amounts, categories, dates, descriptions only) and
   calls Claude. Returns `{ suggestion: string }`. Never writes to the database.
   Shows a clear read-only caveat in the UI.
+
+### Phase 4 draft-action agent: category suggestions (session 2)
+
+- `app/api/records/suggest-category/route.ts` — `GET ?recordId=...` reads
+  the user's own record and category list, calls Claude, returns
+  `{ categoryId, categoryName, reason }`. Validates that the suggestion
+  matches a real category before returning. Returns 503 if
+  `ANTHROPIC_API_KEY` is missing.
+- `app/dashboard/records/SuggestCategoryButton.tsx` — client component
+  shown inline on any record with no category (idle → loading → suggested
+  → accept/dismiss). Accept submits a form that calls `applyRecordCategory`.
+- `app/dashboard/records/actions.ts` — `applyRecordCategory` server action
+  reads the record's `record_type`, verifies the category is owned by the
+  user, then writes `category_id`. Nothing is written before the user
+  clicks Accept.
 
 **MCP acceptance criteria (`knowledge-base/mcp-acceptance-criteria.md`)**
 
@@ -188,7 +202,12 @@ Known audit issue:
      accuracy test has not been run.
    - Not a blocker for current branch work.
 
-3. Review agent — not yet production-verified:
+3. Category suggestion agent — not yet production-verified:
+   - `SuggestCategoryButton` appears on uncategorised records. Requires
+     `ANTHROPIC_API_KEY` in Vercel env vars to work.
+   - If the key is missing the button will show an error inline.
+
+4. Review agent — not yet production-verified:
    - `/dashboard/review` is new on this branch and has not been tested against
      production data yet. Deploy and do a quick check after pushing.
    - If `ANTHROPIC_API_KEY` is missing from Vercel env vars, the route returns
@@ -229,6 +248,8 @@ Production check after latest push:
 4. Test a pending reminder draft can be sent or discarded from the dashboard.
 
 Remaining Phase 4 tasks (see tasks.md Phase 4 direction):
+- Approval-action agent that writes only after explicit user confirmation.
+- Scheduled quarterly readiness checks with audit logs.
 - Browser-agent login with short-lived scoped sessions (parked — do not build here).
 - Proposals, contracts, e-signatures (parked — do not build here).
 - All write-like MCP tools remain parked until acceptance criteria are met
