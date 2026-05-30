@@ -5,6 +5,7 @@ import { formatPounds } from "@/lib/invoices/money";
 import { DEFAULT_PAYMENT_TERMS } from "@/lib/invoices/validation";
 import LogoutButton from "@/app/dashboard/LogoutButton";
 import { createProposal, setProposalStatus, convertProposalToInvoice } from "./actions";
+import { generateContract } from "@/app/dashboard/contracts/actions";
 
 export const metadata = {
   title: "Proposals — VibeCount",
@@ -65,6 +66,7 @@ export default async function ProposalsPage({
             <Link href="/dashboard/records" className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white">Records</Link>
             <Link href="/dashboard/quotes" className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white">Quotes</Link>
             <Link href="/dashboard/proposals" className="rounded-lg bg-white/20 px-3 py-1.5 text-sm font-medium text-white">Proposals</Link>
+            <Link href="/dashboard/contracts" className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white">Contracts</Link>
             <Link href="/dashboard/invoices/repeating" className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white">Repeating</Link>
             <Link href="/dashboard/tax-prep" className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white">Tax prep</Link>
             <Link href="/dashboard/review" className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white">Review</Link>
@@ -264,12 +266,20 @@ export default async function ProposalsPage({
                           )}
 
                           {p.status === "accepted" && (
-                            <form action={convertProposalToInvoice} data-testid={`proposal-convert-form-${p.id}`}>
-                              <input type="hidden" name="proposalId" value={p.id} />
-                              <button type="submit" data-testid={`proposal-convert-button-${p.id}`} className="inline-flex h-9 items-center rounded-lg border border-[#15803d] bg-white px-4 text-xs font-semibold text-[#15803d] transition hover:bg-[#f0fdf4]">
-                                Convert to invoice
-                              </button>
-                            </form>
+                            <>
+                              <form action={convertProposalToInvoice} data-testid={`proposal-convert-form-${p.id}`}>
+                                <input type="hidden" name="proposalId" value={p.id} />
+                                <button type="submit" data-testid={`proposal-convert-button-${p.id}`} className="inline-flex h-9 items-center rounded-lg border border-[#15803d] bg-white px-4 text-xs font-semibold text-[#15803d] transition hover:bg-[#f0fdf4]">
+                                  Convert to invoice
+                                </button>
+                              </form>
+                              <form action={generateContract} data-testid={`proposal-generate-contract-form-${p.id}`}>
+                                <input type="hidden" name="proposalId" value={p.id} />
+                                <button type="submit" data-testid={`proposal-generate-contract-button-${p.id}`} className="inline-flex h-9 items-center rounded-lg bg-[#14532d] px-4 text-xs font-semibold text-white transition hover:bg-[#0f3d21]">
+                                  Generate contract
+                                </button>
+                              </form>
+                            </>
                           )}
                         </div>
                       </div>
