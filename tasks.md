@@ -86,6 +86,10 @@ Read `spec.md` first. This file is the ordered work.
 ### Post-Task 4 follow-up
 - [x] Replace seeded placeholder glossary content with plain-English draft terms.
 - [ ] Verify glossary copy against final approved wording before launch.
+- [ ] Get a free Companies House API key at developer.companieshouse.gov.uk
+      and add it to Settings → Client intelligence. Once added, typing a client
+      name in the invoice builder will search Companies House and auto-fill their
+      registered name, address, and company number.
 
 ### Task 5 — Accessibility layer
 - [x] Large-text mode, spacing controls, plain-language toggle.
