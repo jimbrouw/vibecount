@@ -119,6 +119,25 @@ export async function POST(request: Request) {
   });
 
   const filename = `${invoice.value.number}.pdf`;
+  const storagePath = `${user.id}/${filename}`;
+
+  // Upload to Supabase Storage (best-effort — never fail the invoice over a storage error)
+  const { error: uploadError } = await supabase.storage
+    .from("invoices")
+    .upload(storagePath, Buffer.from(pdfBytes), {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+
+  if (!uploadError) {
+    await supabase
+      .from("invoices")
+      .update({ pdf_path: storagePath })
+      .eq("id", invoice.value.id)
+      .eq("user_id", user.id);
+  } else {
+    console.error("Invoice PDF storage upload failed:", uploadError.message);
+  }
 
   return new NextResponse(Buffer.from(pdfBytes), {
     status: 200,

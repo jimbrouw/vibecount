@@ -30,6 +30,7 @@ type DashboardInvoice = {
   paid_at: string | null;
   reminder_enabled: boolean;
   next_reminder_at: string | null;
+  pdf_path: string | null;
   clients:
     | {
         name: string;
@@ -82,7 +83,7 @@ export default async function DashboardPage({
     supabase
       .from("invoices")
       .select(
-        "id, number, invoice_date, due_date, amount, status, delivery_status, sent_at, paid_at, reminder_enabled, next_reminder_at, clients(name, email)"
+        "id, number, invoice_date, due_date, amount, status, delivery_status, sent_at, paid_at, reminder_enabled, next_reminder_at, pdf_path, clients(name, email)"
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
@@ -414,6 +415,18 @@ export default async function DashboardPage({
                       </p>
                     </div>
                   </div>
+
+                  {inv.pdf_path && (
+                    <div className="mt-3">
+                      <a
+                        href={`/api/invoices/download?id=${inv.id}`}
+                        data-testid={`dashboard-invoice-download-${inv.id}`}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#15803d] underline decoration-[#86efac] underline-offset-2 transition hover:text-[#14532d]"
+                      >
+                        Download PDF
+                      </a>
+                    </div>
+                  )}
 
                   {inv.status === "finalised" ? (
                     <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
