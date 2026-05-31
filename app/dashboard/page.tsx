@@ -25,6 +25,7 @@ type DashboardInvoice = {
   invoice_date: string;
   due_date: string | null;
   amount: number | string;
+  payment_terms: string;
   status: string;
   delivery_status: string;
   sent_at: string | null;
@@ -84,7 +85,7 @@ export default async function DashboardPage({
     supabase
       .from("invoices")
       .select(
-        "id, number, invoice_date, due_date, amount, status, delivery_status, sent_at, paid_at, reminder_enabled, next_reminder_at, pdf_path, clients(name, email)"
+        "id, number, invoice_date, due_date, amount, payment_terms, status, delivery_status, sent_at, paid_at, reminder_enabled, next_reminder_at, pdf_path, clients(name, email)"
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
@@ -433,7 +434,7 @@ export default async function DashboardPage({
                         clientEmail={dashboardClient(inv.clients)?.email ?? ""}
                         amountPence={Math.round(Number(inv.amount) * 100)}
                         dueDate={inv.due_date}
-                        paymentTerms=""
+                        paymentTerms={inv.payment_terms}
                         senderName={settingsRow?.legal_name ?? ""}
                         paymentLinkUrl={settingsRow?.payment_link_url ?? ""}
                         hasPdf={!!inv.pdf_path}
