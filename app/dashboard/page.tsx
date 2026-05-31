@@ -12,6 +12,7 @@ import {
 } from "@/app/dashboard/invoices/actions";
 import LogoutButton from "./LogoutButton";
 import PlainLanguageNote from "./PlainLanguageNote";
+import EmailInvoiceButton from "./EmailInvoiceButton";
 
 export const metadata = {
   title: "Dashboard — VibeCount",
@@ -70,7 +71,7 @@ export default async function DashboardPage({
   // Check if settings exist to decide onboarding state
   const { data: settingsRow } = await supabase
     .from("user_settings")
-    .select("legal_name")
+    .select("legal_name, payment_link_url")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -417,7 +418,7 @@ export default async function DashboardPage({
                   </div>
 
                   {inv.pdf_path && (
-                    <div className="mt-3">
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
                       <a
                         href={`/api/invoices/download?id=${inv.id}`}
                         data-testid={`dashboard-invoice-download-${inv.id}`}
@@ -425,6 +426,18 @@ export default async function DashboardPage({
                       >
                         Download PDF
                       </a>
+                      <EmailInvoiceButton
+                        invoiceId={inv.id}
+                        invoiceNumber={inv.number}
+                        clientName={dashboardClient(inv.clients)?.name ?? ""}
+                        clientEmail={dashboardClient(inv.clients)?.email ?? ""}
+                        amountPence={Math.round(Number(inv.amount) * 100)}
+                        dueDate={inv.due_date}
+                        paymentTerms=""
+                        senderName={settingsRow?.legal_name ?? ""}
+                        paymentLinkUrl={settingsRow?.payment_link_url ?? ""}
+                        hasPdf={!!inv.pdf_path}
+                      />
                     </div>
                   )}
 
