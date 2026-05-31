@@ -11,6 +11,9 @@ type ClientRow = {
   id: string;
   name: string;
   email: string;
+  address: string;
+  company_number: string;
+  vat_number: string;
 };
 
 type InvoiceRow = {
@@ -51,6 +54,9 @@ export async function POST(request: Request) {
 
   const vatPence = typeof body?.vatPence === "number" ? Math.round(body.vatPence) : 0;
   const clientEmail = String(body?.clientEmail ?? "").trim();
+  const clientAddress = String(body?.clientAddress ?? "").trim();
+  const clientCompanyNumber = String(body?.clientCompanyNumber ?? "").trim();
+  const clientVatNumber = String(body?.clientVatNumber ?? "").trim();
   if (clientEmail && !isValidEmail(clientEmail)) {
     return NextResponse.json({ error: "Use a valid client email address." }, { status: 400 });
   }
@@ -67,7 +73,11 @@ export async function POST(request: Request) {
     .eq("id", user.id)
     .maybeSingle();
 
-  const client = await findOrCreateClient(supabase, user.id, input.clientName, clientEmail);
+  const client = await findOrCreateClient(supabase, user.id, input.clientName, clientEmail, {
+    address: clientAddress,
+    company_number: clientCompanyNumber,
+    vat_number: clientVatNumber,
+  });
   if (!client.ok) {
     return NextResponse.json({ error: client.error }, { status: 500 });
   }
@@ -90,6 +100,8 @@ export async function POST(request: Request) {
     number: invoice.value.number,
     invoiceDate: input.invoiceDate,
     clientName: client.value.name,
+    clientAddress: client.value.address,
+    clientVatNumber: settings?.vat_registered ? client.value.vat_number : "",
     description: input.description,
     amountPence: input.amountPence,
     vatPence,
@@ -124,12 +136,13 @@ async function findOrCreateClient(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
   clientName: string,
-  clientEmail: string
+  clientEmail: string,
+  details: { address: string; company_number: string; vat_number: string } = { address: "", company_number: "", vat_number: "" }
 ): Promise<{ ok: true; value: ClientRow } | { ok: false; error: string }> {
   const normalised = normaliseClientName(clientName);
   const { data: clients, error: readError } = await supabase
     .from("clients")
-    .select("id, name, email")
+    .select("id, name, email, address, company_number, vat_number")
     .eq("user_id", userId);
 
   if (readError) {
@@ -141,21 +154,29 @@ async function findOrCreateClient(
   );
 
   if (existing) {
-    if (clientEmail && existing.email !== clientEmail) {
-      await supabase
-        .from("clients")
-        .update({ email: clientEmail })
-        .eq("id", existing.id)
-        .eq("user_id", userId);
-      return { ok: true, value: { ...existing, email: clientEmail } };
+    const updates: Partial<ClientRow> = {};
+    if (clientEmail && existing.email !== clientEmail) updates.email = clientEmail;
+    if (details.address && !existing.address) updates.address = details.address;
+    if (details.company_number && !existing.company_number) updates.company_number = details.company_number;
+    if (details.vat_number && !existing.vat_number) updates.vat_number = details.vat_number;
+
+    if (Object.keys(updates).length > 0) {
+      await supabase.from("clients").update(updates).eq("id", existing.id).eq("user_id", userId);
     }
-    return { ok: true, value: existing };
+    return { ok: true, value: { ...existing, ...updates } };
   }
 
   const { data: inserted, error: insertError } = await supabase
     .from("clients")
-    .insert({ user_id: userId, name: normalised, email: clientEmail })
-    .select("id, name, email")
+    .insert({
+      user_id: userId,
+      name: normalised,
+      email: clientEmail,
+      address: details.address,
+      company_number: details.company_number,
+      vat_number: details.vat_number,
+    })
+    .select("id, name, email, address, company_number, vat_number")
     .single();
 
   if (!insertError && inserted) {
@@ -165,7 +186,7 @@ async function findOrCreateClient(
   if (insertError?.code === "23505") {
     const { data: retryClients } = await supabase
       .from("clients")
-      .select("id, name, email")
+      .select("id, name, email, address, company_number, vat_number")
       .eq("user_id", userId);
     const retry = (retryClients as ClientRow[] | null)?.find(
       (client) =>

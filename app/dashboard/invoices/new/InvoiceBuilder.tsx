@@ -21,10 +21,21 @@ import {
 type ClientOption = {
   id: string;
   name: string;
+  email: string;
+  address: string;
+  company_number: string;
+  vat_number: string;
+};
+
+type CHSuggestion = {
+  name: string;
+  company_number: string;
+  address: string;
 };
 
 type UserDefaults = UserSettings & {
   hasSettings: boolean;
+  companiesHouseConfigured: boolean;
 };
 
 type Props = {
@@ -43,6 +54,9 @@ type Props = {
 type FormState = {
   clientName: string;
   clientEmail: string;
+  clientAddress: string;
+  clientCompanyNumber: string;
+  clientVatNumber: string;
   invoiceDate: string;
   description: string;
   amount: string;
@@ -68,6 +82,9 @@ export default function InvoiceBuilder({
   const [form, setForm] = useState<FormState>({
     clientName: initialDraft.clientName,
     clientEmail: "",
+    clientAddress: "",
+    clientCompanyNumber: "",
+    clientVatNumber: "",
     invoiceDate: initialDate,
     description: initialDraft.description,
     amount: initialDraft.amount,
@@ -80,6 +97,9 @@ export default function InvoiceBuilder({
   const [generatedInvoice, setGeneratedInvoice] = useState<GeneratedInvoice | null>(null);
   const [copyStatus, setCopyStatus] = useState("");
   const hasTrackedManualEntry = useRef(false);
+  const [chSuggestions, setChSuggestions] = useState<CHSuggestion[]>([]);
+  const [showChDropdown, setShowChDropdown] = useState(false);
+  const chTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const amountPence = useMemo(() => parseAmountToPence(form.amount), [form.amount]);
   const vatPence = useMemo(() => {
@@ -155,7 +175,14 @@ export default function InvoiceBuilder({
     const response = await fetch("/api/invoices/pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, vatPence, humanConfirmed: true }),
+      body: JSON.stringify({
+        ...form,
+        vatPence,
+        humanConfirmed: true,
+        clientAddress: form.clientAddress,
+        clientCompanyNumber: form.clientCompanyNumber,
+        clientVatNumber: form.clientVatNumber,
+      }),
     });
 
     if (!response.ok) {
@@ -202,6 +229,56 @@ export default function InvoiceBuilder({
 
   function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function handleClientNameChange(value: string) {
+    updateField("clientName", value);
+
+    // Pre-fill from saved clients
+    const saved = existingClients.find(
+      (c) => c.name.toLowerCase().trim() === value.toLowerCase().trim()
+    );
+    if (saved) {
+      setForm((f) => ({
+        ...f,
+        clientName: value,
+        clientEmail: f.clientEmail || saved.email,
+        clientAddress: f.clientAddress || saved.address,
+        clientCompanyNumber: f.clientCompanyNumber || saved.company_number,
+        clientVatNumber: f.clientVatNumber || saved.vat_number,
+      }));
+      setShowChDropdown(false);
+      return;
+    }
+
+    // Companies House search (debounced)
+    if (!userDefaults.companiesHouseConfigured || value.length < 2) {
+      setChSuggestions([]);
+      setShowChDropdown(false);
+      return;
+    }
+    if (chTimer.current) clearTimeout(chTimer.current);
+    chTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/companies-house/search?q=${encodeURIComponent(value)}`);
+        const data = await res.json() as { companies?: CHSuggestion[] };
+        setChSuggestions(data.companies ?? []);
+        setShowChDropdown((data.companies?.length ?? 0) > 0);
+      } catch {
+        setChSuggestions([]);
+      }
+    }, 400);
+  }
+
+  function selectChSuggestion(company: CHSuggestion) {
+    setForm((f) => ({
+      ...f,
+      clientName: company.name,
+      clientAddress: company.address,
+      clientCompanyNumber: company.company_number,
+    }));
+    setShowChDropdown(false);
+    setChSuggestions([]);
   }
 
   async function copyEmailDraft() {
@@ -294,21 +371,45 @@ export default function InvoiceBuilder({
           <div className="grid gap-5 sm:grid-cols-2">
             <label className="block">
               <span className="text-sm font-medium text-[#1a3a2a]">Client</span>
-              <input
-                name="clientName"
-                data-testid="invoice-client-input"
-                list="saved-clients"
-                value={form.clientName}
-                onChange={(event) => updateField("clientName", event.target.value)}
-                required
-                className={inputCls}
-                placeholder="Client or company name"
-              />
-              <datalist id="saved-clients">
-                {existingClients.map((client) => (
-                  <option key={client.id} value={client.name} />
-                ))}
-              </datalist>
+              <div className="relative">
+                <input
+                  name="clientName"
+                  data-testid="invoice-client-input"
+                  list="saved-clients"
+                  value={form.clientName}
+                  onChange={(event) => handleClientNameChange(event.target.value)}
+                  onBlur={() => setTimeout(() => setShowChDropdown(false), 200)}
+                  onFocus={() => chSuggestions.length > 0 && setShowChDropdown(true)}
+                  required
+                  className={inputCls}
+                  placeholder="Client or company name"
+                  autoComplete="off"
+                />
+                <datalist id="saved-clients">
+                  {existingClients.map((client) => (
+                    <option key={client.id} value={client.name} />
+                  ))}
+                </datalist>
+                {showChDropdown && chSuggestions.length > 0 && (
+                  <ul className="absolute z-20 mt-1 w-full rounded-xl border border-[#c8dfc8] bg-white shadow-lg">
+                    {chSuggestions.map((company) => (
+                      <li key={company.company_number}>
+                        <button
+                          type="button"
+                          onMouseDown={() => selectChSuggestion(company)}
+                          className="w-full px-4 py-2.5 text-left transition hover:bg-[#f0f8f0]"
+                        >
+                          <p className="text-sm font-semibold text-[#1a3a2a]">{company.name}</p>
+                          <p className="text-xs text-[#4a6a5a]">{company.company_number} · {company.address}</p>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              {form.clientAddress && (
+                <p className="mt-1 text-xs text-[#4a6a5a]">{form.clientAddress}</p>
+              )}
             </label>
 
             <label className="block">

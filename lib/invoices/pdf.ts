@@ -5,6 +5,8 @@ export type InvoicePdfData = {
   number: string;
   invoiceDate: string;
   clientName: string;
+  clientAddress: string;
+  clientVatNumber: string;
   description: string;
   amountPence: number;
   vatPence: number;
@@ -111,6 +113,20 @@ export async function createInvoicePdf(data: InvoicePdfData) {
   // To column
   page.drawText("To", { x: 320, y, size: 8, font: bold, color: MUTED });
   page.drawText(data.clientName, { x: 320, y: y - 14, size: 12, font: bold, color: INK });
+
+  // Client address (if provided)
+  let clientDetailY = y - 30;
+  if (data.clientAddress) {
+    const addressLines = data.clientAddress.split(/[,\n]/).map((l) => l.trim()).filter(Boolean).slice(0, 4);
+    for (const line of addressLines) {
+      page.drawText(line, { x: 320, y: clientDetailY, size: 8, font, color: MUTED });
+      clientDetailY -= 11;
+    }
+  }
+  if (data.clientVatNumber) {
+    page.drawText(`VAT no: ${data.clientVatNumber}`, { x: 320, y: clientDetailY, size: 8, font, color: MUTED });
+    clientDetailY -= 11;
+  }
 
   // Description section
   y -= 100;

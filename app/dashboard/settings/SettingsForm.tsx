@@ -487,6 +487,28 @@ export default function SettingsForm() {
         </Field>
       </fieldset>
 
+      {/* Companies House */}
+      <fieldset className="space-y-5 rounded-xl border border-[#e5e0d8] p-5">
+        <legend className="px-1 text-sm font-semibold text-[#1a3a2a]">Client intelligence</legend>
+        <Field
+          hint="Optional. Typing a client name will search Companies House and auto-fill their registered address. Get a free key at developer.companieshouse.gov.uk"
+          label="Companies House API key"
+          id="companies_house_api_key"
+        >
+          <input
+            id="companies_house_api_key"
+            data-testid="settings-companies-house-key-input"
+            type="password"
+            name="companies_house_api_key"
+            value={settings.companies_house_api_key}
+            onChange={(e) => update("companies_house_api_key", e.target.value)}
+            placeholder="Your Companies House API key"
+            className={inputCls}
+            autoComplete="off"
+          />
+        </Field>
+      </fieldset>
+
       {/* Status feedback + submit */}
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
         <button
