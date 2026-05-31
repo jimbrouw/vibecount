@@ -49,24 +49,29 @@ export default function EmailInvoiceButton({
 
       const greeting = clientName ? `Hi ${clientName},` : "Hi,";
       const signoff = senderName || "VibeCount";
-      const amountLine = `${formatPounds(amountPence)} (${amountToWords(amountPence)})`;
-      const dueLine = dueDate ? `\nDue: ${formatDisplayDate(dueDate)}` : "";
-      const paymentLine = paymentTerms ? `\nPayment terms: ${paymentTerms}` : "";
-      const linkLine = paymentLinkUrl ? `\nPay online: ${paymentLinkUrl}` : "";
+      const amountFormatted = formatPounds(amountPence);
+      const amountWords = amountToWords(amountPence);
+      const dueLine = dueDate ? `Due date: ${formatDisplayDate(dueDate)}` : "";
+      const paymentLine = paymentTerms ? `Payment terms: ${paymentTerms}` : "";
+      const payLinkLine = paymentLinkUrl ? `Pay online: ${paymentLinkUrl}` : "";
+      const details = [dueLine, paymentLine, payLinkLine].filter(Boolean).join("\n");
 
       const body = [
         greeting,
         "",
-        `Please find invoice ${invoiceNumber} attached for ${amountLine}.`,
-        `Download your copy here: ${data.url}`,
+        `Please find invoice ${invoiceNumber} for ${amountFormatted} (${amountWords}) linked below.`,
+        "",
+        `Download invoice: ${data.url}`,
         `(Link valid for 30 days)`,
-        dueLine + paymentLine + linkLine,
+        ...(details ? ["", details] : []),
+        "",
+        `If you have any questions, just reply to this email.`,
         "",
         `Thanks,`,
         signoff,
-      ].join("\n").trim();
+      ].join("\n");
 
-      const subject = `Invoice ${invoiceNumber}`;
+      const subject = `Invoice ${invoiceNumber} — ${amountFormatted}`;
       const mailto = `mailto:${encodeURIComponent(clientEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
       window.location.href = mailto;
