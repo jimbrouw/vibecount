@@ -302,7 +302,7 @@ export default function InvoiceBuilder({
                 onChange={(event) => updateField("clientName", event.target.value)}
                 required
                 className={inputCls}
-                placeholder="Simon"
+                placeholder="Client or company name"
               />
               <datalist id="saved-clients">
                 {existingClients.map((client) => (
