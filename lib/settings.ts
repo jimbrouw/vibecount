@@ -12,6 +12,7 @@ export type UserSettings = {
   invoice_number_prefix: string;
   late_payment_wording: string;
   utr: string;
+  companies_house_api_key: string;
 };
 
 export const DEFAULT_LATE_PAYMENT_WORDING =
@@ -31,6 +32,7 @@ export const EMPTY_SETTINGS: UserSettings = {
   invoice_number_prefix: "VC",
   late_payment_wording: DEFAULT_LATE_PAYMENT_WORDING,
   utr: "",
+  companies_house_api_key: "",
 };
 
 export function sanitizeUserSettings(body: unknown): UserSettings | null {
@@ -58,6 +60,7 @@ export function sanitizeUserSettings(body: unknown): UserSettings | null {
     late_payment_wording:
       String(input.late_payment_wording ?? "").trim() || EMPTY_SETTINGS.late_payment_wording,
     utr: String(input.utr ?? "").trim(),
+    companies_house_api_key: String(input.companies_house_api_key ?? "").trim(),
   };
 }
 

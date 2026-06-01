@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import LogoutButton from "../LogoutButton";
 import PlainLanguageNote from "../PlainLanguageNote";
 import SettingsForm from "./SettingsForm";
+import AgentAccess from "./AgentAccess";
 
 export const metadata = {
   title: "Settings — VibeCount",
@@ -19,6 +20,13 @@ export default async function SettingsPage() {
   if (!user) {
     redirect("/login");
   }
+
+  const { data: sessions } = await supabase
+    .from("agent_sessions")
+    .select("id, label, scopes, expires_at, revoked_at, created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(10);
 
   return (
     <main className="min-h-screen bg-[#f5f0e8]">
@@ -75,6 +83,10 @@ export default async function SettingsPage() {
         </div>
 
         <SettingsForm />
+
+        <div className="mt-8">
+          <AgentAccess initialSessions={(sessions ?? []) as Parameters<typeof AgentAccess>[0]["initialSessions"]} />
+        </div>
       </div>
     </main>
   );

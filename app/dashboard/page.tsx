@@ -12,6 +12,7 @@ import {
 } from "@/app/dashboard/invoices/actions";
 import LogoutButton from "./LogoutButton";
 import PlainLanguageNote from "./PlainLanguageNote";
+import EmailInvoiceButton from "./EmailInvoiceButton";
 
 export const metadata = {
   title: "Dashboard — VibeCount",
@@ -24,12 +25,14 @@ type DashboardInvoice = {
   invoice_date: string;
   due_date: string | null;
   amount: number | string;
+  payment_terms: string;
   status: string;
   delivery_status: string;
   sent_at: string | null;
   paid_at: string | null;
   reminder_enabled: boolean;
   next_reminder_at: string | null;
+  pdf_path: string | null;
   clients:
     | {
         name: string;
@@ -69,7 +72,7 @@ export default async function DashboardPage({
   // Check if settings exist to decide onboarding state
   const { data: settingsRow } = await supabase
     .from("user_settings")
-    .select("legal_name")
+    .select("legal_name, payment_link_url")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -82,7 +85,7 @@ export default async function DashboardPage({
     supabase
       .from("invoices")
       .select(
-        "id, number, invoice_date, due_date, amount, status, delivery_status, sent_at, paid_at, reminder_enabled, next_reminder_at, clients(name, email)"
+        "id, number, invoice_date, due_date, amount, payment_terms, status, delivery_status, sent_at, paid_at, reminder_enabled, next_reminder_at, pdf_path, clients(name, email)"
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
@@ -414,6 +417,30 @@ export default async function DashboardPage({
                       </p>
                     </div>
                   </div>
+
+                  {inv.pdf_path && (
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <a
+                        href={`/api/invoices/download?id=${inv.id}`}
+                        data-testid={`dashboard-invoice-download-${inv.id}`}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#15803d] underline decoration-[#86efac] underline-offset-2 transition hover:text-[#14532d]"
+                      >
+                        Download PDF
+                      </a>
+                      <EmailInvoiceButton
+                        invoiceId={inv.id}
+                        invoiceNumber={inv.number}
+                        clientName={dashboardClient(inv.clients)?.name ?? ""}
+                        clientEmail={dashboardClient(inv.clients)?.email ?? ""}
+                        amountPence={Math.round(Number(inv.amount) * 100)}
+                        dueDate={inv.due_date}
+                        paymentTerms={inv.payment_terms}
+                        senderName={settingsRow?.legal_name ?? ""}
+                        paymentLinkUrl={settingsRow?.payment_link_url ?? ""}
+                        hasPdf={!!inv.pdf_path}
+                      />
+                    </div>
+                  )}
 
                   {inv.status === "finalised" ? (
                     <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">

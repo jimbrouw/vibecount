@@ -86,6 +86,15 @@ Read `spec.md` first. This file is the ordered work.
 ### Post-Task 4 follow-up
 - [x] Replace seeded placeholder glossary content with plain-English draft terms.
 - [ ] Verify glossary copy against final approved wording before launch.
+- [ ] Get a free Companies House API key at developer.companieshouse.gov.uk
+      and add it to Settings → Client intelligence. Once added, typing a client
+      name in the invoice builder will search Companies House and auto-fill their
+      registered name, address, and company number.
+- [ ] Set up Vercel cron jobs (Hobby plan requires manual setup — vercel.json crons
+      are not supported):
+      Vercel Dashboard → vibecount project → Settings → Crons
+      Add: /api/reminders/due        schedule: 0 8 * * *   (08:00 daily)
+      Add: /api/invoices/repeating/run  schedule: 0 7 * * *   (07:00 daily)
 
 ### Task 5 — Accessibility layer
 - [x] Large-text mode, spacing controls, plain-language toggle.
@@ -271,13 +280,25 @@ Phase 4 can add an agentic tax copilot and selected freelancer operating system
 features once the records, import, tax-prep, payments, and document foundations
 are stable. The Creators Base-style feature set belongs here, not in Phase 2.
 
-- [ ] Browser-agent login with short-lived scoped sessions
-- [ ] External-agent access model where users bring their own agent/provider
-      tokens; VibeCount does not store BYO provider keys in the first version
-- [ ] MCP/tool layer only after Phase 2/3 review gates are verified; no MCP work
-      should be merged into the current hardening branch
-- [ ] Read-only review agent for missing receipts, uncategorised transactions,
-      overdue reviews, and likely invoice/payment matches
+- [x] Browser-agent login with short-lived scoped sessions
+      Branch: claude/vibecount-ai-agents. agent_sessions table: hashed token,
+      scopes[], 15-min TTL, revoke. POST /api/mcp/session creates token (shown
+      once). Settings UI: scope picker, generate, copy, revoke, audit log link.
+- [x] External-agent access model where users bring their own agent/provider
+      tokens; VibeCount does not store BYO provider keys in the first version.
+      V1: user generates a scoped VibeCount session token for the agent.
+      BYOK AI provider keys remain a future iteration.
+- [x] MCP/tool layer only after Phase 2/3 review gates are verified; no MCP work
+      should be merged into the current hardening branch.
+      Branch: claude/vibecount-ai-agents. Tools: get_pl_summary, list_expenses,
+      list_uncategorised, list_invoices (read); draft_record, draft_invoice (write-
+      draft, lands in review/draft, never approved/finalised). All tools: scoped
+      token auth, ownership check, immutable audit log row. Idempotency keys on
+      draft tools. npm run lint, npm run build pass.
+- [x] Read-only review agent for missing receipts, uncategorised transactions,
+      overdue reviews, and likely invoice/payment matches.
+      Covered by list_uncategorised + list_invoices tools + /dashboard/review
+      AI analysis. Audit log at /dashboard/agent/audit.
 - [x] Draft-action agent for suggested categories, Self Assessment prep answers,
       and accountant questions
       Verification: GET /api/records/suggest-category calls Claude with record

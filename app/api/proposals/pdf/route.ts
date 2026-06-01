@@ -58,11 +58,32 @@ export async function GET(request: Request) {
     items,
   });
 
+  const filename = `${proposal.number}.pdf`;
+
+  // Upload to Supabase Storage at {userId}/proposals/{number}.pdf (best-effort)
+  const storagePath = `${user.id}/proposals/${filename}`;
+  const { error: uploadError } = await supabase.storage
+    .from("invoices")
+    .upload(storagePath, Buffer.from(bytes), {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+
+  if (!uploadError) {
+    await supabase
+      .from("proposals")
+      .update({ pdf_path: storagePath })
+      .eq("id", proposalId)
+      .eq("user_id", user.id);
+  } else {
+    console.error("Proposal PDF storage upload failed:", uploadError.message);
+  }
+
   return new NextResponse(Buffer.from(bytes), {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${proposal.number}.pdf"`,
+      "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
 }
