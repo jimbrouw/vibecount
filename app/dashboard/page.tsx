@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { amountToWords, formatPounds } from "@/lib/invoices/money";
-import LogoutButton from "./LogoutButton";
+import DashboardShell from "./DashboardShell";
 import PlainLanguageNote from "./PlainLanguageNote";
 
 export const metadata = {
@@ -38,43 +38,7 @@ export default async function DashboardPage() {
     .limit(5);
 
   return (
-    <main className="min-h-screen bg-[#f0fdf4]">
-      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[#15803d] bg-[#15803d] px-6 py-4 sm:px-8">
-        <div className="flex items-center gap-6">
-          <span className="text-lg font-semibold text-white">VibeCount</span>
-          <nav className="hidden items-center gap-1 sm:flex">
-            <Link
-              href="/dashboard"
-              className="rounded-lg bg-white/20 px-3 py-1.5 text-sm font-medium text-white"
-            >
-              Invoices
-            </Link>
-            <Link
-              href="/dashboard/glossary"
-              className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white"
-            >
-              Explain Simply
-            </Link>
-            <Link
-              href="/dashboard/agent"
-              className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white"
-            >
-              Agent
-            </Link>
-            <Link
-              href="/dashboard/settings"
-              className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white"
-            >
-              Settings
-            </Link>
-          </nav>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="hidden text-sm text-white/80 sm:block">{user.email}</span>
-          <LogoutButton />
-        </div>
-      </header>
-
+    <DashboardShell active="invoices" userEmail={user.email ?? ""} className="min-h-screen bg-[#f0fdf4]">
       <div className="mx-auto max-w-3xl px-5 py-8 sm:px-8">
         {/* Onboarding banner */}
         {needsOnboarding && (
@@ -268,6 +232,6 @@ export default async function DashboardPage() {
           </Link>
         </div>
       </div>
-    </main>
+    </DashboardShell>
   );
 }

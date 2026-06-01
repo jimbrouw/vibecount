@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import LogoutButton from "../LogoutButton";
+import DashboardShell from "../DashboardShell";
 import PlainLanguageNote from "../PlainLanguageNote";
 import SettingsForm from "./SettingsForm";
 
@@ -21,42 +20,7 @@ export default async function SettingsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f0e8]">
-      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[#e5e0d8] bg-white px-6 py-4 sm:px-8">
-        <div className="flex items-center gap-6">
-          <Link
-            href="/dashboard"
-            className="text-lg font-semibold text-[#1a3a2a] transition hover:text-[#2d6a4a]"
-          >
-            VibeCount
-          </Link>
-          <nav className="hidden items-center gap-1 sm:flex">
-            <Link
-              href="/dashboard"
-              className="rounded-lg px-3 py-1.5 text-sm text-[#4a6a5a] transition hover:bg-[#f0ece4] hover:text-[#1a3a2a]"
-            >
-              Invoices
-            </Link>
-            <Link
-              href="/dashboard/glossary"
-              className="rounded-lg px-3 py-1.5 text-sm text-[#4a6a5a] transition hover:bg-[#f0ece4] hover:text-[#1a3a2a]"
-            >
-              Explain Simply
-            </Link>
-            <Link
-              href="/dashboard/settings"
-              className="rounded-lg bg-[#e8f0eb] px-3 py-1.5 text-sm font-medium text-[#1a3a2a]"
-            >
-              Settings
-            </Link>
-          </nav>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="hidden text-sm text-[#4a6a5a] sm:block">{user.email}</span>
-          <LogoutButton />
-        </div>
-      </header>
-
+    <DashboardShell active="settings" userEmail={user.email ?? ""}>
       <div className="mx-auto max-w-2xl px-5 py-8 sm:px-8">
         <div className="mb-8">
           <h1 className="text-2xl font-semibold tracking-tight text-[#1a3a2a]">
@@ -76,6 +40,6 @@ export default async function SettingsPage() {
 
         <SettingsForm />
       </div>
-    </main>
+    </DashboardShell>
   );
 }

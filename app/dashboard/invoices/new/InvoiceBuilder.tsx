@@ -249,6 +249,7 @@ export default function InvoiceBuilder({
               <input
                 name="clientName"
                 list="saved-clients"
+                data-testid="input-client"
                 value={form.clientName}
                 onChange={(event) => updateField("clientName", event.target.value)}
                 required
@@ -268,6 +269,7 @@ export default function InvoiceBuilder({
                 name="invoiceDate"
                 type="text"
                 inputMode="numeric"
+                data-testid="input-date"
                 value={form.invoiceDate}
                 onChange={(event) => updateField("invoiceDate", event.target.value)}
                 required
@@ -281,6 +283,7 @@ export default function InvoiceBuilder({
             <span className="text-sm font-medium text-[#1a3a2a]">What is this for?</span>
             <textarea
               name="description"
+              data-testid="input-description"
               value={form.description}
               onChange={(event) => updateField("description", event.target.value)}
               required
@@ -300,6 +303,7 @@ export default function InvoiceBuilder({
                 <input
                   name="amount"
                   inputMode="decimal"
+                  data-testid="input-amount"
                   value={form.amount}
                   onChange={(event) => updateField("amount", event.target.value)}
                   required
@@ -394,6 +398,7 @@ export default function InvoiceBuilder({
           <button
             type="submit"
             disabled={isSubmitting}
+            data-testid="btn-submit-invoice"
             className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#1a3a2a] px-5 text-sm font-semibold text-white transition hover:bg-[#2d6a4a] disabled:cursor-not-allowed disabled:bg-[#8a9a91] sm:w-auto"
           >
             {isSubmitting ? "Creating PDF…" : "Confirm and download PDF"}
