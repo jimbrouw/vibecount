@@ -17,10 +17,9 @@ export async function POST(request: Request) {
     amount_pence?: number;
     invoice_date?: string;
     payment_terms?: string;
-    idempotency_key?: string;
   };
 
-  const { client_name, description, amount_pence, invoice_date, payment_terms, idempotency_key } = body;
+  const { client_name, description, amount_pence, invoice_date, payment_terms } = body;
 
   if (!client_name?.trim()) return NextResponse.json({ error: "client_name is required." }, { status: 400 });
   if (!description?.trim()) return NextResponse.json({ error: "description is required." }, { status: 400 });
@@ -30,19 +29,6 @@ export async function POST(request: Request) {
 
   const supabase = createAdminClient();
   if (!supabase) return NextResponse.json({ error: "Database not configured." }, { status: 503 });
-
-  // Idempotency
-  if (idempotency_key) {
-    const { data: existing } = await supabase
-      .from("invoices")
-      .select("id, status, number")
-      .eq("user_id", session.user_id)
-      .eq("idempotency_key", idempotency_key)
-      .maybeSingle();
-    if (existing) {
-      return NextResponse.json({ id: existing.id, number: existing.number, status: existing.status, idempotent: true });
-    }
-  }
 
   // Find or create client
   const { data: clients } = await supabase
@@ -86,7 +72,6 @@ export async function POST(request: Request) {
       amount: amount_pence / 100,
       payment_terms: payment_terms ?? "Payment due within 30 days",
       status: "draft",
-      ...(idempotency_key ? { idempotency_key } : {}),
     })
     .select("id, number, status")
     .single();

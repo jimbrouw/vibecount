@@ -18,10 +18,9 @@ export async function POST(request: Request) {
     description?: string;
     amount_pence?: number;
     category_id?: string;
-    idempotency_key?: string;
   };
 
-  const { record_type, record_date, description, amount_pence, category_id, idempotency_key } = body;
+  const { record_type, record_date, description, amount_pence, category_id } = body;
 
   if (!["income", "expense"].includes(record_type ?? "")) {
     return NextResponse.json({ error: "record_type must be income or expense." }, { status: 400 });
@@ -38,20 +37,6 @@ export async function POST(request: Request) {
 
   const supabase = createAdminClient();
   if (!supabase) return NextResponse.json({ error: "Database not configured." }, { status: 503 });
-
-  // Idempotency: if same key already used, return the existing record
-  if (idempotency_key) {
-    const { data: existing } = await supabase
-      .from("financial_records")
-      .select("id, status")
-      .eq("user_id", session.user_id)
-      .eq("idempotency_key", idempotency_key)
-      .maybeSingle();
-
-    if (existing) {
-      return NextResponse.json({ id: existing.id, status: existing.status, idempotent: true });
-    }
-  }
 
   // Verify category ownership if provided
   if (category_id) {
@@ -82,7 +67,6 @@ export async function POST(request: Request) {
       status: "review",
       tax_year_start: taxYearStart,
       tax_quarter: taxQuarter,
-      ...(idempotency_key ? { idempotency_key } : {}),
     })
     .select("id, status")
     .single();

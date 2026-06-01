@@ -90,6 +90,11 @@ Read `spec.md` first. This file is the ordered work.
       and add it to Settings → Client intelligence. Once added, typing a client
       name in the invoice builder will search Companies House and auto-fill their
       registered name, address, and company number.
+- [ ] Set up Vercel cron jobs (Hobby plan requires manual setup — vercel.json crons
+      are not supported):
+      Vercel Dashboard → vibecount project → Settings → Crons
+      Add: /api/reminders/due        schedule: 0 8 * * *   (08:00 daily)
+      Add: /api/invoices/repeating/run  schedule: 0 7 * * *   (07:00 daily)
 
 ### Task 5 — Accessibility layer
 - [x] Large-text mode, spacing controls, plain-language toggle.
