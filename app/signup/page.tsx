@@ -56,7 +56,7 @@ export default function SignupPage() {
         </p>
 
         <div className="bg-white rounded-2xl shadow-sm p-8 space-y-5 border border-[#bbf7d0]">
-          <GoogleAuthButton label="Continue with Google" />
+          <GoogleAuthButton label="Continue with Google" testId="signup-google-button" />
 
           <div className="flex items-center gap-3">
             <div className="h-px flex-1 bg-[#bbf7d0]" />
@@ -66,7 +66,7 @@ export default function SignupPage() {
             <div className="h-px flex-1 bg-[#bbf7d0]" />
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-5" data-testid="signup-form">
           {error && (
             <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-3">
               {error}
@@ -84,6 +84,7 @@ export default function SignupPage() {
             </label>
             <input
               id="email"
+              data-testid="signup-email-input"
               type="email"
               autoComplete="email"
               required
@@ -100,6 +101,7 @@ export default function SignupPage() {
             </label>
             <input
               id="password"
+              data-testid="signup-password-input"
               type="password"
               autoComplete="new-password"
               required
@@ -113,6 +115,7 @@ export default function SignupPage() {
 
           <button
             type="submit"
+            data-testid="signup-submit-button"
             disabled={loading}
             className="w-full rounded-lg bg-[#15803d] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#14532d] disabled:opacity-60 transition-colors"
           >
@@ -123,7 +126,11 @@ export default function SignupPage() {
 
         <p className="text-center text-sm text-[#166534] mt-6">
           Already have an account?{" "}
-          <Link href="/login" className="font-medium text-[#14532d] underline underline-offset-2">
+          <Link
+            href="/login"
+            data-testid="signup-sign-in-link"
+            className="font-medium text-[#14532d] underline underline-offset-2"
+          >
             Sign in
           </Link>
         </p>

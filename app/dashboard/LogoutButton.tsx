@@ -18,6 +18,8 @@ export default function LogoutButton() {
 
   return (
     <button
+      type="button"
+      data-testid="logout-button"
       onClick={handleLogout}
       disabled={loading}
       className="text-sm text-[#4a6a5a] hover:text-[#1a3a2a] disabled:opacity-60 transition-colors"

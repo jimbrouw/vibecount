@@ -5,6 +5,8 @@ export type InvoicePdfData = {
   number: string;
   invoiceDate: string;
   clientName: string;
+  clientAddress: string;
+  clientVatNumber: string;
   description: string;
   amountPence: number;
   vatPence: number;
@@ -14,6 +16,8 @@ export type InvoicePdfData = {
   freelancerAddress: string;
   freelancerContact: string;
   bankDetails: string;
+  paymentLinkProvider: string;
+  paymentLinkUrl: string;
   vatNumber: string;
   vatRate: number | null;
   latePaymentWording: string;
@@ -110,6 +114,20 @@ export async function createInvoicePdf(data: InvoicePdfData) {
   page.drawText("To", { x: 320, y, size: 8, font: bold, color: MUTED });
   page.drawText(data.clientName, { x: 320, y: y - 14, size: 12, font: bold, color: INK });
 
+  // Client address (if provided)
+  let clientDetailY = y - 30;
+  if (data.clientAddress) {
+    const addressLines = data.clientAddress.split(/[,\n]/).map((l) => l.trim()).filter(Boolean).slice(0, 4);
+    for (const line of addressLines) {
+      page.drawText(line, { x: 320, y: clientDetailY, size: 8, font, color: MUTED });
+      clientDetailY -= 11;
+    }
+  }
+  if (data.clientVatNumber) {
+    page.drawText(`VAT no: ${data.clientVatNumber}`, { x: 320, y: clientDetailY, size: 8, font, color: MUTED });
+    clientDetailY -= 11;
+  }
+
   // Description section
   y -= 100;
   page.drawLine({ start: { x: 48, y: y + 12 }, end: { x: width - 48, y: y + 12 }, thickness: 0.5, color: RULE });
@@ -171,6 +189,14 @@ export async function createInvoicePdf(data: InvoicePdfData) {
     page.drawText("Payment details", { x: 48, y, size: 8, font: bold, color: MUTED });
     y -= 14;
     drawSmallWrappedText(data.bankDetails, 48, y, 480, 9, page, font, INK);
+  }
+
+  if (data.paymentLinkUrl) {
+    y -= data.bankDetails ? 52 : 52;
+    const provider = paymentProviderLabel(data.paymentLinkProvider);
+    page.drawText("Pay online", { x: 48, y, size: 8, font: bold, color: MUTED });
+    y -= 14;
+    drawSmallWrappedText(`${provider}: ${data.paymentLinkUrl}`, 48, y, 480, 9, page, font, INK);
   }
 
   // Footer
@@ -237,6 +263,13 @@ function drawSmallWrappedText(
 function capitalise(s: string) {
   if (!s) return s;
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function paymentProviderLabel(provider: string) {
+  if (provider === "sumup") return "SumUp";
+  if (provider === "stripe") return "Stripe Checkout";
+  if (provider === "paypal") return "PayPal";
+  return "Payment link";
 }
 
 function formatDate(value: string) {

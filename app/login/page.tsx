@@ -41,7 +41,7 @@ export default function LoginPage() {
         </p>
 
         <div className="bg-white rounded-2xl shadow-sm p-8 space-y-5 border border-[#bbf7d0]">
-          <GoogleAuthButton label="Sign in with Google" />
+          <GoogleAuthButton label="Sign in with Google" testId="login-google-button" />
 
           <div className="flex items-center gap-3">
             <div className="h-px flex-1 bg-[#bbf7d0]" />
@@ -51,7 +51,7 @@ export default function LoginPage() {
             <div className="h-px flex-1 bg-[#bbf7d0]" />
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-5" data-testid="login-form">
           {error && (
             <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-3">
               {error}
@@ -64,6 +64,7 @@ export default function LoginPage() {
             </label>
             <input
               id="email"
+              data-testid="login-email-input"
               type="email"
               autoComplete="email"
               required
@@ -80,6 +81,7 @@ export default function LoginPage() {
             </label>
             <input
               id="password"
+              data-testid="login-password-input"
               type="password"
               autoComplete="current-password"
               required
@@ -92,6 +94,7 @@ export default function LoginPage() {
 
           <button
             type="submit"
+            data-testid="login-submit-button"
             disabled={loading}
             className="w-full rounded-lg bg-[#15803d] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#14532d] disabled:opacity-60 transition-colors"
           >
@@ -102,7 +105,11 @@ export default function LoginPage() {
 
         <p className="text-center text-sm text-[#166534] mt-6">
           No account?{" "}
-          <Link href="/signup" className="font-medium text-[#14532d] underline underline-offset-2">
+          <Link
+            href="/signup"
+            data-testid="login-create-account-link"
+            className="font-medium text-[#14532d] underline underline-offset-2"
+          >
             Create one
           </Link>
         </p>

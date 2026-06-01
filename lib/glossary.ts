@@ -5,110 +5,231 @@ export type GlossaryTerm = {
   example: string;
 };
 
+// Founder-approved content. Terms marked VERIFY need accountant sign-off before launch.
 const GLOSSARY_TERMS: GlossaryTerm[] = [
+  {
+    id: "sole-trader",
+    term: "Sole trader",
+    explanation:
+      "You and the business are the same legal person. No company, you keep the profit, you owe the tax.",
+    example:
+      "Invoicing clients under your own name or a trading name, not a Ltd company.",
+  },
   {
     id: "self-assessment",
     term: "Self Assessment",
     explanation:
-      "The annual process where you tell HM Revenue & Customs (HMRC) how much money you made as a self-employed freelancer, and pay the tax and National Insurance you owe on those earnings.",
-    example:
-      "You are a freelance graphic designer. By January 31st each year, you must submit a Self Assessment tax return online to show what you earned between April 6th of the previous year and April 5th of this year.",
+      "The system you use to tell HMRC what you earned and work out your tax.",
+    example: "Once a year you log in and declare your self-employed income.",
+  },
+  {
+    id: "utr",
+    term: "UTR (Unique Taxpayer Reference)",
+    explanation: "A personal 10-digit tax ID number.",
+    example: "A 10-digit number that goes on every tax return.",
+  },
+  {
+    id: "government-gateway",
+    term: "Government Gateway",
+    explanation: "The HMRC login used to file and pay.",
+    example: "One user ID and password for all HMRC services.",
+  },
+  {
+    id: "tax-year",
+    term: "Tax year",
+    explanation: "The 12 months HMRC measures: 6 April to 5 April.",
+    example: "The 2026/27 tax year runs 6 Apr 2026 to 5 Apr 2027.",
+  },
+  {
+    id: "turnover",
+    term: "Turnover (gross income)",
+    explanation: "Total money the business brought in, before any costs.",
+    example: "GBP 48,000 of invoiced work is the turnover.",
   },
   {
     id: "allowable-expenses",
-    term: "Allowable Expenses",
+    term: "Allowable expenses",
     explanation:
-      "Essential business costs that you pay specifically to run your freelance business. You subtract these from your total earnings (turnover) so you only pay tax on your actual profits.",
+      "Costs that can be subtracted because they are wholly and exclusively for the business.",
     example:
-      "You bought a camera for GBP1,000 for your freelance photography work, and spent GBP200 on travel. These are allowable expenses, so if you made GBP10,000 in turnover, you only pay tax on GBP8,800 of profit.",
+      "Software subscriptions, a portion of phone, travel to a client site.",
+  },
+  {
+    id: "taxable-profit",
+    term: "Taxable profit",
+    explanation:
+      "Turnover minus allowable expenses. The figure tax is charged on.",
+    example:
+      "GBP 48,000 turnover minus GBP 9,000 costs = GBP 39,000 taxable profit.",
+  },
+  {
+    id: "personal-allowance",
+    term: "Personal Allowance",
+    explanation: "Income earned tax-free each year (GBP 12,570).",
+    example: "The first GBP 12,570 of profit carries GBP 0 income tax.",
+  },
+  {
+    id: "tax-rates",
+    term: "Basic / Higher / Additional rate",
+    explanation: "The income tax bands: 20% / 40% / 45%.",
+    example: "Profit above GBP 50,270 is taxed at 40%.",
+  },
+  // VERIFY (accountant decision): it's either/or with expenses — flat £1,000 or real costs, never both.
+  // If actual expenses exceed £1,000, claiming the allowance loses money. Check which way leaves the user better off.
+  {
+    id: "trading-allowance",
+    term: "Trading Allowance",
+    explanation:
+      "A flat GBP 1,000 of self-employment income you can earn tax-free, instead of claiming expenses.",
+    example: "A side income of GBP 800 needs no declaration.",
+  },
+  {
+    id: "class-4-nics",
+    term: "Class 4 NICs",
+    explanation:
+      "National Insurance on profits: 6% then 2%. Paid via Self Assessment.",
+    example:
+      "On GBP 39,000 profit, 6% applies to the slice above GBP 12,570.",
+  },
+  // VERIFY (accountant decision): no longer compulsory, but voluntary payment can cheaply protect State Pension in
+  // low-profit years. Whether it's worth it depends on the user's NI record — needs their State Pension forecast, not a generic rule.
+  {
+    id: "class-2-nics",
+    term: "Class 2 NICs",
+    explanation:
+      "Old flat-rate NI, now mostly automatic/voluntary; still counts toward State Pension.",
+    example:
+      "Not paid above the threshold, but pension credit still builds.",
   },
   {
     id: "payment-on-account",
     term: "Payment on Account",
     explanation:
-      "Advance payments towards your next self-employed tax bill. HMRC charges these twice a year to spread the tax cost out, based on a guess that you will earn the same as the previous year.",
-    example:
-      "Your tax bill for last year was GBP3,000. HMRC will automatically ask you to pay GBP1,500 by January 31st and another GBP1,500 by July 31st as advance payments for the upcoming year.",
+      "Advance payments toward next year's bill, in two instalments.",
+    example: "Half of next year's estimated tax paid each January and July.",
   },
   {
-    id: "unique-taxpayer-reference",
-    term: "Unique Taxpayer Reference",
+    id: "balancing-payment",
+    term: "Balancing Payment",
     explanation:
-      "A personal 10-digit number given to you by HMRC when you register as self-employed. It acts as your unique tax fingerprint and is required to log in or pay taxes.",
+      "The top-up if the actual bill was higher than the advance payments.",
     example:
-      "When you register for Self Assessment, HMRC sends a welcome letter containing your 10-digit UTR. You must quote this whenever you contact HMRC or make a tax payment.",
+      "Owing more than was pre-paid means settling the difference by 31 Jan.",
   },
   {
-    id: "national-insurance",
-    term: "National Insurance",
+    id: "capital-allowances",
+    term: "Capital allowances",
     explanation:
-      "A separate self-employed tax paid alongside your regular Income Tax. It builds your eligibility for state benefits, such as the State Pension and maternity allowances.",
+      "Tax relief for buying bigger kit or equipment (capital items).",
+    example: "A GBP 2,000 equipment purchase claimed as a capital allowance.",
+  },
+  // VERIFY (accountant decision): cap is high so most freelancers never hit it, but cars don't qualify and timing
+  // across tax years matters. Accountant confirms the item is eligible and claimed in the right year.
+  {
+    id: "annual-investment-allowance",
+    term: "Annual Investment Allowance (AIA)",
+    explanation:
+      "Lets you deduct the full cost of most equipment in the year you buy it.",
+    example: "A GBP 3,000 workstation deducted in full that year.",
+  },
+  {
+    id: "simplified-expenses",
+    term: "Simplified expenses",
+    explanation: "Flat-rate shortcuts instead of working out exact costs.",
+    example: "A fixed pence-per-mile rate instead of real car costs.",
+  },
+  // VERIFY (accountant decision): flat rate is often lower than claiming a proportion of actual bills (rent, heating,
+  // broadband). It's a choice between easy and bigger. Check which gives more relief for the user's specific setup.
+  {
+    id: "use-of-home",
+    term: "Use of home (flat rate)",
+    explanation: "A set monthly amount claimable for working from home.",
+    example: "A fixed monthly figure based on hours worked at home.",
+  },
+  {
+    id: "cash-basis",
+    term: "Cash basis",
+    explanation:
+      "Record income/expenses when money actually moves. Now the default for sole traders.",
+    example: "A payment received in May counts in May.",
+  },
+  {
+    id: "accruals-basis",
+    term: "Accruals (traditional) basis",
+    explanation:
+      "Record income/expenses when earned/incurred, not when paid.",
     example:
-      "As a freelancer, if your annual profits exceed the self-employed threshold, you will pay Class 4 National Insurance contributions (calculated as a percentage of your profit) through your Self Assessment return.",
+      "An invoice raised in March counts in March, even if paid later.",
   },
   {
     id: "value-added-tax-vat",
-    term: "Value Added Tax (VAT)",
+    term: "VAT (Value Added Tax)",
     explanation:
-      "A tax added to the price of most goods and services. If your business turnover goes above GBP90,000 in a 12-month period, you must register for VAT, charge it to clients, and pay it to HMRC.",
-    example:
-      "You are registered for VAT and invoice a client GBP1,000 for consulting. You must add 20% VAT (GBP200), bringing the total to GBP1,200. You collect that GBP200 and pay it to HMRC later.",
+      "A 20% (standard) tax on most goods/services that registered businesses add and reclaim.",
+    example: "Charging GBP 1,000 + GBP 200 VAT on an invoice.",
   },
   {
-    id: "turnover",
-    term: "Turnover",
+    id: "vat-threshold",
+    term: "VAT registration threshold",
     explanation:
-      "The total amount of money your business receives from clients before any expenses, taxes, or material costs are deducted.",
+      "The turnover level (GBP 90,000) where registering becomes compulsory.",
     example:
-      "If you send 10 invoices of GBP1,000 each during the tax year and they are all paid, your turnover for that year is exactly GBP10,000, even if you spent GBP2,000 on tools.",
+      "Hitting GBP 90k taxable turnover in any rolling 12 months triggers registration.",
   },
   {
-    id: "profit",
-    term: "Profit",
+    id: "output-vat",
+    term: "Output VAT",
+    explanation: "VAT charged to customers and owed to HMRC.",
+    example: "The GBP 200 added to an invoice.",
+  },
+  {
+    id: "input-vat",
+    term: "Input VAT",
+    explanation: "VAT paid on purchases that can be reclaimed.",
+    example: "VAT paid on a work laptop.",
+  },
+  // VERIFY (accountant decision): the % depends on trade sector, and the "limited cost trader" rule can push to a
+  // worse rate if few goods are bought. For a service freelancer with low costs the scheme can cost more than
+  // standard VAT. Needs modelling against the user's real numbers before recommending it.
+  {
+    id: "vat-flat-rate",
+    term: "VAT Flat Rate Scheme",
     explanation:
-      "The actual money your freelance business has made after you subtract all of your allowable business expenses from your total turnover.",
+      "Pay a fixed % of turnover as VAT instead of tracking every transaction.",
+    example: "A simpler VAT method for small businesses with few expenses.",
+  },
+  {
+    id: "mtd",
+    term: "Making Tax Digital (MTD) for Income Tax",
+    explanation:
+      "Mandatory digital records + quarterly updates to HMRC, replacing one annual return.",
     example:
-      "If your total turnover is GBP15,000 and your allowable business expenses (software, travel, office supplies) total GBP3,000, your taxable profit is GBP12,000.",
+      "Over GBP 50k turnover means filing quarterly via software from Apr 2026.",
+  },
+  // Retained from original glossary — not in founder's list
+  {
+    id: "hmrc",
+    term: "HMRC",
+    explanation:
+      "His Majesty's Revenue and Customs — the UK government department responsible for collecting taxes, administering tax laws, and paying state support.",
+    example:
+      "When you file your self-employed tax return, you submit it to HMRC, and send your tax payments directly to HMRC's bank accounts.",
   },
   {
     id: "accounts-payable",
     term: "Accounts Payable",
     explanation:
-      "The money that your freelance business owes to others, such as suppliers, subcontractors, or utility providers, for services or goods already received.",
+      "The money your freelance business owes to others — suppliers, subcontractors, or utility providers — for services or goods already received.",
     example:
-      "You hired a freelance illustrator to draw a custom icon for a client project and they invoiced you GBP300 with 14-day terms. Until you pay them, that GBP300 is part of your accounts payable.",
+      "You hired a freelance illustrator and they invoiced you GBP 300 with 14-day terms. Until you pay, that GBP 300 is accounts payable.",
   },
   {
     id: "accounts-receivable",
     term: "Accounts Receivable",
     explanation:
-      "The money that your clients owe you for services you have finished and invoiced, but have not yet received payment for.",
+      "The money clients owe you for services you have finished and invoiced, but not yet received payment for.",
     example:
-      "You sent a GBP1,500 invoice to a client for web design work with 30-day payment terms. Until the client transfers that GBP1,500 into your bank account, it is an accounts receivable.",
-  },
-  {
-    id: "flat-rate-vat-scheme",
-    term: "Flat Rate VAT Scheme",
-    explanation:
-      "An alternative way for small businesses to pay VAT. Instead of keeping track of VAT on every single purchase, you pay HMRC a fixed, lower percentage of your total VAT-inclusive turnover.",
-    example:
-      "Under the standard scheme, you pay VAT on sales minus VAT on purchases. Under the Flat Rate scheme, you might pay a flat 10% of your total sales to HMRC, simplifying your bookkeeping.",
-  },
-  {
-    id: "sole-trader",
-    term: "Sole Trader",
-    explanation:
-      "The simplest business structure where you run your business as an individual. You are personally responsible for any business debts, and your business profits are taxed as personal income.",
-    example:
-      "You work as a freelance copywriter under your own name or a trading name. You are a sole trader, meaning there is no legal distinction between you and your business.",
-  },
-  {
-    id: "hmrc",
-    term: "HMRC",
-    explanation:
-      "His Majesty's Revenue and Customs (HMRC) is the UK government department responsible for collecting taxes, administering tax laws, and paying state support.",
-    example:
-      "When you file your self-employed tax return, you submit it to HMRC, and you send your tax payments directly to HMRC's bank accounts.",
+      "You sent a GBP 1,500 invoice with 30-day terms. Until the client pays, that GBP 1,500 is accounts receivable.",
   },
 ];
 

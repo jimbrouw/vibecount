@@ -389,11 +389,15 @@ to see a plain-English, accountant-checked explanation beside the official wordi
 
 - Phase 2: spreadsheet / CSV / bank statement import, digital record-keeping,
   quarterly summaries, MTD threshold tracking, bookkeeping assistance, AI finance
-  guidance, expense categorisation, plain-English Self Assessment prep.
-- Phase 3: accounting software integrations and direct HMRC-facing MTD workflows
-  once the records model is stable.
-- Phase 4: agentic tax copilot / freelancer operating system with strict approval
-  and audit boundaries.
+  guidance, expense categorisation, plain-English Self Assessment prep. Do not
+  claim HMRC-recognised MTD compliance until the submission path is actually
+  recognised.
+- Phase 3: branded quotes/invoices, saved services, quote-to-invoice conversion,
+  payment links, repeating invoice drafts, and user-approved reminders. Keep the
+  document model reusable so proposals/contracts can inherit data later.
+- Phase 4: agentic tax copilot / selected freelancer operating system features
+  with strict approval and audit boundaries: proposals, contracts, e-signature
+  provider integration, lightweight scope tracking, and read-only review agents.
 
 Making Tax Digital is now a verified roadmap driver. See
 `knowledge-base/making-tax-digital.md` for current HMRC dates and scope notes.
@@ -401,3 +405,5 @@ See `knowledge-base/bank-statement-import.md` for the privacy-first import idea.
 See `knowledge-base/self-assessment-plain-english.md` for the plain-English tax
 return preparation idea.
 See `knowledge-base/agentic-tax-copilot.md` for the later agentic workflow idea.
+See `knowledge-base/freelancer-operating-system.md` for the smart document /
+freelancer operating system direction.

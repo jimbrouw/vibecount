@@ -13,6 +13,12 @@ type DraftResponse = {
   draft: VoiceDraft;
 };
 
+type CHSuggestion = {
+  name: string;
+  company_number: string;
+  address: string;
+};
+
 export default function VoiceInvoiceBuilder() {
   const router = useRouter();
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -24,6 +30,9 @@ export default function VoiceInvoiceBuilder() {
   const [draft, setDraft] = useState<VoiceDraft | null>(null);
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [hasPlayedReadback, setHasPlayedReadback] = useState(false);
+  const [chSuggestions, setChSuggestions] = useState<CHSuggestion[]>([]);
+  const [clientAddress, setClientAddress] = useState("");
+  const [clientCompanyNumber, setClientCompanyNumber] = useState("");
 
   const resolvedAmount = useMemo(() => {
     if (!draft) {
@@ -48,10 +57,30 @@ export default function VoiceInvoiceBuilder() {
     )}. In words, ${amountToWords(resolvedAmountPence)}.`;
   }, [draft, resolvedAmountPence]);
 
+  async function searchCompaniesHouse(clientName: string) {
+    if (clientName.length < 2) return;
+    try {
+      const res = await fetch(`/api/companies-house/search?q=${encodeURIComponent(clientName)}`);
+      const data = await res.json() as { companies?: CHSuggestion[] };
+      setChSuggestions(data.companies ?? []);
+    } catch {
+      // CH search is best-effort — silently ignore errors
+    }
+  }
+
+  function selectChSuggestion(company: CHSuggestion) {
+    setClientAddress(company.address);
+    setClientCompanyNumber(company.company_number);
+    setChSuggestions([]);
+  }
+
   async function startRecording() {
     setError("");
     setDraft(null);
     setHasPlayedReadback(false);
+    setChSuggestions([]);
+    setClientAddress("");
+    setClientCompanyNumber("");
 
     try {
       trackEvent("voice_invoice_attempt", { input: "microphone" });
@@ -103,6 +132,9 @@ export default function VoiceInvoiceBuilder() {
     setDraft(null);
     setSelectedAmount(null);
     setHasPlayedReadback(false);
+    setChSuggestions([]);
+    setClientAddress("");
+    setClientCompanyNumber("");
 
     trackEvent("voice_invoice_attempt", {
       input: audioBlob ? "audio_blob" : "transcript",
@@ -146,6 +178,11 @@ export default function VoiceInvoiceBuilder() {
       setSelectedAmount(body.draft.amount);
     }
     setIsSubmitting(false);
+
+    // Auto-search Companies House for the extracted client name (best-effort)
+    if (body.draft.client) {
+      void searchCompaniesHouse(body.draft.client);
+    }
   }
 
   function playReadback() {
@@ -175,6 +212,8 @@ export default function VoiceInvoiceBuilder() {
       transcript,
       source: "voice",
     });
+    if (clientAddress) params.set("clientAddress", clientAddress);
+    if (clientCompanyNumber) params.set("clientCompanyNumber", clientCompanyNumber);
     router.push(`/dashboard/invoices/new?${params.toString()}`);
   }
 
@@ -207,6 +246,7 @@ export default function VoiceInvoiceBuilder() {
               {!isRecording ? (
                 <button
                   type="button"
+                  data-testid="voice-start-recording-button"
                   onClick={startRecording}
                   disabled={isSubmitting}
                   className="inline-flex h-12 items-center justify-center rounded-xl bg-[#1a3a2a] px-5 text-sm font-semibold text-white transition hover:bg-[#2d6a4a] disabled:cursor-not-allowed disabled:bg-[#8a9a91]"
@@ -216,6 +256,7 @@ export default function VoiceInvoiceBuilder() {
               ) : (
                 <button
                   type="button"
+                  data-testid="voice-stop-recording-button"
                   onClick={stopRecording}
                   className="inline-flex h-12 items-center justify-center rounded-xl bg-[#7a271a] px-5 text-sm font-semibold text-white transition hover:bg-[#923728]"
                 >
@@ -225,6 +266,7 @@ export default function VoiceInvoiceBuilder() {
 
               <Link
                 href="/dashboard/invoices/new"
+                data-testid="voice-use-typing-link"
                 className="inline-flex h-12 items-center justify-center rounded-xl border border-[#d5d0c8] bg-white px-5 text-sm font-semibold text-[#1a3a2a] transition hover:bg-[#f8f5ef]"
               >
                 Use typing instead
@@ -237,6 +279,7 @@ export default function VoiceInvoiceBuilder() {
               Transcript
             </span>
             <textarea
+              data-testid="voice-transcript-input"
               value={transcript}
               onChange={(event) => setTranscript(event.target.value)}
               rows={4}
@@ -247,6 +290,7 @@ export default function VoiceInvoiceBuilder() {
 
           <button
             type="button"
+            data-testid="voice-reextract-button"
             onClick={() => submitVoiceDraft({ transcriptOverride: transcript })}
             disabled={isSubmitting || transcript.trim() === ""}
             className="inline-flex h-12 items-center justify-center rounded-xl border border-[#d5d0c8] bg-white px-5 text-sm font-semibold text-[#1a3a2a] transition hover:bg-[#f8f5ef] disabled:cursor-not-allowed disabled:text-[#8a9a91]"
@@ -261,7 +305,7 @@ export default function VoiceInvoiceBuilder() {
           ) : null}
 
           {draft ? (
-            <div className="rounded-xl border border-[#d5d0c8] bg-[#f8f5ef] p-4">
+            <div className="rounded-xl border border-[#d5d0c8] bg-[#f8f5ef] p-4" data-testid="voice-draft-review">
               <p className="text-sm font-medium text-[#1a3a2a]">Voice draft</p>
               <div className="mt-4 space-y-4">
                 <div>
@@ -269,6 +313,25 @@ export default function VoiceInvoiceBuilder() {
                     Client
                   </p>
                   <p className="mt-1 text-sm text-[#1a3a2a]">{draft.client || "Not found"}</p>
+                  {clientAddress && (
+                    <p className="mt-1 text-xs text-[#4a6a5a]">{clientAddress}</p>
+                  )}
+                  {chSuggestions.length > 0 && !clientAddress && (
+                    <div className="mt-2 rounded-lg border border-[#d5d0c8] bg-white shadow-sm">
+                      <p className="px-3 py-2 text-xs text-[#4a6a5a]">Companies House matches — tap to fill address:</p>
+                      {chSuggestions.map((company) => (
+                        <button
+                          key={company.company_number}
+                          type="button"
+                          onMouseDown={() => selectChSuggestion(company)}
+                          className="flex w-full flex-col gap-0.5 px-3 py-2 text-left transition hover:bg-[#f0fdf4]"
+                        >
+                          <span className="text-sm font-medium text-[#1a3a2a]">{company.name}</span>
+                          <span className="text-xs text-[#4a6a5a]">{company.address}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -299,6 +362,7 @@ export default function VoiceInvoiceBuilder() {
                             >
                               <input
                                 type="radio"
+                                data-testid={`voice-amount-candidate-${candidatePence}`}
                                 name="voice-amount"
                                 checked={selectedAmount === candidate}
                                 onChange={() => setSelectedAmount(candidate)}
@@ -340,6 +404,7 @@ export default function VoiceInvoiceBuilder() {
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     <button
                       type="button"
+                      data-testid="voice-play-readback-button"
                       onClick={playReadback}
                       disabled={!readbackText}
                       className="inline-flex h-11 items-center justify-center rounded-xl bg-[#1a3a2a] px-4 text-sm font-semibold text-white transition hover:bg-[#2d6a4a] disabled:cursor-not-allowed disabled:bg-[#8a9a91]"
@@ -356,6 +421,7 @@ export default function VoiceInvoiceBuilder() {
 
                 <button
                   type="button"
+                  data-testid="voice-continue-preview-button"
                   onClick={continueToTypedPreview}
                   disabled={!draft || resolvedAmount === null || !hasPlayedReadback}
                   className="inline-flex h-12 items-center justify-center rounded-xl bg-[#1a3a2a] px-5 text-sm font-semibold text-white transition hover:bg-[#2d6a4a] disabled:cursor-not-allowed disabled:bg-[#8a9a91]"

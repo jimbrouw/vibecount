@@ -99,7 +99,7 @@ export default function SettingsForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-10">
+    <form onSubmit={handleSubmit} className="space-y-10" data-testid="settings-form">
       {/* Trading identity */}
       <fieldset className="rounded-xl border border-[#e5e0d8] bg-white p-6 shadow-sm">
         <legend className="mb-4 -ml-1 px-1 text-xs font-semibold uppercase tracking-widest text-[#4a6a5a]">
@@ -113,6 +113,7 @@ export default function SettingsForm() {
           >
             <input
               id="legal_name"
+              data-testid="settings-legal-name-input"
               type="text"
               value={settings.legal_name}
               onChange={(e) => update("legal_name", e.target.value)}
@@ -125,6 +126,7 @@ export default function SettingsForm() {
           <Field label="Email" hint="Shown on invoices." id="contact_email">
             <input
               id="contact_email"
+              data-testid="settings-contact-email-input"
               type="text"
               inputMode="email"
               value={contact.email}
@@ -136,6 +138,7 @@ export default function SettingsForm() {
           <Field label="Phone" hint="Optional." id="contact_phone">
             <input
               id="contact_phone"
+              data-testid="settings-contact-phone-input"
               type="tel"
               value={contact.phone}
               onChange={(e) => updateContact({ phone: e.target.value })}
@@ -146,6 +149,7 @@ export default function SettingsForm() {
           <Field label="Website" hint="Optional." id="contact_website">
             <input
               id="contact_website"
+              data-testid="settings-contact-website-input"
               type="text"
               inputMode="url"
               value={contact.website}
@@ -164,6 +168,7 @@ export default function SettingsForm() {
             >
               <input
                 id="contact_other"
+                data-testid="settings-contact-other-input"
                 type="text"
                 value={contact.other}
                 onChange={(e) => updateContact({ other: e.target.value })}
@@ -176,6 +181,7 @@ export default function SettingsForm() {
           <Field label="Address" hint="Your trading or correspondence address." id="address">
             <textarea
               id="address"
+              data-testid="settings-address-input"
               value={settings.address}
               onChange={(e) => update("address", e.target.value)}
               rows={3}
@@ -199,6 +205,7 @@ export default function SettingsForm() {
           >
             <input
               id="invoice_number_prefix"
+              data-testid="settings-invoice-prefix-input"
               type="text"
               maxLength={10}
               value={settings.invoice_number_prefix}
@@ -216,6 +223,7 @@ export default function SettingsForm() {
           >
             <input
               id="default_payment_terms"
+              data-testid="settings-default-payment-terms-input"
               type="text"
               value={settings.default_payment_terms}
               onChange={(e) => update("default_payment_terms", e.target.value)}
@@ -232,6 +240,7 @@ export default function SettingsForm() {
             labelAction={
               <button
                 type="button"
+                data-testid="settings-late-payment-default-button"
                 onClick={() =>
                   update("late_payment_wording", DEFAULT_LATE_PAYMENT_WORDING)
                 }
@@ -243,6 +252,7 @@ export default function SettingsForm() {
           >
             <textarea
               id="late_payment_wording"
+              data-testid="settings-late-payment-wording-input"
               value={settings.late_payment_wording}
               onChange={(e) => update("late_payment_wording", e.target.value)}
               rows={4}
@@ -262,6 +272,7 @@ export default function SettingsForm() {
           <Field label="Account name" hint="Usually your business or legal name." id="bank_account_name">
             <input
               id="bank_account_name"
+              data-testid="settings-bank-account-name-input"
               type="text"
               value={bank.accountName}
               onChange={(e) => updateBank({ accountName: e.target.value })}
@@ -272,6 +283,7 @@ export default function SettingsForm() {
           <Field label="Bank name" hint="Optional." id="bank_name">
             <input
               id="bank_name"
+              data-testid="settings-bank-name-input"
               type="text"
               value={bank.bankName}
               onChange={(e) => updateBank({ bankName: e.target.value })}
@@ -282,6 +294,7 @@ export default function SettingsForm() {
           <Field label="Sort code" hint="Shown at the bottom of invoices." id="sort_code">
             <input
               id="sort_code"
+              data-testid="settings-sort-code-input"
               type="text"
               inputMode="numeric"
               value={bank.sortCode}
@@ -293,6 +306,7 @@ export default function SettingsForm() {
           <Field label="Account number" hint="Shown at the bottom of invoices." id="account_number">
             <input
               id="account_number"
+              data-testid="settings-account-number-input"
               type="text"
               inputMode="numeric"
               value={bank.accountNumber}
@@ -304,6 +318,7 @@ export default function SettingsForm() {
           <Field label="IBAN" hint="For international payments." id="iban">
             <input
               id="iban"
+              data-testid="settings-iban-input"
               type="text"
               value={bank.iban}
               onChange={(e) => updateBank({ iban: e.target.value.toUpperCase() })}
@@ -314,6 +329,7 @@ export default function SettingsForm() {
           <Field label="SWIFT / BIC" hint="For international bank transfers." id="swift">
             <input
               id="swift"
+              data-testid="settings-swift-input"
               type="text"
               value={bank.swift}
               onChange={(e) => updateBank({ swift: e.target.value.toUpperCase() })}
@@ -326,10 +342,48 @@ export default function SettingsForm() {
           <Field label="Payment reference or note" hint="Optional extra payment instruction." id="bank_reference">
             <input
               id="bank_reference"
+              data-testid="settings-bank-reference-input"
               type="text"
               value={bank.reference}
               onChange={(e) => updateBank({ reference: e.target.value })}
               placeholder="Use the invoice number as the payment reference"
+              className={inputCls}
+            />
+          </Field>
+        </div>
+        <div className="mt-5 grid gap-5 sm:grid-cols-2">
+          <Field
+            label="Hosted payment provider"
+            hint="Use SumUp now, or Stripe/other later."
+            id="payment_link_provider"
+          >
+            <select
+              id="payment_link_provider"
+              data-testid="settings-payment-provider-select"
+              value={settings.payment_link_provider}
+              onChange={(e) => update("payment_link_provider", e.target.value)}
+              className={inputCls}
+            >
+              <option value="">No hosted payment link</option>
+              <option value="sumup">SumUp</option>
+              <option value="stripe">Stripe Checkout</option>
+              <option value="paypal">PayPal</option>
+              <option value="other">Other hosted link</option>
+            </select>
+          </Field>
+          <Field
+            label="Hosted payment link"
+            hint="Must start with https://. Printed on invoices as a pay-online option."
+            id="payment_link_url"
+          >
+            <input
+              id="payment_link_url"
+              data-testid="settings-payment-link-url-input"
+              type="url"
+              inputMode="url"
+              value={settings.payment_link_url}
+              onChange={(e) => update("payment_link_url", e.target.value)}
+              placeholder="https://pay.sumup.com/..."
               className={inputCls}
             />
           </Field>
@@ -346,6 +400,7 @@ export default function SettingsForm() {
           <span className="relative inline-flex h-6 w-11 shrink-0">
             <input
               type="checkbox"
+              data-testid="settings-vat-registered-toggle"
               checked={settings.vat_registered}
               onChange={(e) => update("vat_registered", e.target.checked)}
               className="sr-only"
@@ -376,6 +431,7 @@ export default function SettingsForm() {
             >
               <input
                 id="vat_number"
+                data-testid="settings-vat-number-input"
                 type="text"
                 value={settings.vat_number}
                 onChange={(e) => update("vat_number", e.target.value)}
@@ -386,6 +442,7 @@ export default function SettingsForm() {
             <Field label="VAT rate (%)" id="vat_rate">
               <input
                 id="vat_rate"
+                data-testid="settings-vat-rate-input"
                 type="number"
                 min={0}
                 max={100}
@@ -418,6 +475,7 @@ export default function SettingsForm() {
         >
           <input
             id="utr"
+            data-testid="settings-utr-input"
             type="text"
             inputMode="numeric"
             maxLength={10}
@@ -429,10 +487,33 @@ export default function SettingsForm() {
         </Field>
       </fieldset>
 
+      {/* Companies House */}
+      <fieldset className="space-y-5 rounded-xl border border-[#e5e0d8] p-5">
+        <legend className="px-1 text-sm font-semibold text-[#1a3a2a]">Client intelligence</legend>
+        <Field
+          hint="Optional. Typing a client name will search Companies House and auto-fill their registered address. Get a free key at developer.companieshouse.gov.uk"
+          label="Companies House API key"
+          id="companies_house_api_key"
+        >
+          <input
+            id="companies_house_api_key"
+            data-testid="settings-companies-house-key-input"
+            type="password"
+            name="companies_house_api_key"
+            value={settings.companies_house_api_key}
+            onChange={(e) => update("companies_house_api_key", e.target.value)}
+            placeholder="Your Companies House API key"
+            className={inputCls}
+            autoComplete="off"
+          />
+        </Field>
+      </fieldset>
+
       {/* Status feedback + submit */}
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
         <button
           type="submit"
+          data-testid="settings-save-button"
           disabled={status === "saving"}
           className="inline-flex h-12 items-center justify-center rounded-xl bg-[#1a3a2a] px-8 text-sm font-semibold text-white transition hover:bg-[#2d6a4a] disabled:cursor-not-allowed disabled:bg-[#8a9a91]"
         >
