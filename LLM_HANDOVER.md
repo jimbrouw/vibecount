@@ -1,6 +1,6 @@
 # VibeCount LLM Coder Handover
 
-Last updated: 2026-06-01 (session 4)
+Last updated: 2026-06-01 (session 4 — all bugs fixed, PR open)
 
 ## Start Here
 
@@ -44,7 +44,11 @@ Read these before making changes:
 | `codex/phase-3-invoice-reminders` | Phase 2/3 hardening — the "main production" branch |
 | `claude/vibecount-ai-agents` | Phase 4 features — current working branch |
 
-`claude/vibecount-ai-agents` branches from `codex/phase-3-invoice-reminders` and adds Phase 4 on top. It needs a PR review and merge before promotion to production. See **Pending Tasks** below.
+`claude/vibecount-ai-agents` branches from `codex/phase-3-invoice-reminders` and adds Phase 4 on top.
+
+**PR open:** https://github.com/jimbrouw/vibecount/pull/3
+Target: `codex/phase-3-invoice-reminders`
+Last commit: `4295cea`
 
 ---
 
@@ -141,44 +145,31 @@ All features below are on branch `claude/vibecount-ai-agents`.
 
 ---
 
-## Known Bugs / Issues
+## Known Issues
 
-### 1. Email invoice button missing on pre-existing invoices ⚠️
+### 1. Vercel crons need manual setup ⚠️
 
-`EmailInvoiceButton` only renders when `hasPdf` is true (i.e. `pdf_path != null`). Invoices created before the Storage migration have `pdf_path = null` and show no button.
-
-**Fix needed:** `app/api/invoices/share-url/route.ts` — if `invoice.pdf_path` is null, generate the PDF on demand and upload it before creating the signed URL. Requires reading the invoice + client + user_settings rows to reconstruct `InvoicePdfData`, calling `createInvoicePdf()`, uploading, saving `pdf_path`, then returning the signed URL.
-
-### 2. idempotency_key bug in MCP draft tools ⚠️
-
-Both `app/api/mcp/tools/draft-record/route.ts` and `app/api/mcp/tools/draft-invoice/route.ts` attempt to insert an `idempotency_key` column that does not exist on either table. This will silently fail (or error) in production.
-
-**Fix needed:** Remove the `idempotency_key` field from both inserts and remove any idempotency check block. The `agent_actions` audit log already provides idempotency-equivalent protection via `result_status`.
-
-### 3. Companies House autocomplete not wired in VoiceInvoiceBuilder ⚠️
-
-`app/dashboard/invoices/voice/VoiceInvoiceBuilder.tsx` does not have the CH debounced search and dropdown that `InvoiceBuilder.tsx` has.
-
-**Fix needed:** Port the `handleClientNameChange()` + CH suggestion state + dropdown UI from `InvoiceBuilder.tsx` into `VoiceInvoiceBuilder.tsx`.
-
-### 4. PDF backup not applied to quotes and proposals ⚠️
-
-Invoice PDFs are backed up to Supabase Storage at creation time. Quote PDFs (`/api/quotes/pdf`) and proposal PDFs (`/api/proposals/pdf`) are not backed up.
-
-**Fix needed:** After generating the PDF in each route, upload to a corresponding storage bucket (or to `invoices/` with a sub-path) and save the path on the row.
-
-### 5. Vercel crons need manual setup ⚠️
-
-`vercel.json` was removed to fix Hobby plan deployment errors (cron config in vercel.json rejects on Hobby). Crons must be set up manually in the Vercel dashboard.
+`vercel.json` was removed to fix Hobby plan deployment errors. Crons must be set up manually.
 
 **User todo:**
 - Vercel Dashboard → Project Settings → Crons
-- Add `/api/reminders/due` — schedule `0 8 * * *` (08:00 daily)
-- Add `/api/invoices/repeating/run` — schedule `0 7 * * *` (07:00 daily)
+- Add `/api/reminders/due` — `0 8 * * *` (08:00 daily)
+- Add `/api/invoices/repeating/run` — `0 7 * * *` (07:00 daily)
 
-### 6. Quarterly readiness check migration ⚠️
+### 2. New migration must be applied before deploying ⚠️
 
-`supabase/migrations/20260530100000_quarterly_readiness_checks.sql` must be applied to production Supabase before this branch is deployed. Both `/dashboard/review` and `/dashboard` query this table.
+`supabase/migrations/20260601000000_quote_proposal_pdf_storage.sql` adds `pdf_path` to quotes and proposals tables. Apply before deploying this branch.
+
+```bash
+SUPABASE_ACCESS_TOKEN=sbp_c3c04e9d2f1b228413c9f3cbe3627de3fbf360fe \
+  supabase db push --project-ref lazorvlkgxgzdgflzhjm
+```
+
+Previously fixed (commit `4295cea`):
+- ~~idempotency_key bug in draft-record and draft-invoice MCP tools~~
+- ~~Email invoice button missing on pre-existing invoices (on-demand PDF generation)~~
+- ~~Companies House not wired into VoiceInvoiceBuilder~~
+- ~~PDF backup missing from quote and proposal routes~~
 
 ---
 
@@ -231,12 +222,10 @@ These must exist in Vercel (Production + Preview + Development):
 
 ## Pending Work (ordered)
 
-### Code fixes (should be done before PR)
+### Before merging PR
 
-1. **Fix idempotency_key bug** — remove from `draft-record/route.ts` and `draft-invoice/route.ts`
-2. **On-demand PDF in share-url** — generate + upload PDF when `pdf_path` is null so Email invoice button works on all invoices
-3. **Wire CH autocomplete into VoiceInvoiceBuilder** — same pattern as InvoiceBuilder.tsx
-4. **PDF backup for quotes and proposals** — upload after generation, save path on row
+1. Apply migration to production Supabase (see Known Issues #2)
+2. Merge PR #3: https://github.com/jimbrouw/vibecount/pull/3
 
 ### User todos (owner: Jim)
 
@@ -295,27 +284,29 @@ Known audit issue: `npm audit --omit=dev --audit-level=high` reports vulnerabili
 Continue VibeCount Phase 4 work on branch claude/vibecount-ai-agents.
 Read AGENTS.md, spec.md, tasks.md, HANDOVER.md, and LLM_HANDOVER.md first.
 
-Immediate fixes needed (in order):
+All code fixes are done. PR #3 is open:
+https://github.com/jimbrouw/vibecount/pull/3
 
-1. Fix idempotency_key bug:
-   - app/api/mcp/tools/draft-record/route.ts — remove idempotency_key from insert and remove any idempotency check block
-   - app/api/mcp/tools/draft-invoice/route.ts — same fix
-   Column does not exist on either table; it will error in production.
+Before merging:
+1. Apply the new migration to production Supabase:
+   SUPABASE_ACCESS_TOKEN=sbp_c3c04e9d2f1b228413c9f3cbe3627de3fbf360fe \
+     supabase db push --project-ref lazorvlkgxgzdgflzhjm
 
-2. On-demand PDF generation in share-url:
-   - app/api/invoices/share-url/route.ts — if invoice.pdf_path is null, read the invoice
-     + client + user_settings, call createInvoicePdf(), upload to invoices/{userId}/{number}.pdf,
-     save pdf_path, then create the 30-day signed URL. This unblocks the Email invoice button
-     for all pre-existing invoices.
+2. Smoke-test key flows after deployment:
+   - Create an invoice → PDF backs up → Download PDF and Email invoice both appear
+   - Click Email invoice on an old invoice (no pdf_path) → generates on demand → mailto opens
+   - Voice invoice with a company client name → CH suggestions appear → address pre-fills in typed preview
+   - Download a quote PDF → no error, pdf_path saved on row
+   - Agent settings → generate token → audit log shows the action
 
-3. Wire Companies House autocomplete into VoiceInvoiceBuilder:
-   - app/dashboard/invoices/voice/VoiceInvoiceBuilder.tsx
-   - Port handleClientNameChange() + CH suggestion state + dropdown UI from InvoiceBuilder.tsx
+3. Set up 2 Vercel crons in the dashboard (Hobby plan, manual setup):
+   /api/reminders/due          →  0 8 * * *
+   /api/invoices/repeating/run →  0 7 * * *
 
-4. Add PDF backup to quote/proposal PDF routes:
-   - app/api/quotes/pdf/route.ts and app/api/proposals/pdf/route.ts
-   - After generating PDF bytes, upload to Supabase Storage, save path on row
+4. Confirm Vercel env vars are set: RESEND_API_KEY, RESEND_FROM_EMAIL, ANTHROPIC_API_KEY, CRON_SECRET
 
-After all fixes: npm run lint && npm test && npm run build, then commit and open PR
-from claude/vibecount-ai-agents to codex/phase-3-invoice-reminders.
+Jim still owns:
+- Companies House API key (developer.companieshouse.gov.uk → Settings → Client intelligence)
+- Accountant review of 5 flagged glossary terms
+- Whisper sub-gate (20 real invoice amounts) before voice is promoted
 ```
