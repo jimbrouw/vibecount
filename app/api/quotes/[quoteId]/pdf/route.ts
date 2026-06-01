@@ -59,11 +59,32 @@ export async function GET(_request: Request, { params }: Params) {
     })),
   });
 
+  const filename = `${quote.number}.pdf`;
+
+  // Upload to Supabase Storage at {userId}/quotes/{number}.pdf (best-effort)
+  const storagePath = `${user.id}/quotes/${filename}`;
+  const { error: uploadError } = await supabase.storage
+    .from("invoices")
+    .upload(storagePath, Buffer.from(bytes), {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+
+  if (!uploadError) {
+    await supabase
+      .from("quotes")
+      .update({ pdf_path: storagePath })
+      .eq("id", quoteId)
+      .eq("user_id", user.id);
+  } else {
+    console.error("Quote PDF storage upload failed:", uploadError.message);
+  }
+
   return new NextResponse(Buffer.from(bytes), {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${quote.number}.pdf"`,
+      "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
 }

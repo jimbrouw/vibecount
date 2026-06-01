@@ -1,16 +1,15 @@
 # VibeCount LLM Coder Handover
 
-Last updated: 2026-05-30 (session 3)
+Last updated: 2026-06-01 (session 4)
 
 ## Start Here
 
 - Repo: `/Users/standard/Developer/vibecount`
-- Branch: `codex/phase-3-invoice-reminders`
-- Remote branch: `origin/codex/phase-3-invoice-reminders`
+- Active branch: `claude/vibecount-ai-agents`
+- Remote: `origin/claude/vibecount-ai-agents`
 - Production URL: `https://vibecount-teal.vercel.app`
 - Vercel project: `jims-projects-b7cb6c2e/vibecount`
 - Supabase project: `lazorvlkgxgzdgflzhjm`
-- Vercel CLI checked: `54.6.1`
 
 Read these before making changes:
 
@@ -19,9 +18,7 @@ Read these before making changes:
 - `tasks.md`
 - `HANDOVER.md`
 
-Important boundary: do not build Phase 4 MCP/browser-agent features on this branch.
-The Phase 4 read-only review agent and MCP acceptance criteria doc are already
-on this branch; they do not use MCP endpoints or browser-agent login and are safe.
+---
 
 ## Non-Negotiable Product Rules
 
@@ -36,149 +33,158 @@ on this branch; they do not use MCP endpoints or browser-agent login and are saf
 - Use net profit language, not gross profit.
 - Every tax estimate surface/export must include caveat/estimate wording.
 - Raw bank PDFs and unredacted bank details must not be exposed to LLM prompts or browser-agent surfaces.
+- Glossary content is static, curated, and accountant-reviewed — never LLM-generated.
 
-## Current Production State
+---
 
-Production is currently deployed and aliased to:
+## Branch Strategy
 
-`https://vibecount-teal.vercel.app`
+| Branch | Purpose |
+|---|---|
+| `codex/phase-3-invoice-reminders` | Phase 2/3 hardening — the "main production" branch |
+| `claude/vibecount-ai-agents` | Phase 4 features — current working branch |
 
-Latest commits on this branch (most recent first):
+`claude/vibecount-ai-agents` branches from `codex/phase-3-invoice-reminders` and adds Phase 4 on top. It needs a PR review and merge before promotion to production. See **Pending Tasks** below.
 
-- `518d17a Add approval-action agent and scheduled quarterly readiness checks`
-- `a06280a Add Phase 4 draft-action agent: AI category suggestions for records`
-- `6801711 Mark Phase 3 reminder sending and Phase 4 first tasks complete in tasks.md`
-- `3ffee34 Add Phase 4 read-only review agent and MCP acceptance criteria`
-- `ab64d2b Complete Phase 3: user-approved reminder sending via Resend`
-- `a67cc23 Fix records review QA blockers`
-- `be852ea Add LLM coder handover`
-- `c017c7d Clarify bank PDF extraction failures`
+---
 
-## What Was Built — 2026-05-30
+## What Was Built — Session 4 (2026-06-01)
 
-### Phase 3 complete: User-approved reminder sending
+All features below are on branch `claude/vibecount-ai-agents`.
 
-All Phase 3 tasks are now done.
+### Companies House client lookup
 
-The cron job at `/api/reminders/due` already created `pending` reminder drafts in
-`invoice_reminders`. The missing piece was a user-facing UI to actually send or
-discard them.
+- `app/api/companies-house/search/route.ts` — server-side proxy to Companies House API
+  - GET `?q=...` — Basic auth with user's API key from settings
+  - Returns up to 5 active companies: `{ name, company_number, address, status }`
+- `app/dashboard/invoices/new/InvoiceBuilder.tsx`
+  - Debounced CH search on client name input (400ms)
+  - Dropdown shows suggestions; selecting one fills name, address, company number
+  - Stored address shown below input when filled
+- Schema: `clients` now has `address`, `company_number`, `vat_number` columns
+- Schema: `user_settings` now has `companies_house_api_key` column
+- Invoice PDF renders client address below "To: [name]" (up to 4 lines)
+- `VAT no: {n}` rendered on PDF only when user is VAT-registered
 
-Changes:
+⚠️ **User todo:** Get a free CH API key at developer.companieshouse.gov.uk, add to Settings → Client intelligence.
+⚠️ **Not yet wired:** `VoiceInvoiceBuilder.tsx` still lacks CH autocomplete — see Known Issues.
 
-- `app/dashboard/invoices/actions.ts` — added `sendApprovedReminder` and
-  `discardReminderDraft` server actions.
-  - `sendApprovedReminder`: reads the pending draft, calls Resend to send the
-    email, marks status=`sent`, saves `provider_message_id`, and sets
-    `next_reminder_at` on the invoice for the next cycle.
-  - `discardReminderDraft`: deletes the pending row (no schema change needed).
-- `app/dashboard/page.tsx` — pending reminder drafts are now always visible on
-  the dashboard when they exist (no longer hidden behind `?reminders=1`). Each
-  draft shows the recipient, subject, message body, and two standalone forms:
-  **Send reminder** and **Discard**, both with `data-testid` attributes.
+### Supabase Storage PDF backup (invoices)
 
-### Phase 4 first tasks: Read-only review agent + MCP acceptance criteria
+- `supabase/migrations/20260531010000_invoice_pdf_storage.sql`
+  - Private `invoices` storage bucket; 10 MB limit, PDF only
+  - RLS: users can only read/write `{their_user_id}/*`
+- `app/api/invoices/pdf/route.ts` — after PDF generation, uploads to `invoices/{userId}/{number}.pdf`, saves `pdf_path` on the invoice row (best-effort, never blocks invoice creation)
+- `app/api/invoices/download/route.ts` — GET `?id=...` → 5-min signed URL, redirects as download
+- `app/api/invoices/share-url/route.ts` — GET `?id=...` → 30-day signed URL, returns JSON
 
-These are the first Phase 4 tasks from `tasks.md`. They do NOT involve MCP
-endpoints, browser-agent login, or any DB writes.
+### Email invoice button (mailto with Supabase signed URL)
 
-**Read-only review agent (`/dashboard/review`)**
+- `app/dashboard/EmailInvoiceButton.tsx` — client component
+  - Only renders when `hasPdf: true`
+  - On click: fetches 30-day signed URL, builds pre-filled mailto, opens email client
+  - Subject: `Invoice INV-2026-0042 — £2,500.00`
+  - Body includes amount in figures + words, download link (valid 30 days), due date, payment terms, optional payment link
+- `app/dashboard/page.tsx` — shows "Download PDF" and "Email invoice" for invoices with `pdf_path`
 
-- New nav link: "Review" added to the header across all pages.
-- `app/dashboard/review/page.tsx` — server component that reads:
-  - Approved `financial_records` for the current tax year (last 20)
-  - `financial_record_quarter_summaries` for the current tax year
-  - Sent, unpaid invoices
-  - Count of records in `review` state
-  Builds a sanitised summary (no bank account numbers, no raw PDF content)
-  and passes it to the client component.
-- `app/dashboard/review/RecordsReviewAgent.tsx` — client component with
-  idle/loading/done/error states. On "Run review" it POSTs the summary to
-  `/api/review/suggest` and displays the bullet-point AI analysis.
-- `app/api/review/suggest/route.ts` — POST route that builds a plain-text
-  prompt from the summary (amounts, categories, dates, descriptions only) and
-  calls Claude. Returns `{ suggestion: string }`. Never writes to the database.
-  Shows a clear read-only caveat in the UI.
+⚠️ **Known bug:** Email invoice button only appears for invoices created after the Storage migration was applied (those with `pdf_path` set). Pre-existing invoices have `pdf_path = null`. See Known Issues #1.
 
-### Phase 4 approval-action agent + quarterly readiness checks (session 3)
+### Phase 4 agent infrastructure
 
-**Approval-action agent (batch categorise):**
-- `app/api/records/batch-suggest-categories/route.ts` — `GET` reads all
-  uncategorised records (up to 50), sends them all in one Claude call,
-  returns `{ suggestions: [...] }` validated against real category IDs.
-- `app/dashboard/review/BatchCategorisePanel.tsx` — client component on
-  `/dashboard/review`. Shows a checkbox table (pre-ticked); user reviews
-  and unticks disagreements before clicking "Apply N categories".
-- `app/dashboard/records/actions.ts` `applyBatchCategories` — verifies
-  ownership and record_type match for every row; only applies ticked ones.
+- `supabase/migrations/20260530140000_agent_sessions.sql`
+  - `agent_sessions`: `token_hash` (SHA-256), `scopes text[]`, `expires_at`, `revoked_at`
+  - `agent_actions`: immutable audit log (tool, scope_used, params_summary, result_status)
+- `lib/mcp/auth.ts` — `generateToken()`, `hashToken()`, `validateAgentToken()`, `logAgentAction()`
+- `app/api/mcp/session/route.ts` — POST create, DELETE revoke, GET list active sessions
+- MCP tools at `app/api/mcp/tools/`:
+  - `get-pl-summary` — read P&L summary for a period
+  - `list-expenses` — list expense records
+  - `list-invoices` — list invoices
+  - `list-uncategorised` — list uncategorised records
+  - `draft-record` — write-draft to `financial_records` (lands in review, never approved)
+  - `draft-invoice` — write-draft to `invoices` (lands in draft status)
+- `app/dashboard/settings/AgentAccess.tsx` — scope picker, generate 15-min token (shown once), revoke sessions, link to audit log
+- `app/dashboard/agent/audit/page.tsx` — last 100 agent actions
 
-**Quarterly readiness checks:**
-- `supabase/migrations/20260530100000_quarterly_readiness_checks.sql` —
-  new table with unique index per user/year/quarter. **Apply to production
-  Supabase before deploying this branch.**
-- `app/api/cron/quarterly-check/route.ts` — CRON_SECRET-authenticated
-  POST; uses admin client to sweep users with quarter records, upserts
-  status (`ok`/`needs_attention`) and plain-English notes per user/quarter.
-- `vercel.json` — cron schedules: reminders daily 08:00, repeating
-  invoices daily 07:00, quarterly check on the 6th of Jan/Apr/Jul/Oct.
-- `/dashboard/review` shows latest check result (green/amber).
-- `/dashboard` shows an amber banner when the latest check needs_attention.
+### Glossary content (27 terms)
 
-### Phase 4 draft-action agent: category suggestions (session 2)
+- `lib/glossary.ts` — replaced placeholders with 27 founder-approved terms
+- 5 terms annotated `// VERIFY (accountant decision)`:
+  - Trading Allowance (£1,000 threshold current?)
+  - Class 2 NICs (voluntary rate / personal NI record)
+  - Annual Investment Allowance (current cap)
+  - Use of home (flat vs proportional actual bills)
+  - VAT Flat Rate Scheme (sector %)
+- Glossary does not launch until accountant review is done
 
-- `app/api/records/suggest-category/route.ts` — `GET ?recordId=...` reads
-  the user's own record and category list, calls Claude, returns
-  `{ categoryId, categoryName, reason }`. Validates that the suggestion
-  matches a real category before returning. Returns 503 if
-  `ANTHROPIC_API_KEY` is missing.
-- `app/dashboard/records/SuggestCategoryButton.tsx` — client component
-  shown inline on any record with no category (idle → loading → suggested
-  → accept/dismiss). Accept submits a form that calls `applyRecordCategory`.
-- `app/dashboard/records/actions.ts` — `applyRecordCategory` server action
-  reads the record's `record_type`, verifies the category is owned by the
-  user, then writes `category_id`. Nothing is written before the user
-  clicks Accept.
+### Proposals + contracts + e-signatures
 
-**MCP acceptance criteria (`knowledge-base/mcp-acceptance-criteria.md`)**
+- `supabase/migrations/20260530110000_proposals.sql` — proposals + proposal_line_items
+- `supabase/migrations/20260530120000_contracts.sql` — contracts
+- `/dashboard/proposals` — create, status flow, PDF download, convert to invoice
+- `/dashboard/contracts` — list, download PDF, mark sent/signed
+- `app/dashboard/contracts/SignatureCanvas.tsx` — draw or type signature; on confirm POSTs to `/api/contracts/sign`
+- `app/api/contracts/sign/route.ts` — embeds PNG signature into contract PDF, marks signed
 
-Documents the full checklist every future MCP tool must satisfy before being
-built: scoped auth, audit logging, ownership checks, idempotency, valid status
-transitions, and explicit human confirmation before any write-like action.
-Lists explicitly prohibited actions (finalise_invoice, silent email sending,
-HMRC submission, etc.) and parked tools for Phase 4.
+### Projects / scope tracking
 
-## What Was Previously Verified By User
+- `supabase/migrations/20260530130000_projects.sql` — `projects` table, `project_id` FK on invoices and financial_records
+- `/dashboard/projects` — create, tag invoices/records, budget progress bar, status flow
 
-User confirmed:
+### Review agent + batch categorisation
 
-- Google sign-in works after production promotion.
-- Voice invoice creation works.
-- Voice playback/read-back works.
-- Invoice PDF download works.
-- Records category dropdown works on production.
-- CSV import now stages rows correctly for review.
+- `/dashboard/review` — reads approved records + sent invoices, calls Claude for analysis
+- `app/api/review/suggest/route.ts` — read-only, never writes to DB
+- `app/api/records/batch-suggest-categories/route.ts` — one Claude call for all uncategorised records
+- `BatchCategorisePanel.tsx` — checkbox table, user unticks disagreements before applying
+- `app/dashboard/records/SuggestCategoryButton.tsx` — inline per-record AI category suggestion
 
-Release QA 2026-05-29 verified:
+---
 
-- Login/auth reaches the protected dashboard.
-- Settings loads and saves successfully.
-- Typed invoice shows figures and words, requires confirm, downloads PDF, and
-  exposes reminder preparation rather than sending.
-- Voice transcript extraction works; continue remains disabled until mandatory
-  spoken read-back completes, then routes into the normal invoice preview.
-- Manual record creation starts in `Needs review`, then Approve changes status.
-- CSV import stages rows for review; one income row and one expense row were
-  approved and committed.
-- Bank statement text import redacts account identifiers, stages rows for
-  review, and commits only approved rows.
-- Tax prep shows estimate/net-profit/caveat wording and exports a CSV containing
-  the caveat and net-profit wording.
-- Due reminder route writes a pending `invoice_reminders` draft with
-  `sent_at = null` and no provider message id.
+## Known Bugs / Issues
 
-## Production Supabase Notes
+### 1. Email invoice button missing on pre-existing invoices ⚠️
 
-Live Supabase project `lazorvlkgxgzdgflzhjm`. Applied migrations:
+`EmailInvoiceButton` only renders when `hasPdf` is true (i.e. `pdf_path != null`). Invoices created before the Storage migration have `pdf_path = null` and show no button.
+
+**Fix needed:** `app/api/invoices/share-url/route.ts` — if `invoice.pdf_path` is null, generate the PDF on demand and upload it before creating the signed URL. Requires reading the invoice + client + user_settings rows to reconstruct `InvoicePdfData`, calling `createInvoicePdf()`, uploading, saving `pdf_path`, then returning the signed URL.
+
+### 2. idempotency_key bug in MCP draft tools ⚠️
+
+Both `app/api/mcp/tools/draft-record/route.ts` and `app/api/mcp/tools/draft-invoice/route.ts` attempt to insert an `idempotency_key` column that does not exist on either table. This will silently fail (or error) in production.
+
+**Fix needed:** Remove the `idempotency_key` field from both inserts and remove any idempotency check block. The `agent_actions` audit log already provides idempotency-equivalent protection via `result_status`.
+
+### 3. Companies House autocomplete not wired in VoiceInvoiceBuilder ⚠️
+
+`app/dashboard/invoices/voice/VoiceInvoiceBuilder.tsx` does not have the CH debounced search and dropdown that `InvoiceBuilder.tsx` has.
+
+**Fix needed:** Port the `handleClientNameChange()` + CH suggestion state + dropdown UI from `InvoiceBuilder.tsx` into `VoiceInvoiceBuilder.tsx`.
+
+### 4. PDF backup not applied to quotes and proposals ⚠️
+
+Invoice PDFs are backed up to Supabase Storage at creation time. Quote PDFs (`/api/quotes/pdf`) and proposal PDFs (`/api/proposals/pdf`) are not backed up.
+
+**Fix needed:** After generating the PDF in each route, upload to a corresponding storage bucket (or to `invoices/` with a sub-path) and save the path on the row.
+
+### 5. Vercel crons need manual setup ⚠️
+
+`vercel.json` was removed to fix Hobby plan deployment errors (cron config in vercel.json rejects on Hobby). Crons must be set up manually in the Vercel dashboard.
+
+**User todo:**
+- Vercel Dashboard → Project Settings → Crons
+- Add `/api/reminders/due` — schedule `0 8 * * *` (08:00 daily)
+- Add `/api/invoices/repeating/run` — schedule `0 7 * * *` (07:00 daily)
+
+### 6. Quarterly readiness check migration ⚠️
+
+`supabase/migrations/20260530100000_quarterly_readiness_checks.sql` must be applied to production Supabase before this branch is deployed. Both `/dashboard/review` and `/dashboard` query this table.
+
+---
+
+## Production Supabase — Applied Migrations
+
+All of the following have been applied to `lazorvlkgxgzdgflzhjm`:
 
 - `phase_2_digital_records_foundation`
 - `phase_2_secure_records_storage`
@@ -188,103 +194,128 @@ Live Supabase project `lazorvlkgxgzdgflzhjm`. Applied migrations:
 - `add_invoice_payment_links`
 - `repeating_invoice_templates`
 - `invoice_delivery_reminders`
+- `20260530100000_quarterly_readiness_checks.sql`
+- `20260530110000_proposals.sql`
+- `20260530120000_contracts.sql`
+- `20260530130000_projects.sql`
+- `20260530140000_agent_sessions.sql`
+- `20260531000000_client_details.sql`
+- `20260531010000_invoice_pdf_storage.sql`
 
-Verified tables: `record_categories`, `record_imports`, `financial_records`,
-`financial_record_changes`, `record_attachments`, `record_exports`,
-`csv_import_rows`, `bank_statement_import_rows`, `invoice_reminders`.
+To apply a migration to production:
 
-Default categories: 10.
+```bash
+SUPABASE_ACCESS_TOKEN=sbp_c3c04e9d2f1b228413c9f3cbe3627de3fbf360fe \
+  supabase db push --project-ref lazorvlkgxgzdgflzhjm
+```
+
+---
+
+## Required Vercel Env Vars
+
+These must exist in Vercel (Production + Preview + Development):
+
+| Variable | Notes |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://lazorvlkgxgzdgflzhjm.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Published anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-side admin client |
+| `ANTHROPIC_API_KEY` | Server-side only |
+| `RESEND_API_KEY` | For reminder sending |
+| `RESEND_FROM_EMAIL` | From address for reminders |
+| `CRON_SECRET` | Shared secret for cron routes |
+| `NEXT_PUBLIC_POSTHOG_KEY` | Analytics |
+| `NEXT_PUBLIC_POSTHOG_HOST` | `https://app.posthog.com` |
+
+---
+
+## Pending Work (ordered)
+
+### Code fixes (should be done before PR)
+
+1. **Fix idempotency_key bug** — remove from `draft-record/route.ts` and `draft-invoice/route.ts`
+2. **On-demand PDF in share-url** — generate + upload PDF when `pdf_path` is null so Email invoice button works on all invoices
+3. **Wire CH autocomplete into VoiceInvoiceBuilder** — same pattern as InvoiceBuilder.tsx
+4. **PDF backup for quotes and proposals** — upload after generation, save path on row
+
+### User todos (owner: Jim)
+
+- Get Companies House API key at developer.companieshouse.gov.uk → add to Settings → Client intelligence
+- Set up 2 Vercel crons in dashboard: `/api/reminders/due` at `0 8 * * *`, `/api/invoices/repeating/run` at `0 7 * * *`
+- Confirm Vercel env vars: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `ANTHROPIC_API_KEY`, `CRON_SECRET`
+- Run Whisper sub-gate: record 20 real invoice amounts, verify Whisper accuracy before voice goes to production users
+- Accountant review of 5 glossary terms (see tasks.md parallel track)
+
+### Branch merge
+
+- `claude/vibecount-ai-agents` needs PR → `codex/phase-3-invoice-reminders` or `main`
+- Run `npm run lint && npm test && npm run build` before creating PR
+- Apply any outstanding migrations to production Supabase after merge
+
+---
 
 ## Verification Commands
 
-Run before committing meaningful changes:
-
 ```bash
-npm test
 npm run lint
+npm test
 npm run build
 ```
 
-Known build warning:
+Known build warning: Next.js warns about multiple lockfiles and inferred workspace root — pre-existing, not introduced by recent changes.
 
-- Next.js warns about multiple lockfiles and inferred workspace root.
-- This warning existed before the latest fixes.
+Known audit issue: `npm audit --omit=dev --audit-level=high` reports vulnerabilities through `@vercel/config`/`path-to-regexp` and `next`/`postcss`. Do not run `npm audit fix --force` — it suggests breaking downgrades.
 
-Known audit issue:
+---
 
-- `npm audit --omit=dev --audit-level=high` still reports vulnerabilities through
-  `@vercel/config`/`path-to-regexp` and `next`/`postcss`.
-- Do not run `npm audit fix --force`; it suggests breaking downgrades.
+## Do Not Do
 
-## Current Known Issues / Next Work
+- Do not add `/api/mcp` browser-agent login flow (Phase 4 parked)
+- Do not add `finalise_invoice` or any tool that silently approves/sends
+- Do not send reminders, invoices, or emails without explicit user approval
+- Do not bypass review states for records or imports
+- Do not expose raw bank PDFs or unredacted account numbers to LLM prompts
+- Do not write LLM-generated glossary content — static, accountant-reviewed only
+- Do not say "HMRC-recognised MTD software" — say "MTD-ready records"
 
-1. Bank PDF import:
-   - Graceful error in place: "Could not extract text from this PDF."
-   - CSV/text export is the supported Phase 2 path.
-
-2. Whisper sub-gate (Task 6, tasks.md):
-   - Voice invoice works in production but the formal 20-sample Whisper
-     accuracy test has not been run.
-   - Not a blocker for current branch work.
-
-3. **Production migration required** — `quarterly_readiness_checks` table
-   must be applied to Supabase before this branch is deployed. The review
-   page and dashboard both query this table; they will error without it.
-   Run the migration at:
-   `supabase/migrations/20260530100000_quarterly_readiness_checks.sql`
-
-4. Category suggestion agent — not yet production-verified:
-   - `SuggestCategoryButton` appears on uncategorised records. Requires
-     `ANTHROPIC_API_KEY` in Vercel env vars to work.
-   - If the key is missing the button will show an error inline.
-
-4. Review agent — not yet production-verified:
-   - `/dashboard/review` is new on this branch and has not been tested against
-     production data yet. Deploy and do a quick check after pushing.
-   - If `ANTHROPIC_API_KEY` is missing from Vercel env vars, the route returns
-     a 503 with a clear user-facing error ("AI review is not configured.").
-
-4. Reminder sending — not yet production-verified:
-   - The Resend API key and from-address are in `.env.local`. Confirm
-     `RESEND_API_KEY` and `RESEND_FROM_EMAIL` are also set in Vercel env vars
-     before testing reminder sending on production.
-
-## Do Not Do Next
-
-- Do not add `/api/mcp`.
-- Do not add browser-agent login.
-- Do not add `get_pl_summary`, `list_expenses`, or `finalise_invoice` MCP tools.
-- Do not wire autonomous bank/OCR processing into LLM prompts.
-- Do not send reminders automatically (always require human approval).
-- Do not bypass review states for records/imports.
+---
 
 ## Useful URLs
 
 - Production: `https://vibecount-teal.vercel.app`
-- Records: `https://vibecount-teal.vercel.app/dashboard/records`
-- Review (new): `https://vibecount-teal.vercel.app/dashboard/review`
 - Vercel project: `https://vercel.com/jims-projects-b7cb6c2e/vibecount`
 - Supabase project: `https://supabase.com/dashboard/project/lazorvlkgxgzdgflzhjm`
+- Supabase env vars: `https://vercel.com/jims-projects-b7cb6c2e/vibecount/settings/environment-variables`
+
+---
 
 ## Suggested Next Prompt For Another LLM Coder
 
 ```text
-Continue VibeCount Phase 3/4 work on branch codex/phase-3-invoice-reminders.
+Continue VibeCount Phase 4 work on branch claude/vibecount-ai-agents.
 Read AGENTS.md, spec.md, tasks.md, HANDOVER.md, and LLM_HANDOVER.md first.
 
-Production check after latest push:
-1. Verify RESEND_API_KEY and RESEND_FROM_EMAIL are set in Vercel env vars.
-2. Verify ANTHROPIC_API_KEY is set in Vercel env vars.
-3. Test /dashboard/review loads and the AI review returns findings.
-4. Test a pending reminder draft can be sent or discarded from the dashboard.
+Immediate fixes needed (in order):
 
-Remaining Phase 4 tasks (see tasks.md Phase 4 direction):
-- Browser-agent login with short-lived scoped sessions (parked — do not build here).
-- Proposals, contracts, e-signatures (parked — do not build here).
-- All write-like MCP tools remain parked until acceptance criteria are met
-  (see knowledge-base/mcp-acceptance-criteria.md).
+1. Fix idempotency_key bug:
+   - app/api/mcp/tools/draft-record/route.ts — remove idempotency_key from insert and remove any idempotency check block
+   - app/api/mcp/tools/draft-invoice/route.ts — same fix
+   Column does not exist on either table; it will error in production.
 
-Do not build Phase 4 MCP/browser-agent features.
-Run npm test, npm run lint, npm run build before committing.
-Commit and push each completed fix.
+2. On-demand PDF generation in share-url:
+   - app/api/invoices/share-url/route.ts — if invoice.pdf_path is null, read the invoice
+     + client + user_settings, call createInvoicePdf(), upload to invoices/{userId}/{number}.pdf,
+     save pdf_path, then create the 30-day signed URL. This unblocks the Email invoice button
+     for all pre-existing invoices.
+
+3. Wire Companies House autocomplete into VoiceInvoiceBuilder:
+   - app/dashboard/invoices/voice/VoiceInvoiceBuilder.tsx
+   - Port handleClientNameChange() + CH suggestion state + dropdown UI from InvoiceBuilder.tsx
+
+4. Add PDF backup to quote/proposal PDF routes:
+   - app/api/quotes/pdf/route.ts and app/api/proposals/pdf/route.ts
+   - After generating PDF bytes, upload to Supabase Storage, save path on row
+
+After all fixes: npm run lint && npm test && npm run build, then commit and open PR
+from claude/vibecount-ai-agents to codex/phase-3-invoice-reminders.
 ```

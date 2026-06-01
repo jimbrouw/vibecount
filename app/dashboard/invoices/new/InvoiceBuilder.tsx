@@ -48,6 +48,8 @@ type Props = {
     amount: string;
     source: string;
     transcript: string;
+    clientAddress: string;
+    clientCompanyNumber: string;
   };
 };
 
@@ -82,8 +84,8 @@ export default function InvoiceBuilder({
   const [form, setForm] = useState<FormState>({
     clientName: initialDraft.clientName,
     clientEmail: "",
-    clientAddress: "",
-    clientCompanyNumber: "",
+    clientAddress: initialDraft.clientAddress,
+    clientCompanyNumber: initialDraft.clientCompanyNumber,
     clientVatNumber: "",
     invoiceDate: initialDate,
     description: initialDraft.description,

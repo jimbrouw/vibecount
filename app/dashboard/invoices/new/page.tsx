@@ -57,6 +57,8 @@ export default async function NewInvoicePage({
     amount: getSingleSearchParam(resolvedSearchParams.amount),
     source: getSingleSearchParam(resolvedSearchParams.source),
     transcript: getSingleSearchParam(resolvedSearchParams.transcript),
+    clientAddress: getSingleSearchParam(resolvedSearchParams.clientAddress),
+    clientCompanyNumber: getSingleSearchParam(resolvedSearchParams.clientCompanyNumber),
   };
 
   const userDefaults = {
