@@ -160,26 +160,33 @@ compatibility too early.
 
 ### Phase 2 — MTD-ready records and routines
 
-- [ ] Spreadsheet / CSV import for income and expense records
-- [ ] Bank statement PDF import prototype with redaction before LLM/database use
-- [ ] Digital record-keeping model for income, expenses, categories, and source imports
-- [ ] Quarter-aware summaries for self-employment records
-- [ ] MTD threshold tracking against GBP50,000 / GBP30,000 / GBP20,000 entry points
-- [ ] Running tax estimate and quarterly habit prompts
-- [ ] Audit-friendly edit history on record changes
-- [ ] Plain-English Self Assessment prep checklist for SA103S / SA103F fields
-- [ ] Export tax prep pack for user/accountant review
+- [x] Spreadsheet / CSV import for income and expense records
+- [x] Bank statement PDF import prototype with redaction before LLM/database use
+- [x] Digital record-keeping model for income, expenses, categories, and source imports
+- [x] Quarter-aware summaries for self-employment records
+- [x] MTD threshold tracking against GBP50,000 / GBP30,000 / GBP20,000 entry points
+- [x] Running tax estimate and quarterly habit prompts
+- [x] Plain-English Self Assessment prep checklist for SA103S / SA103F fields
+- [x] Export tax prep pack for user/accountant review
+- [ ] Audit-friendly edit history on record changes (post-launch hardening)
 
-### First task in Phase 2
+### Phase 2 completion notes
 
-- [ ] **Digital records foundation** — create the structured record model and
-      quarter summaries needed before any HMRC-facing workflow is attempted.
-- [ ] **Bank statement import prototype** — after the records foundation, parse
-      bank statement PDFs, redact account-level personal data, suggest categories,
-      and let the user approve rows into income / expense records.
-- [ ] **Self Assessment plain-English map** — map SA103S / SA103F boxes to
-      simple explanations and VibeCount data sources, then show what can be
-      suggested versus what needs user/accountant input.
+- `financial_records` table: unified income/expense with GENERATED `tax_year_start` and `tax_quarter` columns.
+- `record_imports` staging table: CSV + bank PDF rows pending user approval, `raw_row` jsonb stores minimum redacted fields only.
+- Migration: `supabase/migrations/20260529200001_add_financial_records.sql` — must be applied to live Supabase project.
+- Tax estimate uses 2026/27 rates: personal allowance £12,570, basic 20%, higher 40%, Class 4 NI **6%** (cut from 9% April 2024, confirmed GOV.UK), Class 2 NI abolished.
+- MTD thresholds: £50k from 6 Apr 2026, £30k from 6 Apr 2027, £20k from 6 Apr 2028.
+- Bank import: redact-first (account numbers, sort codes, IBAN, card numbers) before any LLM call; raw PDF never stored.
+- Tax figures: the word "estimate" appears in every heading; `TAX_ESTIMATE_DISCLAIMER` string shown on every surface.
+- Self Assessment prep (`/dashboard/tax-prep`): review pack only — never claims to file or submit to HMRC.
+- DashboardShell: centralised nav extracted from all 6 dashboard pages.
+
+### Phase 2 — open items (before shipping to production)
+
+- [ ] Apply migration `20260529200001_add_financial_records.sql` to live Supabase project
+- [ ] Verify glossary copy against final approved wording before launch (carry-over from Phase 1)
+- [ ] Whisper sub-gate: run 20 real founder recordings through voice flow (carry-over from Task 6)
 
 Reference: [knowledge-base/making-tax-digital.md](knowledge-base/making-tax-digital.md)
 Reference: [knowledge-base/bank-statement-import.md](knowledge-base/bank-statement-import.md)

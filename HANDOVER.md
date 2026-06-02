@@ -1,12 +1,14 @@
 # VibeCount — Handover Document
 
-_Last updated: 2026-05-26_
+_Last updated: 2026-06-02_
 
 ---
 
 ## What this project is
 
-VibeCount is a freelancer invoicing tool built for people who find finance admin overwhelming — specifically dyslexic/dyscalculic users and creatives. Two hero features for v1:
+VibeCount is a freelancer finance tool built for people who find finance admin overwhelming — specifically finance-anxious creatives (designers, developers, photographers, writers). The founder built it to solve their own problem first (strong founder-market fit). The strategic play is to be the emotional wedge between "free but confusing" tools and complex products like Xero or FreeAgent. Agent-native and mobile-first are the medium-term direction; broader sole traders (plumbers, tradespeople) are a later expansion.
+
+Two hero features for v1:
 
 1. **Structured Invoice Creation** — voice first (speak an invoice), never voice only (typing is a full equal path). Mandatory read-back of amounts in figures and words before the user confirms.
 2. **Explain Simply** — a static, accountant-reviewed glossary of tax/accounting terms in plain English.
@@ -245,38 +247,40 @@ Done when: speak an invoice → ambiguous amounts force a choice → lands in Ta
   - PostHog hooks added for `voice_invoice_attempt`, `invoice_draft_completion`, `pdf_invoices_generated`, `glossary_term_opened`, `failed_voice_attempt`, and `manual_entry_usage`.
   - Small visual pass pushed the main cards and panels further into the British green / warm cream direction.
 
-### Phase 2 note — MTD changes the roadmap
+### ✅ Phase 2 — MTD-ready records (complete as of 2026-06-02)
 
-- `knowledge-base/making-tax-digital.md` now captures the verified HMRC position as
-  of 27 May 2026.
-- MTD should no longer sit as a vague Phase 3 awareness note.
-- Phase 2 should start the **MTD-ready records** work:
-  - structured income / expense records
-  - spreadsheet import
-  - privacy-first bank statement PDF import
-  - quarterly summaries
-  - threshold tracking
-  - tax estimate support
-  - plain-English Self Assessment prep for SA103S / SA103F
-- Direct HMRC submission should remain later until the records model and user
-  workflow are proven.
-- `knowledge-base/bank-statement-import.md` captures the bank PDF idea:
-  extract transactions, redact before LLM/database use, suggest categories, and
-  commit only user-approved rows into records.
-- `knowledge-base/self-assessment-plain-english.md` captures the tax return prep
-  idea: map HMRC sole trader questions to simple language, VibeCount data
-  sources, and exportable accountant review packs before attempting filing.
+**What was built (commit `4eb4c85`, branch `claude/vibecount-ai-agents-1i5ob`):**
 
-### Phase 4 note — agentic tax copilot
+- **DashboardShell** — centralised nav component extracted from 6 copy-pasted pages. Nav links: Invoices, Records, Tax Prep, Explain Simply, Agent, Settings. `data-testid` on every nav link.
+- **`financial_records` table** — unified income/expense records with `bigint amount_pence`, GENERATED STORED `tax_year_start` and `tax_quarter` columns, RLS.
+- **`record_imports` table** — staging for CSV + bank PDF rows pending approval, `raw_row jsonb` stores only `{ date, description, amount_pence, direction }` — no account data.
+- **Migration:** `supabase/migrations/20260529200001_add_financial_records.sql` — **must be applied to live Supabase project before shipping**.
+- **API routes:** `GET/POST /api/records`, `PATCH/DELETE /api/records/[id]`, `GET /api/records/summary`, `GET /api/records/export`, `POST /api/records/import`, `POST /api/records/import/[id]/approve`, `POST /api/records/import/[id]/reject`, `POST /api/records/bank-import`, `GET /api/tax-prep/export`.
+- **Pages:** `/dashboard/records` (records dashboard with quarterly summary, tax estimate, MTD progress, CSV + PDF import), `/dashboard/tax-prep` (SA103S/F prep pack, accountant checklist, export download).
+- **Tax estimate (`lib/tax/estimate.ts`):** 2026/27 rates — personal allowance £12,570, basic 20%, higher 40%, Class 4 NI **6%** (cut from 9% April 2024), Class 2 NI abolished. Disclaimer on every surface.
+- **MTD thresholds (`lib/records/mtd-thresholds.ts`):** £50k → 6 Apr 2026, £30k → 6 Apr 2027, £20k → 6 Apr 2028. No HMRC compatibility claimed.
+- **Bank import privacy:** REDACT_PATTERNS strips account numbers, sort codes, IBAN, card numbers, balances before any LLM call. Raw PDF never stored.
+- **data-testid pass:** added to login, invoice builder, record form, and all nav links.
 
-- `knowledge-base/agentic-tax-copilot.md` captures the later agent idea.
-- Treat Hermes-style autonomy as inspiration, not the immediate architecture.
-- The first agentic version should be read-only: inspect approved records, explain
-  issues, and create a review queue.
-- Later versions can suggest draft actions and write only after explicit user
-  approval.
-- Hard boundary: no silent HMRC submission, invoice sending, expense approval,
-  or record changes.
+**Phase 2 open items (before pushing `claude/vibecount-ai-agents-1i5ob` → `main`):**
+
+1. Apply migration `20260529200001_add_financial_records.sql` to live Supabase project (Supabase dashboard → SQL editor, or `supabase db push`)
+2. Verify glossary copy with accountant before launch
+3. Whisper sub-gate (Task 6 carry-over) — 20 real founder recordings
+
+**Key constraints that must not be changed:**
+
+- Class 4 NI rate = **6%** (never 9%)
+- `AMOUNT_ESTIMATE_DISCLAIMER` must appear on every API response and UI surface that shows a tax figure
+- `/dashboard/tax-prep` must never suggest users can file from it — it is a review pack
+- Bank PDF: redact before LLM, never store raw PDF, `raw_row` has no account data
+- MTD copy: always include "Check GOV.UK for current thresholds" — no HMRC recognition claim
+
+### Phase 4 note — agentic tax copilot (branch: `claude/vibecount-ai-agents-1i5ob`)
+
+MCP server, BYOK chat, and API key management are already built on this branch. Do not merge until Phase 2 records are on production and verified. See `knowledge-base/agentic-tax-copilot.md` for the read-only → draft-action → approval-action progression.
+
+Hard boundary: no silent HMRC submission, invoice sending, expense approval, or record changes without explicit user confirmation + audit log.
 
 ---
 
