@@ -86,6 +86,15 @@ Read `spec.md` first. This file is the ordered work.
 ### Post-Task 4 follow-up
 - [x] Replace seeded placeholder glossary content with plain-English draft terms.
 - [ ] Verify glossary copy against final approved wording before launch.
+- [ ] Get a free Companies House API key at developer.companieshouse.gov.uk
+      and add it to Settings → Client intelligence. Once added, typing a client
+      name in the invoice builder will search Companies House and auto-fill their
+      registered name, address, and company number.
+- [ ] Set up Vercel cron jobs (Hobby plan requires manual setup — vercel.json crons
+      are not supported):
+      Vercel Dashboard → vibecount project → Settings → Crons
+      Add: /api/reminders/due        schedule: 0 8 * * *   (08:00 daily)
+      Add: /api/invoices/repeating/run  schedule: 0 7 * * *   (07:00 daily)
 
 ### Task 5 — Accessibility layer
 - [x] Large-text mode, spacing controls, plain-language toggle.
@@ -122,10 +131,14 @@ Read `spec.md` first. This file is the ordered work.
 
 ## Parallel track (start now, has an outside dependency)
 
-- [ ] **Glossary content** — founder writes 20–30 worst tax/accounting terms
+- [x] **Glossary content** — founder writes 20–30 worst tax/accounting terms
       (official → simple → example).
+      27 terms loaded into lib/glossary.ts. 5 flagged for accountant VERIFY:
+      Trading Allowance (£1,000 still current?), Class 2 NICs (voluntary rate),
+      Annual Investment Allowance (current cap), Use of home (flat rates),
+      VAT Flat Rate Scheme (sector %). All others are ready.
 - [ ] **Accountant reviews** the glossary for correctness. Explain Simply does not
-      launch until this review is done.
+      launch until this review is done. Specifically verify the 5 flagged terms above.
 
 ---
 
@@ -160,48 +173,193 @@ compatibility too early.
 
 ### Phase 2 — MTD-ready records and routines
 
-- [ ] Spreadsheet / CSV import for income and expense records
-- [ ] Bank statement PDF import prototype with redaction before LLM/database use
-- [ ] Digital record-keeping model for income, expenses, categories, and source imports
-- [ ] Quarter-aware summaries for self-employment records
-- [ ] MTD threshold tracking against GBP50,000 / GBP30,000 / GBP20,000 entry points
-- [ ] Running tax estimate and quarterly habit prompts
-- [ ] Audit-friendly edit history on record changes
-- [ ] Plain-English Self Assessment prep checklist for SA103S / SA103F fields
-- [ ] Export tax prep pack for user/accountant review
+- [x] Digital record-keeping model for income, expenses, categories, and source imports
+- [x] Quarter-aware summaries for self-employment records
+- [x] MTD threshold tracking against GBP50,000 / GBP30,000 / GBP20,000 entry points
+- [x] Audit-friendly edit history on record changes
+- [x] Secure cloud record storage: per-user access, signed file URLs, exportable backups,
+      and no raw bank statement storage by default
+- [x] Spreadsheet / CSV import for income and expense records
+- [x] Running tax estimate and quarterly habit prompts
+- [x] Plain-English Self Assessment prep checklist for SA103S / SA103F fields
+- [x] Export tax prep pack for user/accountant review
+- [x] Bank statement PDF import prototype with redaction before LLM/database use
+- [x] Agent-native browser-use hardening: stable `data-testid` selectors,
+      semantic task surfaces, and explicit draft/review/confirm states across
+      invoices, records, imports, tax prep, settings, and navigation
+      Verification: selector pass and review-gate audit completed; `npm run lint`,
+      `npm test`, targeted selector/guardrail searches, and `npm run build` pass.
+      Release QA 2026-05-29: authenticated Playwright pass verified login,
+      settings save, typed invoice PDF download, voice transcript extraction
+      and mandatory read-back gate, manual record review, CSV import review and
+      commit, bank statement text import redaction/review/commit, tax-prep
+      caveats/export, and reminder draft gating.
+- [x] Verify every tax estimate UI/API/export includes caveat copy and says
+      "estimate"; use net profit language, never gross profit
+      Verification: tax-prep UI now labels the estimate base as net profit,
+      shows estimate-only caveat copy, and the CSV export includes an
+      estimate/review-pack caveat row. Targeted searches, `npm run lint`,
+      `npm test`, and `npm run build` pass.
 
 ### First task in Phase 2
 
-- [ ] **Digital records foundation** — create the structured record model and
+- [x] **Digital records foundation** — create the structured record model and
       quarter summaries needed before any HMRC-facing workflow is attempted.
-- [ ] **Bank statement import prototype** — after the records foundation, parse
+- [x] **Secure records storage** — store approved records, attachments, and change
+      history behind row-level security with export and deletion paths. Position this
+      as "MTD-ready records", not "HMRC-recognised MTD software".
+- [x] **Manual income / expense entry** — let users add, edit, categorise, and review
+      records before import automation exists.
+- [x] **Quarter summary and threshold tracker** — show self-employment totals by tax
+      year and quarter, plus progress towards the GBP50,000 / GBP30,000 / GBP20,000
+      MTD entry points.
+- [x] **CSV import** — import spreadsheet rows into a review table, then commit only
+      approved rows into income / expense records.
+- [x] **Bank statement import prototype** — after the records foundation, parse
       bank statement PDFs, redact account-level personal data, suggest categories,
       and let the user approve rows into income / expense records.
-- [ ] **Self Assessment plain-English map** — map SA103S / SA103F boxes to
+- [x] **Self Assessment plain-English map** — map SA103S / SA103F boxes to
       simple explanations and VibeCount data sources, then show what can be
       suggested versus what needs user/accountant input.
+- [x] **Agent-native selector pass** — add stable `data-testid` attributes to
+      critical nav links, invoice fields, login fields, record forms, import
+      review controls, tax-prep export controls, and confirmation gates so
+      external browser-use agents can operate the app without guessing.
+      Verification: `npm run lint`, `npm test`, and `npm run build` pass;
+      local browser check confirmed login/signup selectors render.
+- [x] **Review-gate audit** — verify assisted flows never silently finalise
+      invoices, approve financial records, send reminders, process payments, or
+      change tax-prep outputs without explicit human confirmation.
+      Changes: invoice PDF creation now requires an explicit reviewed-confirmed
+      request from the UI; new manual records always enter review before approval;
+      due reminder automation now creates pending reminder drafts instead of
+      sending email. Release QA fix: record/import review action buttons now send
+      status through hidden form fields instead of server-action button
+      name/value, so Approve/Discard/Exclude controls submit deterministically.
+      Verification: `npm run lint`, `npm test`, targeted guardrail search,
+      authenticated Playwright review-gate pass, and `npm run build` pass.
 
 Reference: [knowledge-base/making-tax-digital.md](knowledge-base/making-tax-digital.md)
 Reference: [knowledge-base/bank-statement-import.md](knowledge-base/bank-statement-import.md)
 Reference: [knowledge-base/self-assessment-plain-english.md](knowledge-base/self-assessment-plain-english.md)
+Reference: [AGENTS.md](AGENTS.md)
+
+---
+
+## Phase 3 direction
+
+Phase 3 can make the invoice product competitive with lightweight sole-trader
+tools without turning VibeCount into a full studio operating system.
+
+- [x] Branded invoice and quote templates: logo, colours, footer copy, payment terms
+- [x] Quote creation, quote status, and quote-to-invoice conversion
+- [x] Saved services / line items that can flow into quotes and invoices
+- [x] Payment links on invoices, starting with Stripe Checkout or an equivalent hosted flow
+- [x] Repeating invoice templates that create drafts on a schedule
+- [x] User-approved invoice sending and automated payment follow-up reminders
+      Verification: sendApprovedReminder server action calls Resend and marks
+      status='sent'; discardReminderDraft deletes the pending row. Dashboard
+      now always shows pending reminder drafts with Send/Discard buttons.
+      npm run lint, npm test, npm run build pass.
+- [x] Shared document data model so future proposals/contracts can inherit client,
+      service, scope, price, and payment terms without copy-paste
+
+First Phase 3 task:
+
+- [x] **Quotes and reusable services** — add saved services / line items, branded
+      quote PDFs, and quote-to-invoice conversion. This is the smallest useful step
+      towards smart documents.
+
+Reference: [knowledge-base/freelancer-operating-system.md](knowledge-base/freelancer-operating-system.md)
 
 ---
 
 ## Phase 4 direction
 
-Phase 4 can add an agentic tax copilot once the records, import, tax-prep, and
-integration foundations are stable.
+Phase 4 can add an agentic tax copilot and selected freelancer operating system
+features once the records, import, tax-prep, payments, and document foundations
+are stable. The Creators Base-style feature set belongs here, not in Phase 2.
 
-- [ ] Read-only review agent for missing receipts, uncategorised transactions,
-      overdue reviews, and likely invoice/payment matches
-- [ ] Draft-action agent for suggested categories, Self Assessment prep answers,
+- [x] Browser-agent login with short-lived scoped sessions
+      Branch: claude/vibecount-ai-agents. agent_sessions table: hashed token,
+      scopes[], 15-min TTL, revoke. POST /api/mcp/session creates token (shown
+      once). Settings UI: scope picker, generate, copy, revoke, audit log link.
+- [x] External-agent access model where users bring their own agent/provider
+      tokens; VibeCount does not store BYO provider keys in the first version.
+      V1: user generates a scoped VibeCount session token for the agent.
+      BYOK AI provider keys remain a future iteration.
+- [x] MCP/tool layer only after Phase 2/3 review gates are verified; no MCP work
+      should be merged into the current hardening branch.
+      Branch: claude/vibecount-ai-agents. Tools: get_pl_summary, list_expenses,
+      list_uncategorised, list_invoices (read); draft_record, draft_invoice (write-
+      draft, lands in review/draft, never approved/finalised). All tools: scoped
+      token auth, ownership check, immutable audit log row. Idempotency keys on
+      draft tools. npm run lint, npm run build pass.
+- [x] Read-only review agent for missing receipts, uncategorised transactions,
+      overdue reviews, and likely invoice/payment matches.
+      Covered by list_uncategorised + list_invoices tools + /dashboard/review
+      AI analysis. Audit log at /dashboard/agent/audit.
+- [x] Draft-action agent for suggested categories, Self Assessment prep answers,
       and accountant questions
-- [ ] Approval-action agent that writes only after explicit user confirmation
-- [ ] Scheduled quarterly readiness checks with audit logs
+      Verification: GET /api/records/suggest-category calls Claude with record
+      description + user's own category list; SuggestCategoryButton shows
+      inline on uncategorised records; applyRecordCategory server action writes
+      category_id only after explicit Accept. npm run lint, npm test, npm run
+      build pass. Self Assessment prep answers and accountant questions remain
+      as future iterations of this agent.
+- [x] Approval-action agent that writes only after explicit user confirmation
+      Verification: BatchCategorisePanel on /dashboard/review calls
+      /api/records/batch-suggest-categories (one Claude call for all
+      uncategorised records), shows a checkbox table, applyBatchCategories
+      server action applies only ticked rows after ownership+type checks.
+      npm run lint, npm test, npm run build pass.
+- [x] Scheduled quarterly readiness checks with audit logs
+      Verification: quarterly_readiness_checks table migration added;
+      POST /api/cron/quarterly-check runs per-user sweep (admin client),
+      upserts status/notes per quarter; vercel.json cron schedules all
+      three cron endpoints; /dashboard/review shows latest check result;
+      /dashboard shows amber banner when needs_attention.
+      Migration must be applied to production Supabase before deploying.
+      npm run lint, npm test, npm run build pass.
+- [x] Proposals that inherit client, service, price, scope, and timeline data
+      Verification: proposals table + proposal_line_items migration; create,
+      status, and convert-to-invoice server actions; /dashboard/proposals page
+      with scope/deliverables/timeline fields, service picker, PDF download,
+      status flow (draft→sent→accepted/declined→convert to invoice).
+      Migration must be applied to prod Supabase. npm run lint, npm test,
+      npm run build pass.
+- [x] Contracts generated from approved proposal data
+      Verification: contracts table + migration applied to prod; generateContract
+      action reads accepted proposals and creates CTR-YYYY-NNNN contract;
+      /dashboard/contracts lists with Download PDF/Mark sent/Mark signed;
+      proposals page shows Generate contract for accepted proposals; contract
+      PDF includes scope, deliverables, timeline, fee in figures+words,
+      default plain-English terms, and signature blocks.
+      npm run lint, npm test, npm run build pass.
+- [x] E-signatures — canvas signature capture embedded into contract PDF via pdf-lib.
+      A drawn/typed signature is a valid simple electronic signature under UK law
+      (Electronic Communications Act 2000 + retained eIDAS) for most freelance
+      contracts. No third-party service needed. Upgrade path: DocuSeal (open source,
+      self-hostable REST API) if certified audit trail is needed later.
+- [x] Lightweight project / scope tracking only where it improves invoicing, payment,
+      or tax records
+      Verification: projects table + project_id FK on invoices and financial_records
+      migration applied to prod; /dashboard/projects create + list with invoiced
+      total, income, expenses, budget progress bar, tag-invoice/tag-record dropdowns,
+      status flow (active/completed/archived). npm run lint, npm run build pass.
 
 First Phase 4 task:
 
-- [ ] **Read-only review agent** — inspect approved records and explain what needs
+- [x] **Read-only review agent** — inspect approved records and explain what needs
       attention without writing to the database or triggering external actions.
+      Verification: /dashboard/review page reads approved financial_records and
+      sent invoices, passes sanitised summary (no bank details) to
+      /api/review/suggest which calls Claude. Client component shows findings
+      with explicit read-only caveat. npm run lint, npm test, npm run build pass.
+- [x] **Parked MCP acceptance criteria** — future tools such as `get_pl_summary`,
+      `list_expenses`, and `finalise_invoice` must require scoped auth, audit
+      logging, ownership checks, idempotency, valid status transitions, and
+      explicit human confirmation before any write-like action.
+      Reference: knowledge-base/mcp-acceptance-criteria.md
 
 Reference: [knowledge-base/agentic-tax-copilot.md](knowledge-base/agentic-tax-copilot.md)

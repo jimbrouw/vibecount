@@ -1,10 +1,17 @@
-import { PDFDocument, PDFPage, PDFFont, RGB, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import {
+  drawPdfBrandHeader,
+  drawWrappedPdfText,
+  type PdfBranding,
+} from "@/lib/pdf/branding";
 import { amountToWords, formatPounds } from "./money";
 
 export type InvoicePdfData = {
   number: string;
   invoiceDate: string;
   clientName: string;
+  clientAddress: string;
+  clientVatNumber: string;
   description: string;
   amountPence: number;
   vatPence: number;
@@ -14,17 +21,13 @@ export type InvoicePdfData = {
   freelancerAddress: string;
   freelancerContact: string;
   bankDetails: string;
+  paymentLinkProvider: string;
+  paymentLinkUrl: string;
   vatNumber: string;
   vatRate: number | null;
   latePaymentWording: string;
+  branding?: PdfBranding;
 };
-
-const INK = rgb(0.1, 0.23, 0.16);
-const MUTED = rgb(0.29, 0.42, 0.35);
-const LIGHT = rgb(0.47, 0.6, 0.53);
-const RULE = rgb(0.85, 0.82, 0.78);
-const CREAM = rgb(0.96, 0.94, 0.91);
-const PALE_GREEN = rgb(0.91, 0.94, 0.92);
 
 export async function createInvoicePdf(data: InvoicePdfData) {
   const pdf = await PDFDocument.create();
@@ -36,65 +39,51 @@ export async function createInvoicePdf(data: InvoicePdfData) {
   // White background
   page.drawRectangle({ x: 0, y: 0, width, height, color: rgb(1, 1, 1) });
 
-  // Header bar — cream
-  const headerH = 100;
-  page.drawRectangle({ x: 0, y: height - headerH, width, height: headerH, color: CREAM });
-
-  // Brand name
-  const brand = data.freelancerName || "VibeCount";
-  page.drawText(brand, {
-    x: 48,
-    y: height - 58,
-    size: 16,
-    font: bold,
-    color: INK,
-  });
-
-  // "INVOICE" label
-  page.drawText("INVOICE", {
-    x: width - 150,
-    y: height - 52,
-    size: 22,
-    font: bold,
-    color: INK,
+  const { headerH, palette } = await drawPdfBrandHeader({
+    pdf,
+    page,
+    bold,
+    brandName: data.freelancerName || "VibeCount",
+    documentLabel: "INVOICE",
+    branding: data.branding,
   });
 
   // Invoice number below header
   let y = height - headerH - 32;
 
-  page.drawText("Invoice number", { x: 48, y, size: 8, font: bold, color: MUTED });
-  page.drawText(data.number, { x: 48, y: y - 14, size: 11, font: bold, color: INK });
+  page.drawText("Invoice number", { x: 48, y, size: 8, font: bold, color: palette.muted });
+  page.drawText(data.number, { x: 48, y: y - 14, size: 11, font: bold, color: palette.primary });
 
-  page.drawText("Date", { x: 200, y, size: 8, font: bold, color: MUTED });
+  page.drawText("Date", { x: 200, y, size: 8, font: bold, color: palette.muted });
   page.drawText(formatDate(data.invoiceDate), {
     x: 200,
     y: y - 14,
     size: 11,
     font,
-    color: INK,
+    color: palette.ink,
   });
 
   // From / To columns
   y -= 56;
-  page.drawLine({ start: { x: 48, y: y + 12 }, end: { x: width - 48, y: y + 12 }, thickness: 0.5, color: RULE });
+  page.drawLine({ start: { x: 48, y: y + 12 }, end: { x: width - 48, y: y + 12 }, thickness: 0.5, color: palette.primary });
 
   // From column
-  page.drawText("From", { x: 48, y, size: 8, font: bold, color: MUTED });
+  page.drawText("From", { x: 48, y, size: 8, font: bold, color: palette.muted });
   let fromY = y - 14;
 
   if (data.freelancerName) {
-    page.drawText(data.freelancerName, { x: 48, y: fromY, size: 10, font: bold, color: INK });
+    page.drawText(data.freelancerName, { x: 48, y: fromY, size: 10, font: bold, color: palette.primary });
     fromY -= 14;
   }
   if (data.freelancerAddress) {
-    fromY = drawSmallWrappedText(data.freelancerAddress, 48, fromY, 220, 9, page, font, INK);
+    fromY = drawWrappedPdfText(data.freelancerAddress, 48, fromY, 220, 9, page, font, palette.ink);
   }
   if (data.freelancerContact) {
-    page.drawText(data.freelancerContact, { x: 48, y: fromY, size: 9, font, color: LIGHT });
-    fromY -= 12;
+    fromY = drawWrappedPdfText(data.freelancerContact, 48, fromY, 220, 8, page, font, palette.light);
   }
   if (!data.freelancerName && data.freelancerEmail) {
-    page.drawText(data.freelancerEmail, { x: 48, y: fromY, size: 9, font, color: LIGHT });
+    page.drawText(data.freelancerEmail, { x: 48, y: fromY, size: 9, font, color: palette.light });
+    fromY -= 12;
   }
   if (data.vatNumber) {
     page.drawText(`VAT reg: ${data.vatNumber}`, {
@@ -102,49 +91,64 @@ export async function createInvoicePdf(data: InvoicePdfData) {
       y: fromY - 2,
       size: 8,
       font,
-      color: LIGHT,
+      color: palette.light,
     });
+    fromY -= 12;
   }
 
   // To column
-  page.drawText("To", { x: 320, y, size: 8, font: bold, color: MUTED });
-  page.drawText(data.clientName, { x: 320, y: y - 14, size: 12, font: bold, color: INK });
+  page.drawText("To", { x: 320, y, size: 8, font: bold, color: palette.muted });
+  page.drawText(data.clientName, { x: 320, y: y - 14, size: 12, font: bold, color: palette.primary });
 
-  // Description section
-  y -= 100;
-  page.drawLine({ start: { x: 48, y: y + 12 }, end: { x: width - 48, y: y + 12 }, thickness: 0.5, color: RULE });
+  // Client address (if provided)
+  let clientDetailY = y - 30;
+  if (data.clientAddress) {
+    const addressLines = data.clientAddress.split(/[,\n]/).map((l) => l.trim()).filter(Boolean).slice(0, 4);
+    for (const line of addressLines) {
+      page.drawText(line, { x: 320, y: clientDetailY, size: 8, font, color: palette.muted });
+      clientDetailY -= 11;
+    }
+  }
+  if (data.clientVatNumber) {
+    page.drawText(`VAT no: ${data.clientVatNumber}`, { x: 320, y: clientDetailY, size: 8, font, color: palette.muted });
+    clientDetailY -= 11;
+  }
 
-  page.drawText("Description", { x: 48, y, size: 8, font: bold, color: MUTED });
-  page.drawText("Amount", { x: width - 130, y, size: 8, font: bold, color: MUTED });
+  // Description section starts below the taller From/To column.
+  y = Math.min(fromY, clientDetailY) - 30;
+  page.drawLine({ start: { x: 48, y: y + 12 }, end: { x: width - 48, y: y + 12 }, thickness: 0.5, color: palette.primary });
+
+  page.drawText("Description", { x: 48, y, size: 8, font: bold, color: palette.muted });
+  page.drawText("Amount", { x: width - 130, y, size: 8, font: bold, color: palette.muted });
 
   y -= 18;
-  const descBottomY = drawSmallWrappedText(data.description, 48, y, 340, 10, page, font, INK);
+  const descBottomY = drawWrappedPdfText(data.description, 48, y, 340, 10, page, font, palette.ink);
 
   page.drawText(formatPounds(data.amountPence), {
     x: width - 130,
     y,
     size: 12,
     font: bold,
-    color: INK,
+    color: palette.primary,
   });
 
   // VAT line if applicable
   y = Math.min(descBottomY, y) - 10;
   if (data.vatPence > 0 && data.vatRate) {
     y -= 8;
-    page.drawLine({ start: { x: width - 180, y: y + 8 }, end: { x: width - 48, y: y + 8 }, thickness: 0.5, color: RULE });
-    page.drawText(`VAT (${data.vatRate}%)`, { x: width - 180, y, size: 9, font, color: MUTED });
-    page.drawText(formatPounds(data.vatPence), { x: width - 130, y, size: 9, font, color: MUTED });
+    page.drawLine({ start: { x: width - 180, y: y + 8 }, end: { x: width - 48, y: y + 8 }, thickness: 0.5, color: palette.primary });
+    page.drawText(`VAT (${data.vatRate}%)`, { x: width - 180, y, size: 9, font, color: palette.muted });
+    page.drawText(formatPounds(data.vatPence), { x: width - 130, y, size: 9, font, color: palette.muted });
     y -= 16;
   }
 
   // Total line
   y -= 16;
-  page.drawLine({ start: { x: 48, y: y + 12 }, end: { x: width - 48, y: y + 12 }, thickness: 1, color: INK });
+  page.drawLine({ start: { x: 48, y: y + 24 }, end: { x: width - 48, y: y + 24 }, thickness: 1, color: palette.primary });
 
   const totalPence = data.amountPence + data.vatPence;
-  page.drawText("Total", { x: width - 180, y, size: 10, font: bold, color: INK });
-  page.drawText(formatPounds(totalPence), { x: width - 130, y, size: 16, font: bold, color: INK });
+  page.drawText("Total", { x: width - 180, y, size: 10, font: bold, color: palette.primary });
+  page.drawText(formatPounds(totalPence), { x: width - 130, y, size: 16, font: bold, color: palette.primary });
 
   // Amount in words
   y -= 40;
@@ -153,90 +157,64 @@ export async function createInvoicePdf(data: InvoicePdfData) {
     y: y - 14,
     width: width - 96,
     height: 34,
-    color: PALE_GREEN,
+    color: palette.accent,
   });
-  page.drawText("Amount in words", { x: 58, y: y + 5, size: 7, font: bold, color: MUTED });
-  page.drawText(capitalise(amountToWords(totalPence)), { x: 58, y: y - 8, size: 9, font, color: INK });
+  page.drawText("Amount in words", { x: 58, y: y + 5, size: 7, font: bold, color: palette.muted });
+  page.drawText(capitalise(amountToWords(totalPence)), { x: 58, y: y - 8, size: 9, font, color: palette.ink });
 
   // Payment terms
   y -= 56;
-  page.drawLine({ start: { x: 48, y: y + 12 }, end: { x: width - 48, y: y + 12 }, thickness: 0.5, color: RULE });
-  page.drawText("Payment terms", { x: 48, y, size: 8, font: bold, color: MUTED });
+  page.drawLine({ start: { x: 48, y: y + 12 }, end: { x: width - 48, y: y + 12 }, thickness: 0.5, color: palette.primary });
+  page.drawText("Payment terms", { x: 48, y, size: 8, font: bold, color: palette.muted });
   y -= 14;
-  drawSmallWrappedText(data.paymentTerms, 48, y, 480, 9, page, font, INK);
+  y = drawWrappedPdfText(data.paymentTerms, 48, y, 480, 9, page, font, palette.ink);
 
   // Bank details block
   if (data.bankDetails) {
-    y -= 52;
-    page.drawText("Payment details", { x: 48, y, size: 8, font: bold, color: MUTED });
+    y -= 18;
+    page.drawText("Payment details", { x: 48, y, size: 8, font: bold, color: palette.muted });
     y -= 14;
-    drawSmallWrappedText(data.bankDetails, 48, y, 480, 9, page, font, INK);
+    y = drawWrappedPdfText(data.bankDetails, 48, y, 480, 9, page, font, palette.ink);
+  }
+
+  if (data.paymentLinkUrl) {
+    y -= 18;
+    const provider = paymentProviderLabel(data.paymentLinkProvider);
+    page.drawText("Pay online", { x: 48, y, size: 8, font: bold, color: palette.muted });
+    y -= 14;
+    y = drawWrappedPdfText(`${provider}: ${data.paymentLinkUrl}`, 48, y, 480, 9, page, font, palette.ink);
   }
 
   // Footer
   const footerY = 56;
-  page.drawLine({ start: { x: 48, y: footerY + 16 }, end: { x: width - 48, y: footerY + 16 }, thickness: 0.5, color: RULE });
+  page.drawLine({ start: { x: 48, y: footerY + 16 }, end: { x: width - 48, y: footerY + 16 }, thickness: 0.5, color: palette.primary });
 
   const lateWording =
     data.latePaymentWording ||
     "Payment is due within 30 days of the invoice date. We reserve the right to charge statutory interest at 8% above the Bank of England base rate, plus statutory debt recovery costs, under the Late Payment of Commercial Debts (Interest) Act 1998.";
-  drawSmallWrappedText(lateWording, 48, footerY + 4, 380, 7.5, page, font, LIGHT);
+  drawWrappedPdfText(lateWording, 48, footerY + 6, 430, 7, page, font, palette.light);
 
   page.drawText("Generated by VibeCount — check all details before sending.", {
     x: 48,
-    y: footerY - 12,
+    y: 24,
     size: 7,
     font,
-    color: LIGHT,
+    color: palette.light,
   });
 
   return pdf.save();
 }
 
-function drawSmallWrappedText(
-  text: string,
-  x: number,
-  y: number,
-  maxWidth: number,
-  size: number,
-  page: PDFPage,
-  font: PDFFont,
-  color: RGB
-): number {
-  const lineH = size + 4;
-  // Split on literal \n first, then word-wrap each paragraph
-  const paragraphs = text.split(/\r?\n/);
-  let currentY = y;
-  for (const para of paragraphs) {
-    const words = para.split(/\s+/).filter(Boolean);
-    if (words.length === 0) {
-      currentY -= lineH;
-      continue;
-    }
-    let line = "";
-    for (const word of words) {
-      const next = line ? `${line} ${word}` : word;
-      if (font.widthOfTextAtSize(next, size) <= maxWidth) {
-        line = next;
-      } else {
-        if (line) {
-          page.drawText(line, { x, y: currentY, size, font, color });
-          currentY -= lineH;
-        }
-        line = word;
-      }
-    }
-    if (line) {
-      page.drawText(line, { x, y: currentY, size, font, color });
-      currentY -= lineH;
-    }
-  }
-  return currentY;
-}
-
 function capitalise(s: string) {
   if (!s) return s;
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function paymentProviderLabel(provider: string) {
+  if (provider === "sumup") return "SumUp";
+  if (provider === "stripe") return "Stripe Checkout";
+  if (provider === "paypal") return "PayPal";
+  return "Payment link";
 }
 
 function formatDate(value: string) {

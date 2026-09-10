@@ -9,6 +9,7 @@ import {
 } from "@/lib/settings";
 
 type Status = "idle" | "loading" | "saving" | "saved" | "error";
+type LogoStatus = "idle" | "uploading" | "deleting" | "error";
 type ContactDetails = {
   email: string;
   phone: string;
@@ -28,7 +29,10 @@ type BankDetails = {
 export default function SettingsForm() {
   const [settings, setSettings] = useState<UserSettings>(EMPTY_SETTINGS);
   const [status, setStatus] = useState<Status>("loading");
+  const [logoStatus, setLogoStatus] = useState<LogoStatus>("idle");
+  const [logoUrl, setLogoUrl] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [logoError, setLogoError] = useState("");
   const savedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -37,6 +41,7 @@ export default function SettingsForm() {
       .then((data) => {
         if (data && !data.error) {
           setSettings((prev) => ({ ...prev, ...data }));
+          setLogoUrl(data.pdf_logo_url ?? "");
         }
         setStatus("idle");
       })
@@ -90,6 +95,47 @@ export default function SettingsForm() {
     savedRef.current = setTimeout(() => setStatus("idle"), 3000);
   }
 
+  async function handleLogoUpload(file: File | null) {
+    if (!file) return;
+    setLogoStatus("uploading");
+    setLogoError("");
+
+    const form = new FormData();
+    form.append("logo", file);
+    const res = await fetch("/api/settings/logo", {
+      method: "POST",
+      body: form,
+    });
+    const body = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      setLogoError(body?.error ?? "Could not upload logo.");
+      setLogoStatus("error");
+      return;
+    }
+
+    setSettings((prev) => ({ ...prev, pdf_logo_path: body.pdf_logo_path ?? "" }));
+    setLogoUrl(body.pdf_logo_url ?? "");
+    setLogoStatus("idle");
+  }
+
+  async function handleLogoDelete() {
+    setLogoStatus("deleting");
+    setLogoError("");
+
+    const res = await fetch("/api/settings/logo", { method: "DELETE" });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      setLogoError(body?.error ?? "Could not remove logo.");
+      setLogoStatus("error");
+      return;
+    }
+
+    setSettings((prev) => ({ ...prev, pdf_logo_path: "" }));
+    setLogoUrl("");
+    setLogoStatus("idle");
+  }
+
   if (status === "loading") {
     return (
       <div className="flex items-center justify-center py-24 text-sm text-[#4a6a5a]">
@@ -99,7 +145,7 @@ export default function SettingsForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-10">
+    <form onSubmit={handleSubmit} className="space-y-10" data-testid="settings-form">
       {/* Trading identity */}
       <fieldset className="rounded-xl border border-[#e5e0d8] bg-white p-6 shadow-sm">
         <legend className="mb-4 -ml-1 px-1 text-xs font-semibold uppercase tracking-widest text-[#4a6a5a]">
@@ -113,6 +159,7 @@ export default function SettingsForm() {
           >
             <input
               id="legal_name"
+              data-testid="settings-legal-name-input"
               type="text"
               value={settings.legal_name}
               onChange={(e) => update("legal_name", e.target.value)}
@@ -125,6 +172,7 @@ export default function SettingsForm() {
           <Field label="Email" hint="Shown on invoices." id="contact_email">
             <input
               id="contact_email"
+              data-testid="settings-contact-email-input"
               type="text"
               inputMode="email"
               value={contact.email}
@@ -136,6 +184,7 @@ export default function SettingsForm() {
           <Field label="Phone" hint="Optional." id="contact_phone">
             <input
               id="contact_phone"
+              data-testid="settings-contact-phone-input"
               type="tel"
               value={contact.phone}
               onChange={(e) => updateContact({ phone: e.target.value })}
@@ -146,6 +195,7 @@ export default function SettingsForm() {
           <Field label="Website" hint="Optional." id="contact_website">
             <input
               id="contact_website"
+              data-testid="settings-contact-website-input"
               type="text"
               inputMode="url"
               value={contact.website}
@@ -164,6 +214,7 @@ export default function SettingsForm() {
             >
               <input
                 id="contact_other"
+                data-testid="settings-contact-other-input"
                 type="text"
                 value={contact.other}
                 onChange={(e) => updateContact({ other: e.target.value })}
@@ -176,6 +227,7 @@ export default function SettingsForm() {
           <Field label="Address" hint="Your trading or correspondence address." id="address">
             <textarea
               id="address"
+              data-testid="settings-address-input"
               value={settings.address}
               onChange={(e) => update("address", e.target.value)}
               rows={3}
@@ -199,6 +251,7 @@ export default function SettingsForm() {
           >
             <input
               id="invoice_number_prefix"
+              data-testid="settings-invoice-prefix-input"
               type="text"
               maxLength={10}
               value={settings.invoice_number_prefix}
@@ -216,6 +269,7 @@ export default function SettingsForm() {
           >
             <input
               id="default_payment_terms"
+              data-testid="settings-default-payment-terms-input"
               type="text"
               value={settings.default_payment_terms}
               onChange={(e) => update("default_payment_terms", e.target.value)}
@@ -232,6 +286,7 @@ export default function SettingsForm() {
             labelAction={
               <button
                 type="button"
+                data-testid="settings-late-payment-default-button"
                 onClick={() =>
                   update("late_payment_wording", DEFAULT_LATE_PAYMENT_WORDING)
                 }
@@ -243,6 +298,7 @@ export default function SettingsForm() {
           >
             <textarea
               id="late_payment_wording"
+              data-testid="settings-late-payment-wording-input"
               value={settings.late_payment_wording}
               onChange={(e) => update("late_payment_wording", e.target.value)}
               rows={4}
@@ -262,6 +318,7 @@ export default function SettingsForm() {
           <Field label="Account name" hint="Usually your business or legal name." id="bank_account_name">
             <input
               id="bank_account_name"
+              data-testid="settings-bank-account-name-input"
               type="text"
               value={bank.accountName}
               onChange={(e) => updateBank({ accountName: e.target.value })}
@@ -272,6 +329,7 @@ export default function SettingsForm() {
           <Field label="Bank name" hint="Optional." id="bank_name">
             <input
               id="bank_name"
+              data-testid="settings-bank-name-input"
               type="text"
               value={bank.bankName}
               onChange={(e) => updateBank({ bankName: e.target.value })}
@@ -282,6 +340,7 @@ export default function SettingsForm() {
           <Field label="Sort code" hint="Shown at the bottom of invoices." id="sort_code">
             <input
               id="sort_code"
+              data-testid="settings-sort-code-input"
               type="text"
               inputMode="numeric"
               value={bank.sortCode}
@@ -293,6 +352,7 @@ export default function SettingsForm() {
           <Field label="Account number" hint="Shown at the bottom of invoices." id="account_number">
             <input
               id="account_number"
+              data-testid="settings-account-number-input"
               type="text"
               inputMode="numeric"
               value={bank.accountNumber}
@@ -304,6 +364,7 @@ export default function SettingsForm() {
           <Field label="IBAN" hint="For international payments." id="iban">
             <input
               id="iban"
+              data-testid="settings-iban-input"
               type="text"
               value={bank.iban}
               onChange={(e) => updateBank({ iban: e.target.value.toUpperCase() })}
@@ -314,6 +375,7 @@ export default function SettingsForm() {
           <Field label="SWIFT / BIC" hint="For international bank transfers." id="swift">
             <input
               id="swift"
+              data-testid="settings-swift-input"
               type="text"
               value={bank.swift}
               onChange={(e) => updateBank({ swift: e.target.value.toUpperCase() })}
@@ -326,6 +388,7 @@ export default function SettingsForm() {
           <Field label="Payment reference or note" hint="Optional extra payment instruction." id="bank_reference">
             <input
               id="bank_reference"
+              data-testid="settings-bank-reference-input"
               type="text"
               value={bank.reference}
               onChange={(e) => updateBank({ reference: e.target.value })}
@@ -333,6 +396,158 @@ export default function SettingsForm() {
               className={inputCls}
             />
           </Field>
+        </div>
+        <div className="mt-5 grid gap-5 sm:grid-cols-2">
+          <Field
+            label="Hosted payment provider"
+            hint="Use SumUp now, or Stripe/other later."
+            id="payment_link_provider"
+          >
+            <select
+              id="payment_link_provider"
+              data-testid="settings-payment-provider-select"
+              value={settings.payment_link_provider}
+              onChange={(e) => update("payment_link_provider", e.target.value)}
+              className={inputCls}
+            >
+              <option value="">No hosted payment link</option>
+              <option value="sumup">SumUp</option>
+              <option value="stripe">Stripe Checkout</option>
+              <option value="paypal">PayPal</option>
+              <option value="other">Other hosted link</option>
+            </select>
+          </Field>
+          <Field
+            label="Hosted payment link"
+            hint="Must start with https://. Printed on invoices as a pay-online option."
+            id="payment_link_url"
+          >
+            <input
+              id="payment_link_url"
+              data-testid="settings-payment-link-url-input"
+              type="url"
+              inputMode="url"
+              value={settings.payment_link_url}
+              onChange={(e) => update("payment_link_url", e.target.value)}
+              placeholder="https://pay.sumup.com/..."
+              className={inputCls}
+            />
+          </Field>
+        </div>
+      </fieldset>
+
+      {/* PDF branding */}
+      <fieldset
+        id="pdf-branding"
+        className="scroll-mt-24 rounded-xl border border-[#e5e0d8] bg-white p-6 shadow-sm"
+        data-testid="settings-pdf-branding-section"
+      >
+        <legend className="mb-4 -ml-1 px-1 text-xs font-semibold uppercase tracking-widest text-[#4a6a5a]">
+          PDF branding
+        </legend>
+
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field
+            label="Logo"
+            hint="PNG or JPG, 2MB max. Used on new invoice, quote, and proposal PDFs."
+            id="pdf_logo"
+          >
+            <input
+              id="pdf_logo"
+              data-testid="settings-pdf-logo-input"
+              type="file"
+              accept="image/png,image/jpeg"
+              onChange={(e) => {
+                void handleLogoUpload(e.target.files?.[0] ?? null);
+                e.currentTarget.value = "";
+              }}
+              className={`${inputCls} h-auto py-2 file:mr-3 file:rounded-md file:border-0 file:bg-[#e8f0eb] file:px-3 file:py-2 file:text-sm file:font-medium file:text-[#1a3a2a]`}
+            />
+          </Field>
+          <div>
+            <p className="text-sm font-medium text-[#1a3a2a]">Logo preview</p>
+            <div
+              data-testid="settings-pdf-logo-preview"
+              className="mt-2 flex h-24 items-center justify-center rounded-lg border border-[#d5d0c8] bg-[#f8f6f1] p-3"
+            >
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoUrl} alt="PDF logo preview" className="max-h-full max-w-full object-contain" />
+              ) : (
+                <span className="text-xs text-[#7a9a87]">No logo uploaded</span>
+              )}
+            </div>
+            <button
+              type="button"
+              data-testid="settings-pdf-logo-delete-button"
+              onClick={() => void handleLogoDelete()}
+              disabled={!settings.pdf_logo_path || logoStatus === "deleting"}
+              className="mt-2 text-xs font-semibold text-[#7a271a] underline decoration-[#e0b4a8] underline-offset-4 disabled:cursor-not-allowed disabled:text-[#9a8f89]"
+            >
+              {logoStatus === "deleting" ? "Removing..." : "Remove logo"}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-5 sm:grid-cols-2">
+          <Field label="Primary colour" hint="Used for headings, totals, and rules." id="pdf_primary_color">
+            <div className="flex gap-3">
+              <input
+                aria-label="Primary colour swatch"
+                data-testid="settings-pdf-primary-color-swatch"
+                type="color"
+                value={safeColorValue(settings.pdf_primary_color, EMPTY_SETTINGS.pdf_primary_color)}
+                onChange={(e) => update("pdf_primary_color", e.target.value)}
+                className="h-12 w-14 rounded-lg border border-[#d5d0c8] bg-white p-1"
+              />
+              <input
+                id="pdf_primary_color"
+                data-testid="settings-pdf-primary-color-input"
+                type="text"
+                value={settings.pdf_primary_color}
+                onChange={(e) => update("pdf_primary_color", e.target.value)}
+                placeholder="#1a3a2a"
+                className={inputCls}
+              />
+            </div>
+          </Field>
+          <Field label="Accent/background colour" hint="Used for the header band and amount-in-words panel." id="pdf_accent_color">
+            <div className="flex gap-3">
+              <input
+                aria-label="Accent colour swatch"
+                data-testid="settings-pdf-accent-color-swatch"
+                type="color"
+                value={safeColorValue(settings.pdf_accent_color, EMPTY_SETTINGS.pdf_accent_color)}
+                onChange={(e) => update("pdf_accent_color", e.target.value)}
+                className="h-12 w-14 rounded-lg border border-[#d5d0c8] bg-white p-1"
+              />
+              <input
+                id="pdf_accent_color"
+                data-testid="settings-pdf-accent-color-input"
+                type="text"
+                value={settings.pdf_accent_color}
+                onChange={(e) => update("pdf_accent_color", e.target.value)}
+                placeholder="#f5f0e8"
+                className={inputCls}
+              />
+            </div>
+          </Field>
+        </div>
+
+        <div className="mt-5 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+          <a
+            data-testid="settings-pdf-preview-button"
+            href="/api/settings/pdf-preview"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-[#1a3a2a] px-5 text-sm font-semibold text-[#1a3a2a] transition hover:bg-[#e8f0eb]"
+          >
+            Preview sample PDF
+          </a>
+          {logoStatus === "uploading" ? (
+            <p className="text-sm text-[#4a6a5a]">Uploading logo...</p>
+          ) : null}
+          {logoStatus === "error" ? <p className="text-sm text-[#7a271a]">{logoError}</p> : null}
         </div>
       </fieldset>
 
@@ -346,6 +561,7 @@ export default function SettingsForm() {
           <span className="relative inline-flex h-6 w-11 shrink-0">
             <input
               type="checkbox"
+              data-testid="settings-vat-registered-toggle"
               checked={settings.vat_registered}
               onChange={(e) => update("vat_registered", e.target.checked)}
               className="sr-only"
@@ -376,6 +592,7 @@ export default function SettingsForm() {
             >
               <input
                 id="vat_number"
+                data-testid="settings-vat-number-input"
                 type="text"
                 value={settings.vat_number}
                 onChange={(e) => update("vat_number", e.target.value)}
@@ -386,6 +603,7 @@ export default function SettingsForm() {
             <Field label="VAT rate (%)" id="vat_rate">
               <input
                 id="vat_rate"
+                data-testid="settings-vat-rate-input"
                 type="number"
                 min={0}
                 max={100}
@@ -397,6 +615,49 @@ export default function SettingsForm() {
             </Field>
           </div>
         )}
+      </fieldset>
+
+      {/* Tax & Debt Recovery */}
+      <fieldset className="rounded-xl border border-[#e5e0d8] bg-white p-6 shadow-sm">
+        <legend className="mb-4 -ml-1 px-1 text-xs font-semibold uppercase tracking-widest text-[#4a6a5a]">
+          Tax & Debt Recovery
+        </legend>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field
+            label="Tax pot nudge (%)"
+            hint="Percentage of net income to suggest saving for taxes."
+            id="tax_pot_percentage"
+          >
+            <input
+              id="tax_pot_percentage"
+              data-testid="settings-tax-pot-percentage-input"
+              type="number"
+              min={0}
+              max={100}
+              step={0.1}
+              value={settings.tax_pot_percentage}
+              onChange={(e) => update("tax_pot_percentage", Number(e.target.value))}
+              className={inputCls}
+            />
+          </Field>
+          <Field
+            label="Statutory interest rate (%)"
+            hint="Used to calculate late payment fees (usually 8% + Bank of England base rate)."
+            id="statutory_interest_rate"
+          >
+            <input
+              id="statutory_interest_rate"
+              data-testid="settings-statutory-interest-rate-input"
+              type="number"
+              min={0}
+              max={100}
+              step={0.01}
+              value={settings.statutory_interest_rate}
+              onChange={(e) => update("statutory_interest_rate", Number(e.target.value))}
+              className={inputCls}
+            />
+          </Field>
+        </div>
       </fieldset>
 
       {/* Private info */}
@@ -418,6 +679,7 @@ export default function SettingsForm() {
         >
           <input
             id="utr"
+            data-testid="settings-utr-input"
             type="text"
             inputMode="numeric"
             maxLength={10}
@@ -429,10 +691,50 @@ export default function SettingsForm() {
         </Field>
       </fieldset>
 
+      {/* Companies House */}
+      <fieldset className="space-y-5 rounded-xl border border-[#e5e0d8] p-5">
+        <legend className="px-1 text-sm font-semibold text-[#1a3a2a]">Client intelligence</legend>
+        <Field
+          hint="Optional. Typing a client name will search Companies House and auto-fill their registered address. Get a free key at developer.companieshouse.gov.uk"
+          label="Companies House API key"
+          id="companies_house_api_key"
+        >
+          <input
+            id="companies_house_api_key"
+            data-testid="settings-companies-house-key-input"
+            type="password"
+            name="companies_house_api_key"
+            value={settings.companies_house_api_key}
+            onChange={(e) => update("companies_house_api_key", e.target.value)}
+            placeholder="Your Companies House API key"
+            className={inputCls}
+            autoComplete="off"
+          />
+        </Field>
+      </fieldset>
+
+      {/* Data Export */}
+      <fieldset className="rounded-xl border border-[#e5e0d8] bg-white p-6 shadow-sm">
+        <legend className="mb-1 -ml-1 px-1 text-xs font-semibold uppercase tracking-widest text-[#4a6a5a]">
+          Data Export & Backup
+        </legend>
+        <p className="mb-4 text-xs text-[#7a9a87]">
+          Download a complete backup of all your account data (invoices, clients, settings, records, and reminders) in JSON format.
+        </p>
+        <a
+          href="/api/backup/export"
+          data-testid="settings-export-backup-link"
+          className="inline-flex h-10 items-center rounded-lg border border-[#d5d0c8] bg-[#f7fef9] px-4 text-sm font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
+        >
+          Download Full JSON Backup
+        </a>
+      </fieldset>
+
       {/* Status feedback + submit */}
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
         <button
           type="submit"
+          data-testid="settings-save-button"
           disabled={status === "saving"}
           className="inline-flex h-12 items-center justify-center rounded-xl bg-[#1a3a2a] px-8 text-sm font-semibold text-white transition hover:bg-[#2d6a4a] disabled:cursor-not-allowed disabled:bg-[#8a9a91]"
         >
@@ -492,6 +794,10 @@ function Field({
 
 const inputCls =
   "h-12 w-full rounded-lg border border-[#d5d0c8] bg-white px-3 text-base text-[#1a3a2a] outline-none transition focus:border-[#2d6a4a] focus:ring-2 focus:ring-[#b9d2bd]";
+
+function safeColorValue(value: string, fallback: string) {
+  return /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
+}
 
 function parseContactDetails(value: string): ContactDetails {
   const lines = value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);

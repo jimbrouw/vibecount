@@ -25,10 +25,10 @@ export default async function NewInvoicePage({
     redirect("/login");
   }
 
-  // Load existing clients for autocomplete
+  // Load existing clients for autocomplete (include address and company details)
   const { data: clientRows } = await supabase
     .from("clients")
-    .select("id, name")
+    .select("id, name, email, address, company_number, vat_number")
     .eq("user_id", user.id)
     .order("name", { ascending: true });
 
@@ -36,12 +36,19 @@ export default async function NewInvoicePage({
   const { data: settingsRow } = await supabase
     .from("user_settings")
     .select(
-      "legal_name, address, contact_details, default_payment_terms, bank_details, vat_registered, vat_number, vat_rate, invoice_number_prefix, late_payment_wording, utr"
+      "legal_name, address, contact_details, default_payment_terms, bank_details, payment_link_provider, payment_link_url, vat_registered, vat_number, vat_rate, invoice_number_prefix, late_payment_wording, utr, companies_house_api_key"
     )
     .eq("id", user.id)
     .maybeSingle();
 
-  const existingClients = (clientRows ?? []) as { id: string; name: string }[];
+  const existingClients = (clientRows ?? []) as {
+    id: string;
+    name: string;
+    email: string;
+    address: string;
+    company_number: string;
+    vat_number: string;
+  }[];
   const initialDate = formatTodayAsUkDate();
   const resolvedSearchParams = await searchParams;
   const initialDraft = {
@@ -50,6 +57,8 @@ export default async function NewInvoicePage({
     amount: getSingleSearchParam(resolvedSearchParams.amount),
     source: getSingleSearchParam(resolvedSearchParams.source),
     transcript: getSingleSearchParam(resolvedSearchParams.transcript),
+    clientAddress: getSingleSearchParam(resolvedSearchParams.clientAddress),
+    clientCompanyNumber: getSingleSearchParam(resolvedSearchParams.clientCompanyNumber),
   };
 
   const userDefaults = {
@@ -58,6 +67,7 @@ export default async function NewInvoicePage({
     hasSettings: Boolean(
       settingsRow?.legal_name || settingsRow?.bank_details || settingsRow?.contact_details
     ),
+    companiesHouseConfigured: Boolean(settingsRow?.companies_house_api_key?.trim()),
   };
 
   return (
@@ -76,6 +86,18 @@ export default async function NewInvoicePage({
               className="rounded-lg px-3 py-1.5 text-sm text-[#4a6a5a] transition hover:bg-[#f0ece4] hover:text-[#1a3a2a]"
             >
               Invoices
+            </Link>
+            <Link
+              href="/dashboard/quotes"
+              className="rounded-lg px-3 py-1.5 text-sm text-[#4a6a5a] transition hover:bg-[#f0ece4] hover:text-[#1a3a2a]"
+            >
+              Quotes
+            </Link>
+            <Link
+              href="/dashboard/records"
+              className="rounded-lg px-3 py-1.5 text-sm text-[#4a6a5a] transition hover:bg-[#f0ece4] hover:text-[#1a3a2a]"
+            >
+              Records
             </Link>
             <Link
               href="/dashboard/glossary"

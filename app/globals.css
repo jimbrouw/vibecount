@@ -5,6 +5,13 @@
   --foreground: #14532d;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, sans-serif;
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  --background: #0c1410;
+  --foreground: #eaf4ec;
+  color-scheme: dark;
 }
 
 body {
@@ -45,8 +52,205 @@ html[data-spacing="relaxed"] .dashboard-shell textarea {
   line-height: 1.6;
 }
 
+.dashboard-content > div > main {
+  min-height: auto;
+  background: transparent;
+}
+
+.dashboard-content > div > main > header {
+  display: none;
+}
+
+.dashboard-content > div > main > div {
+  max-width: none;
+  padding: 0;
+}
+
+.dashboard-content section,
+.dashboard-content article,
+.dashboard-content details,
+.dashboard-content fieldset,
+.dashboard-content input,
+.dashboard-content textarea,
+.dashboard-content select,
+.dashboard-content button,
+.dashboard-content a {
+  border-radius: 0.5rem;
+}
+
+.dashboard-content fieldset > legend {
+  background: #ffffff;
+  padding-left: 0.65rem;
+  padding-right: 0.65rem;
+}
+
 /* Smooth focus rings */
 *:focus-visible {
   outline: 2px solid #16a34a;
   outline-offset: 2px;
+}
+
+html[data-theme="dark"] body {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(45, 106, 74, 0.22), transparent 28rem),
+    linear-gradient(180deg, #0c1410 0%, #101a14 42%, #0b120e 100%);
+  color: #eaf4ec;
+}
+
+html[data-theme="dark"] .dashboard-shell {
+  color: #eaf4ec;
+}
+
+html[data-theme="dark"] .dashboard-shell .theme-toggle,
+html[data-theme="dark"] .dashboard-shell [data-testid="mobile-nav-open-button"] {
+  border-color: #2e4035;
+  background: rgba(21, 33, 26, 0.94);
+  color: #ecf7ef;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.34);
+}
+
+html[data-theme="dark"] .dashboard-shell .theme-toggle:hover,
+html[data-theme="dark"] .dashboard-shell [data-testid="mobile-nav-open-button"]:hover {
+  background: #1b2b22;
+}
+
+html[data-theme="dark"] .dashboard-shell aside,
+html[data-theme="dark"] .dashboard-content main,
+html[data-theme="dark"] .dashboard-content section,
+html[data-theme="dark"] .dashboard-content article,
+html[data-theme="dark"] .dashboard-content details,
+html[data-theme="dark"] .dashboard-content fieldset,
+html[data-theme="dark"] .dashboard-content form,
+html[data-theme="dark"] .dashboard-content .bg-white,
+html[data-theme="dark"] .dashboard-content [class*="bg-[#fff"],
+html[data-theme="dark"] .dashboard-content [class*="bg-[#f1"],
+html[data-theme="dark"] .dashboard-content [class*="bg-[#f6"],
+html[data-theme="dark"] .dashboard-content [class*="bg-[#f7"],
+html[data-theme="dark"] .dashboard-content [class*="bg-[#f8"],
+html[data-theme="dark"] .dashboard-content [class*="bg-[#fb"] {
+  background-color: #121d17 !important;
+  border-color: #2b3f33 !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="dark"] .dashboard-content [class*="bg-[#f0"],
+html[data-theme="dark"] .dashboard-content [class*="bg-[#dc"],
+html[data-theme="dark"] .dashboard-content [class*="bg-[#e8"],
+html[data-theme="dark"] .dashboard-content [class*="bg-[#e9"] {
+  background-color: #18271f !important;
+  border-color: #395742 !important;
+}
+
+html[data-theme="dark"] .dashboard-content [class*="bg-[#dbeafe"] {
+  background-color: #173255 !important;
+  border-color: #315d95 !important;
+}
+
+html[data-theme="dark"] .dashboard-content [class*="bg-[#fef"],
+html[data-theme="dark"] .dashboard-content [class*="bg-[#fff8"],
+html[data-theme="dark"] .dashboard-content [class*="bg-[#fff7"] {
+  background-color: #2a2212 !important;
+  border-color: #6f5a1b !important;
+}
+
+html[data-theme="dark"] .dashboard-content h1,
+html[data-theme="dark"] .dashboard-content h2,
+html[data-theme="dark"] .dashboard-content h3,
+html[data-theme="dark"] .dashboard-content label,
+html[data-theme="dark"] .dashboard-content legend,
+html[data-theme="dark"] .dashboard-content summary,
+html[data-theme="dark"] .dashboard-content p,
+html[data-theme="dark"] .dashboard-content span,
+html[data-theme="dark"] .dashboard-content li,
+html[data-theme="dark"] .dashboard-content div,
+html[data-theme="dark"] .dashboard-content code,
+html[data-theme="dark"] .dashboard-shell [class*="text-[#1"],
+html[data-theme="dark"] .dashboard-shell [class*="text-[#145"],
+html[data-theme="dark"] .dashboard-shell [class*="text-[#166"],
+html[data-theme="dark"] .dashboard-shell [class*="text-[#4"],
+html[data-theme="dark"] .dashboard-shell [class*="text-[#6"],
+html[data-theme="dark"] .dashboard-shell [class*="text-[#7a9"] {
+  color: #e7f2ea !important;
+}
+
+html[data-theme="dark"] .dashboard-content [class*="text-[#158"],
+html[data-theme="dark"] .dashboard-content a {
+  color: #7ee0a0 !important;
+}
+
+html[data-theme="dark"] .dashboard-content [class*="text-[#713"],
+html[data-theme="dark"] .dashboard-content [class*="text-[#854"],
+html[data-theme="dark"] .dashboard-content [class*="text-[#7a2"] {
+  color: #f4d47c !important;
+}
+
+html[data-theme="dark"] .dashboard-content [class*="text-[#1d4ed8"] {
+  color: #bfdbfe !important;
+}
+
+html[data-theme="dark"] .dashboard-content fieldset > legend {
+  background: #121d17;
+}
+
+html[data-theme="dark"] .dashboard-content input,
+html[data-theme="dark"] .dashboard-content textarea,
+html[data-theme="dark"] .dashboard-content select {
+  border-color: #395742 !important;
+  background: #0f1914 !important;
+  color: #f1f8f2 !important;
+}
+
+html[data-theme="dark"] .dashboard-content input::placeholder,
+html[data-theme="dark"] .dashboard-content textarea::placeholder {
+  color: #8ea897 !important;
+}
+
+html[data-theme="dark"] .dashboard-content button:not([class*="bg-[#15803d]"]):not([class*="bg-[#1a3a2a]"]),
+html[data-theme="dark"] .dashboard-content [role="button"]:not([class*="bg-[#15803d]"]):not([class*="bg-[#1a3a2a]"]) {
+  border-color: #395742 !important;
+}
+
+html[data-theme="dark"] .dashboard-shell > div:first-child,
+html[data-theme="dark"] .dashboard-shell aside {
+  background-color: #0f1914 !important;
+  border-color: #263a2f !important;
+}
+
+html[data-theme="dark"] .dashboard-shell aside .bg-white,
+html[data-theme="dark"] .dashboard-shell aside [class*="bg-[#fb"],
+html[data-theme="dark"] .dashboard-shell aside [class*="bg-[#f2"],
+html[data-theme="dark"] .dashboard-shell aside [class*="bg-[#e9"] {
+  background-color: #15231b !important;
+  border-color: #2f4939 !important;
+}
+
+html[data-theme="dark"] .dashboard-shell aside a[class*="bg-[#e9"],
+html[data-theme="dark"] .dashboard-shell aside a[aria-current="page"] {
+  background-color: #203829 !important;
+  color: #f4fff6 !important;
+}
+
+html[data-theme="dark"] .dashboard-shell nav a,
+html[data-theme="dark"] .dashboard-shell nav button,
+html[data-theme="dark"] .dashboard-shell [data-testid="nav-brand-link"] span,
+html[data-theme="dark"] .dashboard-shell kbd {
+  color: #dcebe0 !important;
+}
+
+html[data-theme="dark"] .dashboard-shell aside [class*="text-[#7b"],
+html[data-theme="dark"] .dashboard-shell aside [class*="text-[#667"],
+html[data-theme="dark"] .dashboard-shell aside [class*="text-[#6d"] {
+  color: #9fb8a8 !important;
+}
+
+html[data-theme="dark"] .dashboard-shell nav a:hover,
+html[data-theme="dark"] .dashboard-shell nav button:hover,
+html[data-theme="dark"] .dashboard-shell .hover\:bg-\[\#f2f5f1\]:hover {
+  background-color: #1b2b22 !important;
+}
+
+html[data-theme="dark"] .plain-language-note {
+  border-color: #395742;
+  background: #15261d;
+  color: #dff3e4;
 }
