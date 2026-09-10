@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createInvoicePdf } from "@/lib/invoices/pdf";
+import { loadPdfBranding } from "@/lib/pdf/settings-branding";
 
 export const runtime = "nodejs";
 
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
   if (!pdfPath) {
     const { data: settings } = await supabase
       .from("user_settings")
-      .select("legal_name, address, contact_details, bank_details, payment_link_provider, payment_link_url, vat_registered, vat_number, vat_rate, late_payment_wording")
+      .select("legal_name, address, contact_details, bank_details, payment_link_provider, payment_link_url, vat_registered, vat_number, vat_rate, late_payment_wording, pdf_logo_path, pdf_primary_color, pdf_accent_color")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -56,6 +57,7 @@ export async function GET(request: Request) {
       vatNumber: settings?.vat_number ?? "",
       vatRate: settings?.vat_rate ?? null,
       latePaymentWording: settings?.late_payment_wording ?? "",
+      branding: await loadPdfBranding(supabase, settings),
     });
 
     const filename = `${invoice.number}.pdf`;

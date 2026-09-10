@@ -111,6 +111,12 @@ export default async function RecordsPage({
   const categories = await ensureRecordCategories(supabase, user.id);
   const manualCategoryOptions = withFallbackRecordCategories(categories);
 
+  const { data: settingsRow } = await supabase
+    .from("user_settings")
+    .select("tax_pot_percentage")
+    .eq("id", user.id)
+    .maybeSingle();
+
   const [
     summaryResult,
     categoryResult,
@@ -205,6 +211,9 @@ export default async function RecordsPage({
     0
   );
   const thresholdStatus = getThresholdStatus(annualIncomePence);
+  const netIncomePence = annualIncomePence - annualExpensePence;
+  const taxPotPercentage = settingsRow?.tax_pot_percentage ?? 27.00;
+  const taxPotEstimatePence = Math.max(0, Math.round(netIncomePence * (taxPotPercentage / 100)));
 
   return (
     <main className="min-h-screen bg-[#f0fdf4]">
@@ -302,7 +311,7 @@ export default async function RecordsPage({
           </div>
         )}
 
-        <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <SummaryTile
             label="Income"
             value={formatPounds(annualIncomePence)}
@@ -313,7 +322,11 @@ export default async function RecordsPage({
           />
           <SummaryTile
             label="Net"
-            value={formatPounds(annualIncomePence - annualExpensePence)}
+            value={formatPounds(netIncomePence)}
+          />
+          <SummaryTile
+            label="Tax pot nudge"
+            value={formatPounds(taxPotEstimatePence)}
           />
           <SummaryTile
             label="Approved records"

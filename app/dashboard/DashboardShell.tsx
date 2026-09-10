@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ReactNode, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useAccessibility } from "./AccessibilityProvider";
 import { useGlossary } from "./GlossaryProvider";
 import LogoutButton from "./LogoutButton";
@@ -163,13 +163,62 @@ export default function DashboardShell({ children, userEmail }: Props) {
       </aside>
 
       <div className="lg:pl-[280px]">
-        <main className="dashboard-content min-h-screen px-4 pb-10 pt-16 sm:px-6 lg:px-8 lg:pt-8">
+        <div className="fixed right-4 top-4 z-30 sm:right-6 lg:right-8">
+          <ThemeToggle />
+        </div>
+        <main className="dashboard-content min-h-screen px-4 pb-10 pt-20 sm:px-6 lg:px-8">
           <div className="mx-auto w-full max-w-7xl">{children}</div>
         </main>
       </div>
 
       <HelpDrawer open={drawerOpen} onClose={() => setHelpOpen(false)} />
     </div>
+  );
+}
+
+function ThemeToggle() {
+  const [dark, setDark] = useState(false);
+  const [themeReady, setThemeReady] = useState(false);
+
+  useEffect(() => {
+    window.requestAnimationFrame(() => {
+      setDark(window.localStorage.getItem("vibecount-theme") === "dark");
+      setThemeReady(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!themeReady) return;
+    document.documentElement.dataset.theme = dark ? "dark" : "";
+  }, [dark, themeReady]);
+
+  function toggleTheme() {
+    const nextDark = !dark;
+    setDark(nextDark);
+    document.documentElement.dataset.theme = nextDark ? "dark" : "";
+    try {
+      if (nextDark) {
+        window.localStorage.setItem("vibecount-theme", "dark");
+      } else {
+        window.localStorage.removeItem("vibecount-theme");
+      }
+    } catch {
+      // Theme still changes for this session if storage is unavailable.
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+      aria-pressed={dark}
+      data-testid="theme-toggle-button"
+      onClick={toggleTheme}
+      className="theme-toggle inline-flex h-10 items-center gap-2 rounded-md border border-[#d9ded8] bg-white px-3 text-sm font-semibold text-[#17251d] shadow-sm transition hover:bg-[#f2f5f1]"
+    >
+      {dark ? <SunIcon /> : <MoonIcon />}
+      <span className="hidden sm:inline">{dark ? "Light" : "Dark"}</span>
+    </button>
   );
 }
 
@@ -391,3 +440,5 @@ function SettingsIcon() { return <IconSvg><path d="M9 11.5A2.5 2.5 0 109 6.5a2.5
 function MenuIcon() { return <IconSvg><path d="M3 5h12M3 9h12M3 13h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></IconSvg>; }
 function CloseIcon() { return <IconSvg><path d="M5 5l8 8M13 5l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></IconSvg>; }
 function SearchIcon() { return <IconSvg><path d="M8 13a5 5 0 100-10 5 5 0 000 10zM12 12l3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></IconSvg>; }
+function MoonIcon() { return <IconSvg><path d="M13.8 11.2A5.8 5.8 0 016.8 4.2 5.8 5.8 0 1013.8 11.2z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></IconSvg>; }
+function SunIcon() { return <IconSvg><path d="M9 12a3 3 0 100-6 3 3 0 000 6zM9 2.5v1.3M9 14.2v1.3M2.5 9h1.3M14.2 9h1.3M4.4 4.4l.9.9M12.7 12.7l.9.9M13.6 4.4l-.9.9M5.3 12.7l-.9.9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></IconSvg>; }

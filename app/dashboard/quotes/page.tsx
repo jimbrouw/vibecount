@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { formatPounds } from "@/lib/invoices/money";
 import LogoutButton from "../LogoutButton";
 import { createQuote, createService, setQuoteStatus } from "./actions";
+import QuoteDateFields from "./QuoteDateFields";
+import QuoteEmailButton from "./QuoteEmailButton";
 
 export const metadata = {
   title: "Quotes — VibeCount",
@@ -46,7 +48,7 @@ export default async function QuotesPage({
 
   const params = await searchParams;
   const message = getPageMessage(params);
-  const [servicesResult, quotesResult] = await Promise.all([
+  const [servicesResult, quotesResult, settingsResult] = await Promise.all([
     supabase
       .from("services")
       .select("id, name, description, unit_price")
@@ -60,10 +62,16 @@ export default async function QuotesPage({
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(12),
+    supabase
+      .from("user_settings")
+      .select("legal_name")
+      .eq("id", user.id)
+      .maybeSingle(),
   ]);
 
   const services = (servicesResult.data ?? []) as ServiceRow[];
   const quotes = (quotesResult.data ?? []) as unknown as QuoteRow[];
+  const senderName = settingsResult.data?.legal_name ?? user.email ?? "";
 
   return (
     <main className="min-h-screen bg-[#f0fdf4]">
@@ -123,7 +131,7 @@ export default async function QuotesPage({
           ) : (
             <div className="divide-y divide-[#f0fdf4]">
               {quotes.map((quote) => (
-                <QuoteCard key={quote.id} quote={quote} />
+                <QuoteCard key={quote.id} quote={quote} senderName={senderName} />
               ))}
             </div>
           )}
@@ -151,13 +159,16 @@ function ServiceForm() {
 }
 
 function QuoteForm({ services }: { services: ServiceRow[] }) {
+  const today = new Date().toISOString().slice(0, 10);
   return (
     <section className="rounded-xl border border-[#bbf7d0] bg-white p-5 shadow-sm">
       <h2 className="text-base font-semibold text-[#14532d]">Create a quote</h2>
       <form action={createQuote} className="mt-5 space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4">
           <Field label="Client" name="clientName" placeholder="Client name" />
-          <Field label="Quote date" name="quoteDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <QuoteDateFields initialDate={today} />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block">
@@ -171,7 +182,6 @@ function QuoteForm({ services }: { services: ServiceRow[] }) {
               ))}
             </select>
           </label>
-          <Field label="Valid until" name="validUntil" type="date" />
         </div>
         <label className="block">
           <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">Description</span>
@@ -191,7 +201,7 @@ function QuoteForm({ services }: { services: ServiceRow[] }) {
   );
 }
 
-function QuoteCard({ quote }: { quote: QuoteRow }) {
+function QuoteCard({ quote, senderName }: { quote: QuoteRow; senderName: string }) {
   const firstItem = quote.quote_line_items[0];
   const totalPence = quote.quote_line_items.reduce(
     (total, item) => total + Math.round(Number(item.quantity) * Number(item.unit_price) * 100),
@@ -219,12 +229,20 @@ function QuoteCard({ quote }: { quote: QuoteRow }) {
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <a href={`/api/quotes/${quote.id}/pdf`} className={secondaryButtonCls}>PDF</a>
+        <QuoteEmailButton
+          quoteId={quote.id}
+          clientName={quote.clients?.name ?? ""}
+          quoteNumber={quote.number}
+          amount={formatPounds(totalPence)}
+          validUntil={quote.valid_until ? formatQuoteDate(quote.valid_until) : ""}
+          senderName={senderName}
+        />
         <Link href={invoiceHref} className={secondaryButtonCls}>Convert to invoice</Link>
         {(["sent", "accepted", "declined"] as const).map((status) => (
           <form action={setQuoteStatus} key={status}>
             <input type="hidden" name="quoteId" value={quote.id} />
             <button name="status" value={status} className={secondaryButtonCls}>
-              {status}
+              Mark {status}
             </button>
           </form>
         ))}

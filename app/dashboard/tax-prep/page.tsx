@@ -196,13 +196,22 @@ export default async function TaxPrepPage({
               <EstimateTile label="Payment on account estimate prompt" value={formatPounds(taxEstimate.paymentOnAccountPence)} />
             </div>
           </div>
-          <a
-            href={`/api/tax-prep/export?taxYearStart=${selectedTaxYearStart}`}
-            data-testid="tax-prep-export-pack-link"
-            className="mt-5 inline-flex h-10 items-center rounded-lg bg-[#15803d] px-4 text-sm font-semibold text-white transition hover:bg-[#14532d]"
-          >
-            Export tax prep pack
-          </a>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <a
+              href={`/api/tax-prep/export?taxYearStart=${selectedTaxYearStart}`}
+              data-testid="tax-prep-export-pack-link"
+              className="inline-flex h-10 items-center rounded-lg bg-[#15803d] px-4 text-sm font-semibold text-white transition hover:bg-[#14532d]"
+            >
+              Export tax prep pack (CSV)
+            </a>
+            <a
+              href={`/api/tax-prep/export?taxYearStart=${selectedTaxYearStart}&format=txt`}
+              data-testid="tax-prep-export-text-link"
+              className="inline-flex h-10 items-center rounded-lg border border-[#bbf7d0] bg-white px-4 text-sm font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
+            >
+              Export text summary
+            </a>
+          </div>
         </section>
 
         <section className="rounded-xl border border-[#bbf7d0] bg-white shadow-sm">

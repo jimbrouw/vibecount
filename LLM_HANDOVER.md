@@ -1,6 +1,6 @@
 # VibeCount LLM Coder Handover
 
-Last updated: 2026-06-01 (session 4 — all bugs fixed, PR open)
+Last updated: 2026-06-01 (session 5 — Supabase migration verified applied)
 
 ## Start Here
 
@@ -156,14 +156,13 @@ All features below are on branch `claude/vibecount-ai-agents`.
 - Add `/api/reminders/due` — `0 8 * * *` (08:00 daily)
 - Add `/api/invoices/repeating/run` — `0 7 * * *` (07:00 daily)
 
-### 2. New migration must be applied before deploying ⚠️
+### 2. Quote/proposal PDF migration applied ✅
 
-`supabase/migrations/20260601000000_quote_proposal_pdf_storage.sql` adds `pdf_path` to quotes and proposals tables. Apply before deploying this branch.
+`supabase/migrations/20260601000000_quote_proposal_pdf_storage.sql` has been applied to production Supabase.
 
-```bash
-SUPABASE_ACCESS_TOKEN=sbp_c3c04e9d2f1b228413c9f3cbe3627de3fbf360fe \
-  supabase db push --project-ref lazorvlkgxgzdgflzhjm
-```
+Verified on 2026-06-01:
+- `supabase migration list --linked` shows `20260601000000` on both Local and Remote.
+- `supabase db query --linked` confirms `public.quotes.pdf_path` and `public.proposals.pdf_path` both exist as `text`.
 
 Previously fixed (commit `4295cea`):
 - ~~idempotency_key bug in draft-record and draft-invoice MCP tools~~
@@ -192,13 +191,16 @@ All of the following have been applied to `lazorvlkgxgzdgflzhjm`:
 - `20260530140000_agent_sessions.sql`
 - `20260531000000_client_details.sql`
 - `20260531010000_invoice_pdf_storage.sql`
+- `20260601000000_quote_proposal_pdf_storage.sql`
 
-To apply a migration to production:
+To check/apply future migrations, use an authenticated Supabase CLI session:
 
 ```bash
-SUPABASE_ACCESS_TOKEN=sbp_c3c04e9d2f1b228413c9f3cbe3627de3fbf360fe \
-  supabase db push --project-ref lazorvlkgxgzdgflzhjm
+supabase migration list --linked
+supabase db push --linked
 ```
+
+Do not paste long-lived Supabase access tokens into this handover, chat, or commits. If a token has already been exposed, rotate it in Supabase.
 
 ---
 
@@ -224,7 +226,7 @@ These must exist in Vercel (Production + Preview + Development):
 
 ### Before merging PR
 
-1. Apply migration to production Supabase (see Known Issues #2)
+1. Resolve the Phase 4 boundary decision before merging: either revise `AGENTS.md`/handover docs to allow this scoped Phase 4 PR, or split Phase 2/3 hardening from Phase 4 MCP work.
 2. Merge PR #3: https://github.com/jimbrouw/vibecount/pull/3
 
 ### User todos (owner: Jim)
@@ -239,7 +241,7 @@ These must exist in Vercel (Production + Preview + Development):
 
 - `claude/vibecount-ai-agents` needs PR → `codex/phase-3-invoice-reminders` or `main`
 - Run `npm run lint && npm test && npm run build` before creating PR
-- Apply any outstanding migrations to production Supabase after merge
+- Check for outstanding migrations after merge with `supabase migration list --linked`
 
 ---
 
@@ -288,22 +290,27 @@ All code fixes are done. PR #3 is open:
 https://github.com/jimbrouw/vibecount/pull/3
 
 Before merging:
-1. Apply the new migration to production Supabase:
-   SUPABASE_ACCESS_TOKEN=sbp_c3c04e9d2f1b228413c9f3cbe3627de3fbf360fe \
-     supabase db push --project-ref lazorvlkgxgzdgflzhjm
+1. Resolve the Phase 4 boundary decision:
+   - either revise AGENTS.md/HANDOVER.md/tasks.md to allow the scoped Phase 4 MCP work in this PR, or
+   - split Phase 2/3 hardening from Phase 4 MCP work.
 
-2. Smoke-test key flows after deployment:
+2. Supabase migration status is already verified:
+   - 20260601000000_quote_proposal_pdf_storage.sql is applied remotely
+   - public.quotes.pdf_path exists as text
+   - public.proposals.pdf_path exists as text
+
+3. Smoke-test key flows after deployment:
    - Create an invoice → PDF backs up → Download PDF and Email invoice both appear
    - Click Email invoice on an old invoice (no pdf_path) → generates on demand → mailto opens
    - Voice invoice with a company client name → CH suggestions appear → address pre-fills in typed preview
    - Download a quote PDF → no error, pdf_path saved on row
    - Agent settings → generate token → audit log shows the action
 
-3. Set up 2 Vercel crons in the dashboard (Hobby plan, manual setup):
+4. Set up 2 Vercel crons in the dashboard (Hobby plan, manual setup):
    /api/reminders/due          →  0 8 * * *
    /api/invoices/repeating/run →  0 7 * * *
 
-4. Confirm Vercel env vars are set: RESEND_API_KEY, RESEND_FROM_EMAIL, ANTHROPIC_API_KEY, CRON_SECRET
+5. Confirm Vercel env vars are set: RESEND_API_KEY, RESEND_FROM_EMAIL, ANTHROPIC_API_KEY, CRON_SECRET
 
 Jim still owns:
 - Companies House API key (developer.companieshouse.gov.uk → Settings → Client intelligence)

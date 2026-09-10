@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { redactBankDetailsForPrompt } from "@/lib/ai/redaction";
 
 export const runtime = "nodejs";
 
@@ -61,7 +62,7 @@ export async function GET() {
   const expenseCatList = expenseCategories.map((c) => `  - id: "${c.id}", name: "${c.name}"`).join("\n");
 
   const recordList = typedRecords
-    .map((r, i) => `${i + 1}. id: "${r.id}" | type: ${r.record_type} | description: "${r.description}" | £${Number(r.amount).toFixed(2)}`)
+    .map((r, i) => `${i + 1}. id: "${r.id}" | type: ${r.record_type} | description: "${redactBankDetailsForPrompt(r.description)}" | £${Number(r.amount).toFixed(2)}`)
     .join("\n");
 
   const prompt = `You are categorising financial records for a UK freelancer.
@@ -121,7 +122,7 @@ Reply with ONLY a raw valid JSON array, no markdown, no code fences. One object 
 
     suggestions.push({
       recordId: record.id,
-      description: record.description,
+      description: redactBankDetailsForPrompt(record.description),
       amount: Number(record.amount),
       recordType: record.record_type,
       categoryId: category.id,

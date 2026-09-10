@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { amountToWords, formatPounds } from "@/lib/invoices/money";
+import { calculateLateInterest } from "@/lib/invoices/interest";
 import {
   disableInvoiceReminders,
   discardReminderDraft,
@@ -13,6 +14,8 @@ import {
 import LogoutButton from "./LogoutButton";
 import PlainLanguageNote from "./PlainLanguageNote";
 import EmailInvoiceButton from "./EmailInvoiceButton";
+import ChaseInvoiceButton from "./ChaseInvoiceButton";
+import DeleteInvoiceButton from "./DeleteInvoiceButton";
 
 export const metadata = {
   title: "Dashboard — VibeCount",
@@ -72,7 +75,7 @@ export default async function DashboardPage({
   // Check if settings exist to decide onboarding state
   const { data: settingsRow } = await supabase
     .from("user_settings")
-    .select("legal_name, payment_link_url")
+    .select("legal_name, payment_link_url, tax_pot_percentage, statutory_interest_rate")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -81,7 +84,12 @@ export default async function DashboardPage({
   const resolvedSearchParams = await searchParams;
   const flash = flashMessage(resolvedSearchParams);
 
-  const [{ data: recentInvoices }, { data: reminderDrafts }, { data: readinessCheck }] = await Promise.all([
+  const [
+    { data: recentInvoices },
+    { data: reminderDrafts },
+    { data: readinessCheck },
+    { data: allInvoices },
+  ] = await Promise.all([
     supabase
       .from("invoices")
       .select(
@@ -105,10 +113,54 @@ export default async function DashboardPage({
       .order("checked_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    supabase
+      .from("invoices")
+      .select("amount, paid_at, status, delivery_status")
+      .eq("user_id", user.id),
   ]);
 
-  const invoices = (recentInvoices ?? []) as unknown as DashboardInvoice[];
+  let totalInvoiced = 0;
+  let totalPaid = 0;
+  let totalOutstanding = 0;
+
+  (allInvoices || []).forEach((inv) => {
+    if (inv.status !== "draft") {
+      const amount = Math.round(Number(inv.amount) * 100);
+      totalInvoiced += amount;
+      if (inv.paid_at || inv.delivery_status === "paid") {
+        totalPaid += amount;
+      } else {
+        totalOutstanding += amount;
+      }
+    }
+  });
+
+  const taxPotPercentage = settingsRow?.tax_pot_percentage ?? 27.00;
+  const taxPotEstimate = Math.round(totalPaid * (taxPotPercentage / 100));
+  const statutoryInterestRate = settingsRow?.statutory_interest_rate ?? 13.25;
+
+  const rawInvoices = (recentInvoices ?? []) as unknown as DashboardInvoice[];
+  const THIRTY_DAYS_SECONDS = 60 * 60 * 24 * 30;
+  const invoices = await Promise.all(
+    rawInvoices.map(async (inv) => {
+      let pdfShareUrl = "";
+      if (inv.pdf_path) {
+        const { data } = await supabase.storage
+          .from("invoices")
+          .createSignedUrl(inv.pdf_path, THIRTY_DAYS_SECONDS);
+        pdfShareUrl = data?.signedUrl ?? "";
+      }
+      return {
+        ...inv,
+        pdfShareUrl,
+      };
+    })
+  );
   const reminders = (reminderDrafts ?? []) as ReminderDraft[];
+  const showReminderHelp =
+    Boolean(resolvedSearchParams.reminders) ||
+    Boolean(resolvedSearchParams.remindersEnabled) ||
+    reminders.length > 0;
 
   return (
     <main className="min-h-screen bg-[#f0fdf4]">
@@ -232,6 +284,22 @@ export default async function DashboardPage({
                   />
                 </svg>
               </Link>
+              <Link
+                href="/dashboard/settings#pdf-branding"
+                data-testid="dashboard-pdf-branding-setup-link"
+                className="ml-4 mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#15803d] underline decoration-[#86efac] underline-offset-2 transition hover:text-[#14532d]"
+              >
+                Make PDFs look like your brand
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path
+                    d="M2 6h8M7 3l3 3-3 3"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </Link>
             </div>
           </div>
         )}
@@ -252,6 +320,45 @@ export default async function DashboardPage({
             </div>
           </div>
         )}
+
+        {/* Home totals */}
+        <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl border border-[#bbf7d0] bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
+              Total Invoiced
+            </p>
+            <p className="mt-2 text-xl font-semibold text-[#14532d]">
+              {formatPounds(totalInvoiced)}
+            </p>
+          </div>
+          <div className="rounded-xl border border-[#bbf7d0] bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
+              Total Paid
+            </p>
+            <p className="mt-2 text-xl font-semibold text-[#14532d]">
+              {formatPounds(totalPaid)}
+            </p>
+          </div>
+          <div className="rounded-xl border border-[#bbf7d0] bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
+              Outstanding
+            </p>
+            <p className="mt-2 text-xl font-semibold text-[#14532d]">
+              {formatPounds(totalOutstanding)}
+            </p>
+          </div>
+          <div className="rounded-xl border border-[#dcfce7] bg-[#f7fef9] p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
+              Tax Pot Nudge
+            </p>
+            <p className="mt-2 text-xl font-semibold text-[#14532d]">
+              {formatPounds(taxPotEstimate)}
+            </p>
+            <p className="mt-1 text-xs text-[#4b8068]">
+              {taxPotPercentage}% of paid invoices
+            </p>
+          </div>
+        </section>
 
         {/* Hero action */}
         <div className="mb-8 flex items-center justify-between">
@@ -319,56 +426,68 @@ export default async function DashboardPage({
           </p>
         ) : null}
 
-        {reminders.length > 0 ? (
-          <section className="mb-6 rounded-xl border border-[#fef9c3] bg-white p-5 shadow-sm" data-testid="pending-reminders-section">
+        {showReminderHelp ? (
+          <section
+            id="payment-reminders"
+            className="mb-6 rounded-xl border border-[#fef9c3] bg-white p-5 shadow-sm"
+            data-testid="payment-reminders-section"
+          >
             <h2 className="text-base font-semibold text-[#713f12]">
-              Payment reminders awaiting your approval
+              Payment reminders
             </h2>
             <p className="mt-1 text-sm leading-6 text-[#854d0e]">
-              Review each draft below. Send it yourself or discard it — VibeCount
-              never emails your clients without your explicit approval.
+              Scheduling reminders does not email the client now. VibeCount creates a
+              draft when a reminder becomes due, then you review and press Send reminder.
             </p>
-            <div className="mt-4 space-y-3">
-              {reminders.map((reminder) => (
-                <div key={reminder.id} className="rounded-lg border border-[#fef08a] bg-[#fefce8] p-4" data-testid={`pending-reminder-${reminder.id}`}>
-                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-[#713f12]">{reminder.subject}</p>
-                      <p className="mt-1 text-xs text-[#854d0e]">
-                        To: {reminder.recipient_email} · Drafted {formatDateTime(reminder.created_at)}
-                      </p>
+            {reminders.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                {reminders.map((reminder) => (
+                  <div key={reminder.id} className="rounded-lg border border-[#fef08a] bg-[#fefce8] p-4" data-testid={`pending-reminder-${reminder.id}`}>
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-[#713f12]">{reminder.subject}</p>
+                        <p className="mt-1 text-xs text-[#854d0e]">
+                          To: {reminder.recipient_email} · Drafted {formatDateTime(reminder.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="mt-3 whitespace-pre-wrap text-xs leading-5 text-[#713f12]">
+                      {reminder.message}
+                    </p>
+                    <div className="mt-4 flex gap-2">
+                      <form action={sendApprovedReminder} data-testid={`send-reminder-form-${reminder.id}`}>
+                        <input type="hidden" name="reminderId" value={reminder.id} />
+                        <input type="hidden" name="redirectTo" value="/dashboard?reminders=1" />
+                        <button
+                          type="submit"
+                          data-testid={`send-reminder-button-${reminder.id}`}
+                          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#15803d] px-4 text-xs font-semibold text-white transition hover:bg-[#14532d]"
+                        >
+                          Send reminder
+                        </button>
+                      </form>
+                      <form action={discardReminderDraft} data-testid={`discard-reminder-form-${reminder.id}`}>
+                        <input type="hidden" name="reminderId" value={reminder.id} />
+                        <input type="hidden" name="redirectTo" value="/dashboard?reminders=1" />
+                        <button
+                          type="submit"
+                          data-testid={`discard-reminder-button-${reminder.id}`}
+                          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#fef08a] bg-white px-4 text-xs font-semibold text-[#713f12] transition hover:bg-[#fefce8]"
+                        >
+                          Discard
+                        </button>
+                      </form>
                     </div>
                   </div>
-                  <p className="mt-3 whitespace-pre-wrap text-xs leading-5 text-[#713f12]">
-                    {reminder.message}
-                  </p>
-                  <div className="mt-4 flex gap-2">
-                    <form action={sendApprovedReminder} data-testid={`send-reminder-form-${reminder.id}`}>
-                      <input type="hidden" name="reminderId" value={reminder.id} />
-                      <input type="hidden" name="redirectTo" value="/dashboard" />
-                      <button
-                        type="submit"
-                        data-testid={`send-reminder-button-${reminder.id}`}
-                        className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#15803d] px-4 text-xs font-semibold text-white transition hover:bg-[#14532d]"
-                      >
-                        Send reminder
-                      </button>
-                    </form>
-                    <form action={discardReminderDraft} data-testid={`discard-reminder-form-${reminder.id}`}>
-                      <input type="hidden" name="reminderId" value={reminder.id} />
-                      <input type="hidden" name="redirectTo" value="/dashboard" />
-                      <button
-                        type="submit"
-                        data-testid={`discard-reminder-button-${reminder.id}`}
-                        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#fef08a] bg-white px-4 text-xs font-semibold text-[#713f12] transition hover:bg-[#fefce8]"
-                      >
-                        Discard
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-4 rounded-lg border border-[#fef08a] bg-[#fefce8] px-4 py-3 text-sm leading-6 text-[#713f12]">
+                No reminder drafts need approval yet. Scheduled invoices show a “Next reminder
+                draft” date below; when that date arrives, a draft will appear here for you to send
+                or discard.
+              </p>
+            )}
           </section>
         ) : null}
 
@@ -383,6 +502,8 @@ export default async function DashboardPage({
             <ul>
               {invoices.map((inv, idx) => {
                 const client = dashboardClient(inv.clients);
+                const amountPence = Math.round(Number(inv.amount) * 100);
+                const lateInterest = (!inv.paid_at && inv.due_date) ? calculateLateInterest(amountPence, inv.due_date, statutoryInterestRate) : null;
                 return (
                 <li
                   key={inv.id}
@@ -403,31 +524,54 @@ export default async function DashboardPage({
                         <StatusPill invoice={inv} />
                         {inv.reminder_enabled ? (
                           <span className="rounded-full bg-[#fef9c3] px-2 py-0.5 text-xs font-medium text-[#854d0e]">
-                            Reminder {inv.next_reminder_at ? formatDateTime(inv.next_reminder_at) : "on"}
+                            Next reminder draft {inv.next_reminder_at ? formatDateTime(inv.next_reminder_at) : "on"}
+                          </span>
+                        ) : null}
+                        {lateInterest ? (
+                          <span className="rounded-full bg-[#fee2e2] px-2 py-0.5 text-xs font-medium text-[#991b1b]">
+                            {lateInterest.daysOverdue} days overdue · {formatPounds(lateInterest.totalLateFeePence)} fee
                           </span>
                         ) : null}
                       </div>
                     </div>
                     <div className="lg:text-right">
                       <p className="text-sm font-semibold text-[#14532d]">
-                        {formatPounds(Math.round(Number(inv.amount) * 100))}
+                        {formatPounds(amountPence)}
                       </p>
                       <p className="mt-0.5 text-xs text-[#4b8068]">
-                        {amountToWords(Math.round(Number(inv.amount) * 100))}
+                        {amountToWords(amountPence)}
                       </p>
+                      {lateInterest ? (
+                        <p className="mt-1 text-xs text-[#991b1b] font-medium">
+                          + {formatPounds(lateInterest.totalLateFeePence)} statutory interest & fee
+                        </p>
+                      ) : null}
                     </div>
                   </div>
 
-                  {inv.pdf_path && (
-                    <div className="mt-3 flex flex-wrap items-center gap-3">
-                      <a
-                        href={`/api/invoices/download?id=${inv.id}`}
-                        data-testid={`dashboard-invoice-download-${inv.id}`}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#15803d] underline decoration-[#86efac] underline-offset-2 transition hover:text-[#14532d]"
-                      >
-                        Download PDF
-                      </a>
-                      <EmailInvoiceButton
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <a
+                      href={`/api/invoices/download?id=${inv.id}`}
+                      data-testid={`dashboard-invoice-download-${inv.id}`}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#bbf7d0] bg-white px-3 text-xs font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
+                    >
+                      Download PDF
+                    </a>
+                    <EmailInvoiceButton
+                      invoiceId={inv.id}
+                      invoiceNumber={inv.number}
+                      clientName={dashboardClient(inv.clients)?.name ?? ""}
+                      clientEmail={dashboardClient(inv.clients)?.email ?? ""}
+                      amountPence={Math.round(Number(inv.amount) * 100)}
+                      dueDate={inv.due_date}
+                      paymentTerms={inv.payment_terms}
+                      senderName={settingsRow?.legal_name ?? ""}
+                      paymentLinkUrl={settingsRow?.payment_link_url ?? ""}
+                      hasPdf
+                      pdfShareUrl={(inv as any).pdfShareUrl}
+                    />
+                    {lateInterest && lateInterest.daysOverdue > 0 && (
+                      <ChaseInvoiceButton
                         invoiceId={inv.id}
                         invoiceNumber={inv.number}
                         clientName={dashboardClient(inv.clients)?.name ?? ""}
@@ -437,17 +581,28 @@ export default async function DashboardPage({
                         paymentTerms={inv.payment_terms}
                         senderName={settingsRow?.legal_name ?? ""}
                         paymentLinkUrl={settingsRow?.payment_link_url ?? ""}
-                        hasPdf={!!inv.pdf_path}
+                        hasPdf
+                        pdfShareUrl={(inv as any).pdfShareUrl}
+                        daysOverdue={lateInterest.daysOverdue}
+                        lateFeePence={lateInterest.totalLateFeePence}
                       />
-                    </div>
-                  )}
+                    )}
+                    <Link
+                      href={`/dashboard/invoices/edit?id=${inv.id}`}
+                      data-testid={`dashboard-invoice-edit-${inv.id}`}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#bbf7d0] bg-white px-3 text-xs font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
+                    >
+                      Edit
+                    </Link>
+                    <DeleteInvoiceButton invoiceId={inv.id} />
+                  </div>
 
                   {inv.status === "finalised" ? (
                     <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                       {!inv.sent_at && !inv.paid_at ? (
                         <form action={markInvoiceSent} className="flex gap-2" data-testid={`dashboard-invoice-mark-sent-form-${inv.id}`}>
                           <input type="hidden" name="invoiceId" value={inv.id} />
-                          <input type="hidden" name="redirectTo" value="/dashboard" />
+                          <input type="hidden" name="redirectTo" value="/dashboard?reminders=1" />
                           <input
                             name="clientEmail"
                             data-testid={`dashboard-invoice-client-email-input-${inv.id}`}
@@ -480,7 +635,7 @@ export default async function DashboardPage({
                             placeholder="client@example.com"
                             className="min-w-0 flex-1 rounded-lg border border-[#bbf7d0] px-3 text-xs text-[#14532d] outline-none focus:border-[#15803d]"
                           />
-                          <button data-testid={`dashboard-invoice-enable-reminders-button-${inv.id}`} className={smallOutlineButtonCls}>Draft reminder</button>
+                          <button data-testid={`dashboard-invoice-enable-reminders-button-${inv.id}`} className={smallOutlineButtonCls}>Schedule reminders</button>
                         </form>
                       ) : null}
 
@@ -499,11 +654,56 @@ export default async function DashboardPage({
             </ul>
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-[#bbf7d0] bg-white p-10 text-center">
-            <p className="text-sm text-[#4b8068]">No invoices yet.</p>
-            <p className="mt-1 text-xs text-[#86a88e]">
-              Create your first one above.
-            </p>
+          <div
+            className="rounded-xl border border-dashed border-[#bbf7d0] bg-white p-6 sm:p-8"
+            data-testid="dashboard-first-run-empty-state"
+          >
+            <div className="mx-auto max-w-xl">
+              <p className="text-base font-semibold text-[#14532d]">
+                Start with one small invoice
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[#4b8068]">
+                You do not need to set up everything first. Add your details,
+                create a draft, then check the figures and words before you
+                download or send anything.
+              </p>
+              <ol className="mt-5 grid gap-3 text-sm text-[#14532d] sm:grid-cols-3">
+                <li className="rounded-lg border border-[#bbf7d0] bg-[#f7fef9] p-4">
+                  <span className="block text-xs font-semibold uppercase tracking-widest text-[#166534]">
+                    Step 1
+                  </span>
+                  <span className="mt-1 block">Add your invoice details.</span>
+                </li>
+                <li className="rounded-lg border border-[#bbf7d0] bg-[#f7fef9] p-4">
+                  <span className="block text-xs font-semibold uppercase tracking-widest text-[#166534]">
+                    Step 2
+                  </span>
+                  <span className="mt-1 block">Create a draft invoice.</span>
+                </li>
+                <li className="rounded-lg border border-[#bbf7d0] bg-[#f7fef9] p-4">
+                  <span className="block text-xs font-semibold uppercase tracking-widest text-[#166534]">
+                    Step 3
+                  </span>
+                  <span className="mt-1 block">Read it back before sending.</span>
+                </li>
+              </ol>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link
+                  href="/dashboard/settings"
+                  data-testid="dashboard-empty-state-settings-link"
+                  className="inline-flex h-10 items-center rounded-xl border border-[#bbf7d0] bg-white px-4 text-sm font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
+                >
+                  Add my details
+                </Link>
+                <Link
+                  href="/dashboard/invoices/new"
+                  data-testid="dashboard-empty-state-new-invoice-link"
+                  className="inline-flex h-10 items-center rounded-xl bg-[#15803d] px-4 text-sm font-semibold text-white transition hover:bg-[#14532d]"
+                >
+                  Create invoice
+                </Link>
+              </div>
+            </div>
           </div>
         )}
 
@@ -706,9 +906,10 @@ function flashMessage(searchParams: { [key: string]: string | string[] | undefin
   if (error) return { kind: "error", text: error };
   if (searchParams.invoiceSent) return { kind: "success", text: "Invoice marked as sent." };
   if (searchParams.invoicePaid) return { kind: "success", text: "Invoice marked as paid." };
-  if (searchParams.remindersEnabled) return { kind: "success", text: "Reminder drafts enabled." };
+  if (searchParams.remindersEnabled) return { kind: "success", text: "Payment reminders scheduled. No email has been sent. A draft will appear here when it is due for your approval." };
   if (searchParams.remindersDisabled) return { kind: "success", text: "Automatic reminders stopped." };
   if (searchParams.reminderSent) return { kind: "success", text: "Reminder sent to client." };
+  if (searchParams.invoiceDeleted) return { kind: "success", text: "Invoice deleted successfully." };
   if (searchParams.proposalConverted) return { kind: "success", text: "Invoice created from proposal." };
   if (searchParams.reminderDiscarded) return { kind: "success", text: "Reminder draft discarded." };
   return null;

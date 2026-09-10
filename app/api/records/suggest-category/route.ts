@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { redactBankDetailsForPrompt } from "@/lib/ai/redaction";
 
 export const runtime = "nodejs";
 
@@ -63,7 +64,7 @@ ${categoryList}
 
 Record to categorise:
 - Type: ${typedRecord.record_type}
-- Description: ${typedRecord.description}
+- Description: ${redactBankDetailsForPrompt(typedRecord.description)}
 - Amount: £${Number(typedRecord.amount).toFixed(2)}
 
 Choose the best matching category from the list above. Reply with ONLY raw valid JSON — no markdown, no code fences:

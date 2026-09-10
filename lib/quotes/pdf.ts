@@ -1,5 +1,10 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { amountToWords, formatPounds } from "@/lib/invoices/money";
+import {
+  drawPdfBrandHeader,
+  drawWrappedPdfText,
+  type PdfBranding,
+} from "@/lib/pdf/branding";
 
 export type QuotePdfData = {
   number: string;
@@ -16,13 +21,8 @@ export type QuotePdfData = {
     quantity: number;
     unitPricePence: number;
   }[];
+  branding?: PdfBranding;
 };
-
-const INK = rgb(0.1, 0.23, 0.16);
-const MUTED = rgb(0.29, 0.42, 0.35);
-const RULE = rgb(0.85, 0.82, 0.78);
-const CREAM = rgb(0.96, 0.94, 0.91);
-const PALE_GREEN = rgb(0.91, 0.94, 0.92);
 
 export async function createQuotePdf(data: QuotePdfData) {
   const pdf = await PDFDocument.create();
@@ -32,75 +32,62 @@ export async function createQuotePdf(data: QuotePdfData) {
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
   page.drawRectangle({ x: 0, y: 0, width, height, color: rgb(1, 1, 1) });
-  page.drawRectangle({ x: 0, y: height - 100, width, height: 100, color: CREAM });
-  page.drawText(data.freelancerName || "VibeCount", {
-    x: 48,
-    y: height - 58,
-    size: 16,
-    font: bold,
-    color: INK,
-  });
-  page.drawText("QUOTE", {
-    x: width - 135,
-    y: height - 52,
-    size: 22,
-    font: bold,
-    color: INK,
+  const { palette } = await drawPdfBrandHeader({
+    pdf,
+    page,
+    bold,
+    brandName: data.freelancerName || "VibeCount",
+    documentLabel: "QUOTE",
+    branding: data.branding,
   });
 
   let y = height - 132;
-  page.drawText("Quote number", { x: 48, y, size: 8, font: bold, color: MUTED });
-  page.drawText(data.number, { x: 48, y: y - 14, size: 11, font: bold, color: INK });
-  page.drawText("Date", { x: 200, y, size: 8, font: bold, color: MUTED });
-  page.drawText(formatDate(data.quoteDate), { x: 200, y: y - 14, size: 11, font, color: INK });
+  page.drawText("Quote number", { x: 48, y, size: 8, font: bold, color: palette.muted });
+  page.drawText(data.number, { x: 48, y: y - 14, size: 11, font: bold, color: palette.primary });
+  page.drawText("Date", { x: 200, y, size: 8, font: bold, color: palette.muted });
+  page.drawText(formatDate(data.quoteDate), { x: 200, y: y - 14, size: 11, font, color: palette.ink });
   if (data.validUntil) {
-    page.drawText("Valid until", { x: 320, y, size: 8, font: bold, color: MUTED });
-    page.drawText(formatDate(data.validUntil), { x: 320, y: y - 14, size: 11, font, color: INK });
+    page.drawText("Valid until", { x: 320, y, size: 8, font: bold, color: palette.muted });
+    page.drawText(formatDate(data.validUntil), { x: 320, y: y - 14, size: 11, font, color: palette.ink });
   }
 
   y -= 64;
-  page.drawLine({ start: { x: 48, y: y + 12 }, end: { x: width - 48, y: y + 12 }, thickness: 0.5, color: RULE });
-  page.drawText("From", { x: 48, y, size: 8, font: bold, color: MUTED });
-  page.drawText(data.freelancerName || data.freelancerEmail || "Your business", {
-    x: 48,
-    y: y - 14,
-    size: 10,
-    font: bold,
-    color: INK,
-  });
-  page.drawText("To", { x: 320, y, size: 8, font: bold, color: MUTED });
-  page.drawText(data.clientName, { x: 320, y: y - 14, size: 12, font: bold, color: INK });
+  page.drawLine({ start: { x: 48, y: y + 12 }, end: { x: width - 48, y: y + 12 }, thickness: 0.5, color: palette.primary });
+  page.drawText("From", { x: 48, y, size: 8, font: bold, color: palette.muted });
+  drawWrappedPdfText(data.freelancerName || data.freelancerEmail || "Your business", 48, y - 14, 220, 10, page, bold, palette.primary, 2);
+  page.drawText("To", { x: 320, y, size: 8, font: bold, color: palette.muted });
+  drawWrappedPdfText(data.clientName, 320, y - 14, 220, 12, page, bold, palette.primary, 2);
 
   y -= 74;
-  page.drawLine({ start: { x: 48, y: y + 12 }, end: { x: width - 48, y: y + 12 }, thickness: 0.5, color: RULE });
-  page.drawText("Description", { x: 48, y, size: 8, font: bold, color: MUTED });
-  page.drawText("Qty", { x: width - 190, y, size: 8, font: bold, color: MUTED });
-  page.drawText("Amount", { x: width - 130, y, size: 8, font: bold, color: MUTED });
+  page.drawLine({ start: { x: 48, y: y + 12 }, end: { x: width - 48, y: y + 12 }, thickness: 0.5, color: palette.primary });
+  page.drawText("Description", { x: 48, y, size: 8, font: bold, color: palette.muted });
+  page.drawText("Qty", { x: width - 190, y, size: 8, font: bold, color: palette.muted });
+  page.drawText("Amount", { x: width - 130, y, size: 8, font: bold, color: palette.muted });
   y -= 20;
 
   const totalPence = data.items.reduce((total, item) => {
     const lineTotal = Math.round(item.quantity * item.unitPricePence);
-    page.drawText(item.description, { x: 48, y, size: 10, font, color: INK });
-    page.drawText(String(item.quantity), { x: width - 190, y, size: 10, font, color: INK });
-    page.drawText(formatPounds(lineTotal), { x: width - 130, y, size: 10, font: bold, color: INK });
+    drawWrappedPdfText(item.description, 48, y, 330, 10, page, font, palette.ink, 2);
+    page.drawText(String(item.quantity), { x: width - 190, y, size: 10, font, color: palette.ink });
+    page.drawText(formatPounds(lineTotal), { x: width - 130, y, size: 10, font: bold, color: palette.primary });
     y -= 22;
     return total + lineTotal;
   }, 0);
 
   y -= 10;
-  page.drawLine({ start: { x: 48, y: y + 12 }, end: { x: width - 48, y: y + 12 }, thickness: 1, color: INK });
-  page.drawText("Total quote", { x: width - 190, y, size: 10, font: bold, color: INK });
-  page.drawText(formatPounds(totalPence), { x: width - 130, y, size: 16, font: bold, color: INK });
+  page.drawLine({ start: { x: 48, y: y + 12 }, end: { x: width - 48, y: y + 12 }, thickness: 1, color: palette.primary });
+  page.drawText("Total quote", { x: width - 190, y, size: 10, font: bold, color: palette.primary });
+  page.drawText(formatPounds(totalPence), { x: width - 130, y, size: 16, font: bold, color: palette.primary });
 
   y -= 44;
-  page.drawRectangle({ x: 48, y: y - 14, width: width - 96, height: 34, color: PALE_GREEN });
-  page.drawText("Amount in words", { x: 58, y: y + 5, size: 7, font: bold, color: MUTED });
-  page.drawText(capitalise(amountToWords(totalPence)), { x: 58, y: y - 8, size: 9, font, color: INK });
+  page.drawRectangle({ x: 48, y: y - 14, width: width - 96, height: 34, color: palette.accent });
+  page.drawText("Amount in words", { x: 58, y: y + 5, size: 7, font: bold, color: palette.muted });
+  page.drawText(capitalise(amountToWords(totalPence)), { x: 58, y: y - 8, size: 9, font, color: palette.ink });
 
   if (data.notes) {
     y -= 58;
-    page.drawText("Notes", { x: 48, y, size: 8, font: bold, color: MUTED });
-    page.drawText(data.notes.slice(0, 180), { x: 48, y: y - 14, size: 9, font, color: INK });
+    page.drawText("Notes", { x: 48, y, size: 8, font: bold, color: palette.muted });
+    drawWrappedPdfText(data.notes, 48, y - 14, 480, 9, page, font, palette.ink, 3);
   }
 
   page.drawText("Generated by VibeCount — check all details before sending.", {
@@ -108,7 +95,7 @@ export async function createQuotePdf(data: QuotePdfData) {
     y: 44,
     size: 7,
     font,
-    color: MUTED,
+    color: palette.muted,
   });
 
   return pdf.save();

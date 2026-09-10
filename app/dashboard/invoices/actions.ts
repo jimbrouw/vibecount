@@ -103,7 +103,7 @@ export async function enableInvoiceReminders(formData: FormData) {
 
   if (error) redirect(`${redirectTo}?error=${encodeURIComponent("Could not enable reminders.")}`);
   revalidatePath("/dashboard");
-  redirect(`${redirectTo}?remindersEnabled=1`);
+  redirect(addRedirectParam(redirectTo, "remindersEnabled", "1"));
 }
 
 export async function disableInvoiceReminders(formData: FormData) {
@@ -268,6 +268,32 @@ export async function discardReminderDraft(formData: FormData) {
   redirect(`${redirectTo}?reminderDiscarded=1`);
 }
 
+export async function deleteInvoice(formData: FormData) {
+  const { supabase, userId } = await requireUser();
+  const invoiceId = String(formData.get("invoiceId") ?? "");
+  const redirectTo = safeRedirect(String(formData.get("redirectTo") ?? "/dashboard"));
+
+  if (!invoiceId) redirect(`${redirectTo}?error=${encodeURIComponent("Missing invoice ID.")}`);
+
+  const { error } = await supabase
+    .from("invoices")
+    .delete()
+    .eq("id", invoiceId)
+    .eq("user_id", userId);
+
+  if (error) redirect(`${redirectTo}?error=${encodeURIComponent("Could not delete invoice.")}`);
+
+  revalidatePath("/dashboard");
+  redirect(`${redirectTo}?invoiceDeleted=1`);
+}
+
 function safeRedirect(value: string) {
   return value.startsWith("/dashboard") ? value : "/dashboard";
+}
+
+function addRedirectParam(path: string, key: string, value: string) {
+  const [pathname, query = ""] = path.split("?");
+  const params = new URLSearchParams(query);
+  params.set(key, value);
+  return `${pathname}?${params.toString()}`;
 }

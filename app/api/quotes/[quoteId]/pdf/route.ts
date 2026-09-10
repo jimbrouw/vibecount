@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createQuotePdf } from "@/lib/quotes/pdf";
+import { loadPdfBranding } from "@/lib/pdf/settings-branding";
 
 export const runtime = "nodejs";
 
@@ -34,7 +35,7 @@ export async function GET(_request: Request, { params }: Params) {
 
   const { data: settings } = await supabase
     .from("user_settings")
-    .select("legal_name, address, contact_details")
+    .select("legal_name, address, contact_details, pdf_logo_path, pdf_primary_color, pdf_accent_color")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -48,6 +49,7 @@ export async function GET(_request: Request, { params }: Params) {
     freelancerAddress: settings?.address ?? "",
     freelancerContact: settings?.contact_details ?? "",
     notes: quote.notes ?? "",
+    branding: await loadPdfBranding(supabase, settings),
     items: ((quote.quote_line_items ?? []) as {
       description: string;
       quantity: number | string;

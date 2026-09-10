@@ -299,9 +299,9 @@ Vercel now has these variables across Production, Preview, and Development:
 
 | Variable | Value (from `.env.local`) |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `sb_publishable_Oluky7SEjng36pBB0CFMUw_oEwlLlvf` |
-| `ANTHROPIC_API_KEY` | your `sk-ant-api03-...` key — server side only |
-| `NEXT_PUBLIC_POSTHOG_KEY` | `phc_vj8Y8ybvQs2A5zfKgWrfsaEknPNQzWaA82EiSmyJK8zL` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Set in Vercel and local `.env.local`; do not paste literal values into docs. |
+| `ANTHROPIC_API_KEY` | Server side only; do not paste literal values into docs. |
+| `NEXT_PUBLIC_POSTHOG_KEY` | Set in Vercel and local `.env.local`; do not paste literal values into docs. |
 | `NEXT_PUBLIC_POSTHOG_HOST` | `https://app.posthog.com` |
 | `NEXT_PUBLIC_SUPABASE_URL` | `https://lazorvlkgxgzdgflzhjm.supabase.co` |
 

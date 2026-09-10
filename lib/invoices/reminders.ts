@@ -51,20 +51,29 @@ export function buildInvoiceEmailDraft(input: {
   invoiceNumber: string;
   clientName: string;
   amountPence: number;
+  amountWords?: string;
   dueDate: string;
   paymentTerms: string;
   paymentLinkUrl: string;
+  invoiceLinkUrl?: string;
   senderName: string;
 }) {
   const subject = `Invoice ${input.invoiceNumber}`;
   const greeting = input.clientName ? `Hi ${input.clientName},` : "Hi,";
   const signoff = input.senderName || "VibeCount";
+  const amountText = input.amountWords
+    ? `${formatPounds(input.amountPence)} (${input.amountWords})`
+    : formatPounds(input.amountPence);
+  const hasInvoiceLink = Boolean(input.invoiceLinkUrl);
+  const invoiceLine = hasInvoiceLink
+    ? `\n\nDownload invoice: [${input.invoiceNumber}](${input.invoiceLinkUrl})\n(Link valid for 30 days)`
+    : "";
   const paymentLine = input.paymentLinkUrl
     ? `\n\nYou can also pay online here:\n${input.paymentLinkUrl}`
     : "";
   const body = `${greeting}
 
-Please find invoice ${input.invoiceNumber} attached for ${formatPounds(input.amountPence)}.
+Please find invoice ${input.invoiceNumber} for ${amountText}${hasInvoiceLink ? " linked below" : ""}.${invoiceLine}
 
 Payment terms: ${input.paymentTerms}
 Due date: ${formatDisplayDate(input.dueDate)}${paymentLine}

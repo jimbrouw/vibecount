@@ -4,6 +4,7 @@ import { createInvoicePdf } from "@/lib/invoices/pdf";
 import { validateInvoiceInput } from "@/lib/invoices/validation";
 import { normaliseClientName } from "@/lib/invoices/money";
 import { inferDueDate, isValidEmail } from "@/lib/invoices/reminders";
+import { loadPdfBranding } from "@/lib/pdf/settings-branding";
 
 export const runtime = "nodejs";
 
@@ -68,7 +69,7 @@ export async function POST(request: Request) {
   const { data: settings } = await supabase
     .from("user_settings")
     .select(
-      "legal_name, address, contact_details, bank_details, payment_link_provider, payment_link_url, vat_registered, vat_number, vat_rate, invoice_number_prefix, late_payment_wording"
+      "legal_name, address, contact_details, bank_details, payment_link_provider, payment_link_url, vat_registered, vat_number, vat_rate, invoice_number_prefix, late_payment_wording, pdf_logo_path, pdf_primary_color, pdf_accent_color"
     )
     .eq("id", user.id)
     .maybeSingle();
@@ -83,14 +84,38 @@ export async function POST(request: Request) {
   }
 
   const prefix = settings?.invoice_number_prefix?.trim() || "VC";
+  const invoiceId = body?.invoiceId ? String(body.invoiceId).trim() : null;
 
-  const invoice = await createFinalInvoice(supabase, user.id, client.value.id, prefix, {
-    invoiceDate: input.invoiceDate,
-    dueDate,
-    description: input.description,
-    amountPence: input.amountPence + vatPence,
-    paymentTerms: input.paymentTerms,
-  });
+  let invoice;
+  if (invoiceId) {
+    const { data, error } = await supabase
+      .from("invoices")
+      .update({
+        client_id: client.value.id,
+        invoice_date: input.invoiceDate,
+        due_date: dueDate,
+        description: input.description,
+        amount: (input.amountPence + vatPence) / 100,
+        payment_terms: input.paymentTerms,
+      })
+      .eq("id", invoiceId)
+      .eq("user_id", user.id)
+      .select("id, number")
+      .single();
+
+    if (error || !data) {
+      return NextResponse.json({ error: "Could not update the invoice." }, { status: 500 });
+    }
+    invoice = { ok: true as const, value: data };
+  } else {
+    invoice = await createFinalInvoice(supabase, user.id, client.value.id, prefix, {
+      invoiceDate: input.invoiceDate,
+      dueDate,
+      description: input.description,
+      amountPence: input.amountPence + vatPence,
+      paymentTerms: input.paymentTerms,
+    });
+  }
 
   if (!invoice.ok) {
     return NextResponse.json({ error: invoice.error }, { status: 500 });
@@ -116,6 +141,7 @@ export async function POST(request: Request) {
     vatNumber: settings?.vat_number ?? "",
     vatRate: settings?.vat_rate ?? null,
     latePaymentWording: settings?.late_payment_wording ?? "",
+    branding: await loadPdfBranding(supabase, settings),
   });
 
   const filename = `${invoice.value.number}.pdf`;
@@ -175,7 +201,7 @@ async function findOrCreateClient(
   if (existing) {
     const updates: Partial<ClientRow> = {};
     if (clientEmail && existing.email !== clientEmail) updates.email = clientEmail;
-    if (details.address && !existing.address) updates.address = details.address;
+    if (details.address && existing.address !== details.address) updates.address = details.address;
     if (details.company_number && !existing.company_number) updates.company_number = details.company_number;
     if (details.vat_number && !existing.vat_number) updates.vat_number = details.vat_number;
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { redactBankDetailsForPrompt } from "@/lib/ai/redaction";
 
 export const runtime = "nodejs";
 
@@ -105,7 +106,7 @@ function buildReviewPrompt(summary: ReviewSummary): string {
     for (const r of summary.recentRecords) {
       const cat = r.category ?? "Uncategorised";
       lines.push(
-        `  ${r.record_date} | ${r.record_type} | £${(r.amount / 100).toFixed(2)} | ${cat} | ${r.description}`
+        `  ${r.record_date} | ${r.record_type} | £${(r.amount / 100).toFixed(2)} | ${cat} | ${redactBankDetailsForPrompt(r.description)}`
       );
     }
     lines.push("");
@@ -115,7 +116,7 @@ function buildReviewPrompt(summary: ReviewSummary): string {
     lines.push("Invoices sent but not marked paid:");
     for (const inv of summary.overdueInvoices) {
       lines.push(
-        `  Invoice ${inv.number} | ${inv.client} | £${(inv.amount / 100).toFixed(2)} | due ${inv.due_date ?? "unknown"}`
+        `  Invoice ${redactBankDetailsForPrompt(inv.number)} | ${redactBankDetailsForPrompt(inv.client)} | £${(inv.amount / 100).toFixed(2)} | due ${inv.due_date ?? "unknown"}`
       );
     }
     lines.push("");

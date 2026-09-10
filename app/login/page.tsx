@@ -1,22 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import GoogleAuthButton from "@/app/auth/GoogleAuthButton";
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [hideMessage, setHideMessage] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const message = hideMessage ? null : searchParams.get("message");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setHideMessage(true);
 
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -55,6 +59,14 @@ export default function LoginPage() {
           {error && (
             <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-3">
               {error}
+            </p>
+          )}
+          {message && (
+            <p
+              data-testid="login-message"
+              className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-3"
+            >
+              {message}
             </p>
           )}
 
@@ -115,5 +127,13 @@ export default function LoginPage() {
         </p>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

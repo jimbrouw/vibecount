@@ -8,6 +8,7 @@ import {
   moneyToPence,
 } from "@/lib/records/tax-periods";
 import { formatPounds } from "@/lib/invoices/money";
+import { redactBankDetailsForPrompt } from "@/lib/ai/redaction";
 import LogoutButton from "@/app/dashboard/LogoutButton";
 import RecordsReviewAgent from "./RecordsReviewAgent";
 import BatchCategorisePanel from "./BatchCategorisePanel";
@@ -130,17 +131,17 @@ export default async function ReviewPage({
     recentRecords: records.map((r) => ({
       record_type: r.record_type,
       record_date: r.record_date,
-      description: r.description,
+      description: redactBankDetailsForPrompt(r.description),
       amount: moneyToPence(r.amount),
       category: r.record_categories?.name ?? null,
       status: r.status,
     })),
     overdueInvoices: invoices.map((inv) => ({
-      number: inv.number,
+      number: redactBankDetailsForPrompt(inv.number),
       amount: moneyToPence(inv.amount),
       due_date: inv.due_date,
       delivery_status: inv.delivery_status,
-      client: invoiceClient(inv.clients),
+      client: redactBankDetailsForPrompt(invoiceClient(inv.clients)),
     })),
   };
 

@@ -9,6 +9,7 @@ import {
 } from "@/lib/settings";
 
 type Status = "idle" | "loading" | "saving" | "saved" | "error";
+type LogoStatus = "idle" | "uploading" | "deleting" | "error";
 type ContactDetails = {
   email: string;
   phone: string;
@@ -28,7 +29,10 @@ type BankDetails = {
 export default function SettingsForm() {
   const [settings, setSettings] = useState<UserSettings>(EMPTY_SETTINGS);
   const [status, setStatus] = useState<Status>("loading");
+  const [logoStatus, setLogoStatus] = useState<LogoStatus>("idle");
+  const [logoUrl, setLogoUrl] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [logoError, setLogoError] = useState("");
   const savedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -37,6 +41,7 @@ export default function SettingsForm() {
       .then((data) => {
         if (data && !data.error) {
           setSettings((prev) => ({ ...prev, ...data }));
+          setLogoUrl(data.pdf_logo_url ?? "");
         }
         setStatus("idle");
       })
@@ -88,6 +93,47 @@ export default function SettingsForm() {
     setStatus("saved");
     if (savedRef.current) clearTimeout(savedRef.current);
     savedRef.current = setTimeout(() => setStatus("idle"), 3000);
+  }
+
+  async function handleLogoUpload(file: File | null) {
+    if (!file) return;
+    setLogoStatus("uploading");
+    setLogoError("");
+
+    const form = new FormData();
+    form.append("logo", file);
+    const res = await fetch("/api/settings/logo", {
+      method: "POST",
+      body: form,
+    });
+    const body = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      setLogoError(body?.error ?? "Could not upload logo.");
+      setLogoStatus("error");
+      return;
+    }
+
+    setSettings((prev) => ({ ...prev, pdf_logo_path: body.pdf_logo_path ?? "" }));
+    setLogoUrl(body.pdf_logo_url ?? "");
+    setLogoStatus("idle");
+  }
+
+  async function handleLogoDelete() {
+    setLogoStatus("deleting");
+    setLogoError("");
+
+    const res = await fetch("/api/settings/logo", { method: "DELETE" });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      setLogoError(body?.error ?? "Could not remove logo.");
+      setLogoStatus("error");
+      return;
+    }
+
+    setSettings((prev) => ({ ...prev, pdf_logo_path: "" }));
+    setLogoUrl("");
+    setLogoStatus("idle");
   }
 
   if (status === "loading") {
@@ -390,6 +436,121 @@ export default function SettingsForm() {
         </div>
       </fieldset>
 
+      {/* PDF branding */}
+      <fieldset
+        id="pdf-branding"
+        className="scroll-mt-24 rounded-xl border border-[#e5e0d8] bg-white p-6 shadow-sm"
+        data-testid="settings-pdf-branding-section"
+      >
+        <legend className="mb-4 -ml-1 px-1 text-xs font-semibold uppercase tracking-widest text-[#4a6a5a]">
+          PDF branding
+        </legend>
+
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field
+            label="Logo"
+            hint="PNG or JPG, 2MB max. Used on new invoice, quote, and proposal PDFs."
+            id="pdf_logo"
+          >
+            <input
+              id="pdf_logo"
+              data-testid="settings-pdf-logo-input"
+              type="file"
+              accept="image/png,image/jpeg"
+              onChange={(e) => {
+                void handleLogoUpload(e.target.files?.[0] ?? null);
+                e.currentTarget.value = "";
+              }}
+              className={`${inputCls} h-auto py-2 file:mr-3 file:rounded-md file:border-0 file:bg-[#e8f0eb] file:px-3 file:py-2 file:text-sm file:font-medium file:text-[#1a3a2a]`}
+            />
+          </Field>
+          <div>
+            <p className="text-sm font-medium text-[#1a3a2a]">Logo preview</p>
+            <div
+              data-testid="settings-pdf-logo-preview"
+              className="mt-2 flex h-24 items-center justify-center rounded-lg border border-[#d5d0c8] bg-[#f8f6f1] p-3"
+            >
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoUrl} alt="PDF logo preview" className="max-h-full max-w-full object-contain" />
+              ) : (
+                <span className="text-xs text-[#7a9a87]">No logo uploaded</span>
+              )}
+            </div>
+            <button
+              type="button"
+              data-testid="settings-pdf-logo-delete-button"
+              onClick={() => void handleLogoDelete()}
+              disabled={!settings.pdf_logo_path || logoStatus === "deleting"}
+              className="mt-2 text-xs font-semibold text-[#7a271a] underline decoration-[#e0b4a8] underline-offset-4 disabled:cursor-not-allowed disabled:text-[#9a8f89]"
+            >
+              {logoStatus === "deleting" ? "Removing..." : "Remove logo"}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-5 sm:grid-cols-2">
+          <Field label="Primary colour" hint="Used for headings, totals, and rules." id="pdf_primary_color">
+            <div className="flex gap-3">
+              <input
+                aria-label="Primary colour swatch"
+                data-testid="settings-pdf-primary-color-swatch"
+                type="color"
+                value={safeColorValue(settings.pdf_primary_color, EMPTY_SETTINGS.pdf_primary_color)}
+                onChange={(e) => update("pdf_primary_color", e.target.value)}
+                className="h-12 w-14 rounded-lg border border-[#d5d0c8] bg-white p-1"
+              />
+              <input
+                id="pdf_primary_color"
+                data-testid="settings-pdf-primary-color-input"
+                type="text"
+                value={settings.pdf_primary_color}
+                onChange={(e) => update("pdf_primary_color", e.target.value)}
+                placeholder="#1a3a2a"
+                className={inputCls}
+              />
+            </div>
+          </Field>
+          <Field label="Accent/background colour" hint="Used for the header band and amount-in-words panel." id="pdf_accent_color">
+            <div className="flex gap-3">
+              <input
+                aria-label="Accent colour swatch"
+                data-testid="settings-pdf-accent-color-swatch"
+                type="color"
+                value={safeColorValue(settings.pdf_accent_color, EMPTY_SETTINGS.pdf_accent_color)}
+                onChange={(e) => update("pdf_accent_color", e.target.value)}
+                className="h-12 w-14 rounded-lg border border-[#d5d0c8] bg-white p-1"
+              />
+              <input
+                id="pdf_accent_color"
+                data-testid="settings-pdf-accent-color-input"
+                type="text"
+                value={settings.pdf_accent_color}
+                onChange={(e) => update("pdf_accent_color", e.target.value)}
+                placeholder="#f5f0e8"
+                className={inputCls}
+              />
+            </div>
+          </Field>
+        </div>
+
+        <div className="mt-5 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+          <a
+            data-testid="settings-pdf-preview-button"
+            href="/api/settings/pdf-preview"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-[#1a3a2a] px-5 text-sm font-semibold text-[#1a3a2a] transition hover:bg-[#e8f0eb]"
+          >
+            Preview sample PDF
+          </a>
+          {logoStatus === "uploading" ? (
+            <p className="text-sm text-[#4a6a5a]">Uploading logo...</p>
+          ) : null}
+          {logoStatus === "error" ? <p className="text-sm text-[#7a271a]">{logoError}</p> : null}
+        </div>
+      </fieldset>
+
       {/* VAT settings */}
       <fieldset className="rounded-xl border border-[#e5e0d8] bg-white p-6 shadow-sm">
         <legend className="mb-4 -ml-1 px-1 text-xs font-semibold uppercase tracking-widest text-[#4a6a5a]">
@@ -456,6 +617,49 @@ export default function SettingsForm() {
         )}
       </fieldset>
 
+      {/* Tax & Debt Recovery */}
+      <fieldset className="rounded-xl border border-[#e5e0d8] bg-white p-6 shadow-sm">
+        <legend className="mb-4 -ml-1 px-1 text-xs font-semibold uppercase tracking-widest text-[#4a6a5a]">
+          Tax & Debt Recovery
+        </legend>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field
+            label="Tax pot nudge (%)"
+            hint="Percentage of net income to suggest saving for taxes."
+            id="tax_pot_percentage"
+          >
+            <input
+              id="tax_pot_percentage"
+              data-testid="settings-tax-pot-percentage-input"
+              type="number"
+              min={0}
+              max={100}
+              step={0.1}
+              value={settings.tax_pot_percentage}
+              onChange={(e) => update("tax_pot_percentage", Number(e.target.value))}
+              className={inputCls}
+            />
+          </Field>
+          <Field
+            label="Statutory interest rate (%)"
+            hint="Used to calculate late payment fees (usually 8% + Bank of England base rate)."
+            id="statutory_interest_rate"
+          >
+            <input
+              id="statutory_interest_rate"
+              data-testid="settings-statutory-interest-rate-input"
+              type="number"
+              min={0}
+              max={100}
+              step={0.01}
+              value={settings.statutory_interest_rate}
+              onChange={(e) => update("statutory_interest_rate", Number(e.target.value))}
+              className={inputCls}
+            />
+          </Field>
+        </div>
+      </fieldset>
+
       {/* Private info */}
       <fieldset className="rounded-xl border border-[#e5e0d8] bg-white p-6 shadow-sm">
         <legend className="mb-1 -ml-1 px-1 text-xs font-semibold uppercase tracking-widest text-[#4a6a5a]">
@@ -507,6 +711,23 @@ export default function SettingsForm() {
             autoComplete="off"
           />
         </Field>
+      </fieldset>
+
+      {/* Data Export */}
+      <fieldset className="rounded-xl border border-[#e5e0d8] bg-white p-6 shadow-sm">
+        <legend className="mb-1 -ml-1 px-1 text-xs font-semibold uppercase tracking-widest text-[#4a6a5a]">
+          Data Export & Backup
+        </legend>
+        <p className="mb-4 text-xs text-[#7a9a87]">
+          Download a complete backup of all your account data (invoices, clients, settings, records, and reminders) in JSON format.
+        </p>
+        <a
+          href="/api/backup/export"
+          data-testid="settings-export-backup-link"
+          className="inline-flex h-10 items-center rounded-lg border border-[#d5d0c8] bg-[#f7fef9] px-4 text-sm font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
+        >
+          Download Full JSON Backup
+        </a>
       </fieldset>
 
       {/* Status feedback + submit */}
@@ -573,6 +794,10 @@ function Field({
 
 const inputCls =
   "h-12 w-full rounded-lg border border-[#d5d0c8] bg-white px-3 text-base text-[#1a3a2a] outline-none transition focus:border-[#2d6a4a] focus:ring-2 focus:ring-[#b9d2bd]";
+
+function safeColorValue(value: string, fallback: string) {
+  return /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
+}
 
 function parseContactDetails(value: string): ContactDetails {
   const lines = value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);

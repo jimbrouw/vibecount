@@ -50,6 +50,10 @@ type Props = {
     transcript: string;
     clientAddress: string;
     clientCompanyNumber: string;
+    invoiceId?: string;
+    clientEmail?: string;
+    clientVatNumber?: string;
+    paymentTerms?: string;
   };
 };
 
@@ -72,6 +76,9 @@ type GeneratedInvoice = {
   dueDate: string;
   subject: string;
   body: string;
+  htmlBody: string;
+  mailtoHref: string;
+  invoiceLinkUrl: string;
 };
 
 export default function InvoiceBuilder({
@@ -83,14 +90,14 @@ export default function InvoiceBuilder({
   const { plainLanguage } = useAccessibility();
   const [form, setForm] = useState<FormState>({
     clientName: initialDraft.clientName,
-    clientEmail: "",
+    clientEmail: initialDraft.clientEmail || "",
     clientAddress: initialDraft.clientAddress,
     clientCompanyNumber: initialDraft.clientCompanyNumber,
-    clientVatNumber: "",
+    clientVatNumber: initialDraft.clientVatNumber || "",
     invoiceDate: initialDate,
     description: initialDraft.description,
     amount: initialDraft.amount,
-    paymentTerms: userDefaults.default_payment_terms || DEFAULT_PAYMENT_TERMS,
+    paymentTerms: initialDraft.paymentTerms || userDefaults.default_payment_terms || DEFAULT_PAYMENT_TERMS,
     vatEnabled: userDefaults.vat_registered,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -184,6 +191,7 @@ export default function InvoiceBuilder({
         clientAddress: form.clientAddress,
         clientCompanyNumber: form.clientCompanyNumber,
         clientVatNumber: form.clientVatNumber,
+        invoiceId: initialDraft.invoiceId,
       }),
     });
 
@@ -208,19 +216,33 @@ export default function InvoiceBuilder({
     URL.revokeObjectURL(url);
 
     setLastInvoice(invoiceNumber);
+    let invoiceLinkUrl = "";
+    if (invoiceId) {
+      const shareResponse = await fetch(`/api/invoices/share-url?id=${encodeURIComponent(invoiceId)}`);
+      if (shareResponse.ok) {
+        const share = await shareResponse.json().catch(() => null) as { url?: string } | null;
+        invoiceLinkUrl = share?.url ?? "";
+      }
+    }
+    const emailDraft = buildInvoiceEmailDraft({
+      invoiceNumber,
+      clientName: form.clientName.trim(),
+      amountPence: totalPence ?? 0,
+      amountWords,
+      dueDate,
+      paymentTerms: form.paymentTerms.trim() || DEFAULT_PAYMENT_TERMS,
+      paymentLinkUrl: userDefaults.payment_link_url,
+      invoiceLinkUrl,
+      senderName: userDefaults.legal_name,
+    });
     setGeneratedInvoice({
       id: invoiceId,
       number: invoiceNumber,
       dueDate,
-      ...buildInvoiceEmailDraft({
-        invoiceNumber,
-        clientName: form.clientName.trim(),
-        amountPence: totalPence ?? 0,
-        dueDate,
-        paymentTerms: form.paymentTerms.trim() || DEFAULT_PAYMENT_TERMS,
-        paymentLinkUrl: userDefaults.payment_link_url,
-        senderName: userDefaults.legal_name,
-      }),
+      ...emailDraft,
+      htmlBody: buildInvoiceEmailHtml(emailDraft.body, invoiceLinkUrl, invoiceNumber),
+      mailtoHref: buildMailtoHref(form.clientEmail, emailDraft.subject, emailDraft.body),
+      invoiceLinkUrl,
     });
     trackEvent("pdf_invoices_generated", {
       source: initialDraft.source === "voice" ? "voice_to_typed" : "typed",
@@ -286,7 +308,19 @@ export default function InvoiceBuilder({
   async function copyEmailDraft() {
     if (!generatedInvoice) return;
     const text = `Subject: ${generatedInvoice.subject}\n\n${generatedInvoice.body}`;
-    await navigator.clipboard.writeText(text);
+    if (generatedInvoice.htmlBody && "ClipboardItem" in window) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/plain": new Blob([text], { type: "text/plain" }),
+          "text/html": new Blob(
+            [`<p><strong>Subject:</strong> ${escapeHtml(generatedInvoice.subject)}</p>${generatedInvoice.htmlBody}`],
+            { type: "text/html" }
+          ),
+        }),
+      ]);
+    } else {
+      await navigator.clipboard.writeText(text);
+    }
     setCopyStatus("Copied");
   }
 
@@ -409,9 +443,6 @@ export default function InvoiceBuilder({
                   </ul>
                 )}
               </div>
-              {form.clientAddress && (
-                <p className="mt-1 text-xs text-[#4a6a5a]">{form.clientAddress}</p>
-              )}
             </label>
 
             <label className="block">
@@ -429,11 +460,25 @@ export default function InvoiceBuilder({
               />
               {plainLanguage ? (
                 <p className="mt-2 text-xs text-[#4a6a5a]">
-                  Used only when you choose to prepare reminder drafts.
+                  Used only if you schedule payment reminders.
                 </p>
               ) : null}
             </label>
           </div>
+
+          <label className="block">
+            <span className="text-sm font-medium text-[#1a3a2a]">Client address</span>
+            <textarea
+              name="clientAddress"
+              data-testid="invoice-client-address-input"
+              value={form.clientAddress}
+              onChange={(event) => updateField("clientAddress", event.target.value)}
+              rows={2}
+              className="mt-2 w-full resize-y rounded-lg border border-[#d5d0c8] bg-white px-3 py-3 text-base leading-6 text-[#1a3a2a] outline-none transition focus:border-[#2d6a4a] focus:ring-2 focus:ring-[#b9d2bd]"
+              placeholder="Client address"
+            />
+          </label>
+
 
           <div className="grid gap-5 sm:grid-cols-2">
             <label className="block">
@@ -599,6 +644,36 @@ export default function InvoiceBuilder({
               >
                 {copyStatus || "Copy email"}
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const cleanMailto = `mailto:${encodeURIComponent(form.clientEmail)}?subject=${encodeMailtoParam(generatedInvoice.subject)}`;
+
+                  // Trigger synchronously to avoid popup blocker!
+                  window.location.href = cleanMailto;
+
+                  // Then asynchronously write to clipboard
+                  const plainBody = generatedInvoice.body;
+                  const htmlBody = generatedInvoice.htmlBody;
+                  if ("ClipboardItem" in window) {
+                    navigator.clipboard.write([
+                      new ClipboardItem({
+                        "text/plain": new Blob([plainBody], { type: "text/plain" }),
+                        "text/html": new Blob([htmlBody], { type: "text/html" }),
+                      }),
+                    ]).catch(console.error);
+                  } else {
+                    navigator.clipboard.writeText(plainBody).catch(console.error);
+                  }
+
+                  setCopyStatus("Draft copied!");
+                  setTimeout(() => setCopyStatus(""), 5000);
+                }}
+                data-testid="invoice-open-email-button"
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-[#b9d2bd] bg-white px-4 text-sm font-semibold text-[#1a3a2a] transition hover:bg-[#eef6ef]"
+              >
+                Open email app
+              </button>
             </div>
 
             <div className="mt-4 rounded-lg border border-[#d7d1c3] bg-white p-4">
@@ -609,16 +684,18 @@ export default function InvoiceBuilder({
               <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-[#4a6a5a]">
                 Body
               </p>
-              <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[#1a3a2a]">
-                {generatedInvoice.body}
-              </p>
+              <EmailBodyPreview
+                body={generatedInvoice.body}
+                invoiceLinkUrl={generatedInvoice.invoiceLinkUrl}
+                invoiceNumber={generatedInvoice.number}
+              />
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <form action={markInvoiceSent} className="space-y-3" data-testid="invoice-mark-sent-form">
                 <input type="hidden" name="invoiceId" value={generatedInvoice.id} />
                 <input type="hidden" name="clientEmail" value={form.clientEmail} />
-                <input type="hidden" name="redirectTo" value="/dashboard" />
+                <input type="hidden" name="redirectTo" value="/dashboard?reminders=1" />
                 <button
                   type="submit"
                   data-testid="invoice-mark-sent-button"
@@ -637,7 +714,7 @@ export default function InvoiceBuilder({
                   data-testid="invoice-enable-reminders-button"
                   className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-[#b9d2bd] bg-white px-4 text-sm font-semibold text-[#1a3a2a] transition hover:bg-[#eef6ef]"
                 >
-                  Prepare reminder drafts
+                  Add payment reminders
                 </button>
               </form>
             </div>
@@ -707,6 +784,11 @@ export default function InvoiceBuilder({
             <p className="mt-1.5 text-lg font-medium text-[#1a3a2a]">
               {form.clientName.trim() || "Client name"}
             </p>
+            {form.clientAddress && (
+              <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[#4a6a5a]">
+                {form.clientAddress}
+              </p>
+            )}
           </div>
 
           <div>
@@ -776,6 +858,79 @@ export default function InvoiceBuilder({
         </div>
       </aside>
     </div>
+  );
+}
+
+function EmailBodyPreview({
+  body,
+  invoiceLinkUrl,
+  invoiceNumber,
+}: {
+  body: string;
+  invoiceLinkUrl: string;
+  invoiceNumber: string;
+}) {
+  if (!invoiceLinkUrl) {
+    return <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[#1a3a2a]">{body}</p>;
+  }
+
+  const target = `[${invoiceNumber}](${invoiceLinkUrl})`;
+  if (body.includes(target)) {
+    const [before, after = ""] = body.split(target);
+    return (
+      <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[#1a3a2a]">
+        {before}
+        <a href={invoiceLinkUrl} className="font-semibold underline underline-offset-4" target="_blank" rel="noreferrer">
+          {invoiceNumber}
+        </a>
+        {after}
+      </p>
+    );
+  }
+
+  const [before, after = ""] = body.split(invoiceLinkUrl);
+  return (
+    <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[#1a3a2a]">
+      {before}
+      <a href={invoiceLinkUrl} className="font-semibold underline underline-offset-4" target="_blank" rel="noreferrer">
+        {invoiceNumber}
+      </a>
+      {after}
+    </p>
+  );
+}
+
+function buildMailtoHref(to: string, subject: string, body: string) {
+  return `mailto:${encodeURIComponent(to.trim())}?subject=${encodeMailtoParam(subject)}&body=${encodeMailtoParam(body)}`;
+}
+
+function buildInvoiceEmailHtml(body: string, invoiceLinkUrl: string, invoiceNumber: string) {
+  const escaped = escapeHtml(body);
+  const target = `[${invoiceNumber}](${invoiceLinkUrl})`;
+  const escapedTarget = escapeHtml(target);
+
+  if (escaped.includes(escapedTarget)) {
+    const linked = escaped.replace(escapedTarget, `<a href="${escapeHtml(invoiceLinkUrl)}">${escapeHtml(invoiceNumber)}</a>`);
+    return `<div>${linked.replace(/\n/g, "<br>")}</div>`;
+  }
+
+  const linked = invoiceLinkUrl
+    ? escaped.replace(escapeHtml(invoiceLinkUrl), `<a href="${escapeHtml(invoiceLinkUrl)}">${escapeHtml(invoiceNumber)}</a>`)
+    : escaped;
+  return `<div>${linked.replace(/\n/g, "<br>")}</div>`;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function encodeMailtoParam(value: string) {
+  return encodeURIComponent(value).replace(/[!'()*]/g, (char) =>
+    `%${char.charCodeAt(0).toString(16).toUpperCase()}`
   );
 }
 

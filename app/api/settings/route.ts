@@ -26,7 +26,17 @@ export async function GET() {
     return NextResponse.json({ error: settingsErrorMessage(error) }, { status: 500 });
   }
 
-  return NextResponse.json(data ?? { id: user.id, ...EMPTY_SETTINGS });
+  const settings = data ?? { id: user.id, ...EMPTY_SETTINGS };
+  let pdf_logo_url = "";
+
+  if (settings.pdf_logo_path) {
+    const { data: signed } = await supabase.storage
+      .from("brand-assets")
+      .createSignedUrl(settings.pdf_logo_path, 60 * 10);
+    pdf_logo_url = signed?.signedUrl ?? "";
+  }
+
+  return NextResponse.json({ ...settings, pdf_logo_url });
 }
 
 export async function PUT(request: Request) {
@@ -46,9 +56,20 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
+  const safeSettings = { ...settings };
+  safeSettings.pdf_logo_path = "";
+  const { data: existing } = await supabase
+    .from("user_settings")
+    .select("pdf_logo_path")
+    .eq("id", user.id)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("user_settings")
-    .upsert({ id: user.id, ...settings }, { onConflict: "id" });
+    .upsert(
+      { id: user.id, ...safeSettings, pdf_logo_path: existing?.pdf_logo_path ?? "" },
+      { onConflict: "id" }
+    );
 
   if (error) {
     console.error("Could not save user settings", error);
