@@ -145,7 +145,9 @@ export default async function RecordsPage({
       supabase
         .from("financial_records")
         .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id),
+        .eq("user_id", user.id)
+        .eq("status", "approved")
+        .eq("tax_year_start", selectedTaxYearStart),
       supabase
         .from("record_attachments")
         .select("id", { count: "exact", head: true })

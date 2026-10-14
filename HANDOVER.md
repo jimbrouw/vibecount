@@ -592,3 +592,15 @@ node --env-file=.env.local --import tsx scripts/check-receipt-extraction.mts
 ```
 
 Live deployment and test cleanup receipts are appended after publishing below.
+
+Production proof update:
+
+- First release built and promoted as `dpl_54kAZog5Y8pzJDJxLNfcJhgs9yZc`.
+  Authenticated live scan upload, source route, human confirmation and refresh
+  passed: the labelled £120 / 50% fixture produced exactly one £60 record.
+- Live text-PDF test initially used document vision because default worker loading
+  differed from local. Receipt extraction now imports the documented pdf-parse
+  worker and uses its inline worker data plus CanvasFactory. Re-ran all seven
+  extraction fixtures, lint and build successfully before the replacement deploy.
+- Records' approved count now filters status and selected tax year, so excluded
+  test costs are not described as approved records.
