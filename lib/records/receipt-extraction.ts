@@ -22,8 +22,11 @@ export async function extractReceipt(bytes: Buffer, contentType: string, categor
     // Real canvas implementation supplied by pdf-parse; no fake canvas globals.
     const { DOMMatrix, Path2D, ImageData } = await import("@napi-rs/canvas");
     Object.assign(globalThis, { DOMMatrix, Path2D, ImageData });
+    const { getData, CanvasFactory } = await import("pdf-parse/worker");
     const { PDFParse } = await import("pdf-parse");
-    const parser = new PDFParse({ data: new Uint8Array(bytes) });
+    // An inline worker survives serverless file tracing; no remote worker download.
+    PDFParse.setWorker(getData());
+    const parser = new PDFParse({ data: new Uint8Array(bytes), CanvasFactory });
     try { text = (await parser.getText()).text.trim(); } catch { /* Scans use document vision below. */ }
     finally { await parser.destroy(); }
   }

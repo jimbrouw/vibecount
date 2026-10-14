@@ -40,9 +40,9 @@
       "kind": "expense",
       "categoryId": "12345678-1234-4234-8234-123456789abc",
       "notes": [
-        "Receipt is marked 'TEST ONLY – NO REAL TRANSACTION' — confirm this represents a genuine purchase before approving.",
-        "Payment date (06 Apr) differs from receipt date (05 Apr) — please confirm which is correct for your records.",
-        "Cash payment: no card or VAT registration details visible — confirm supplier is VAT-registered if reclaiming input VAT."
+        "Receipt is marked as a test document ('VIBECOUNT TEST ONLY - NO REAL TRANSACTION') — confirm this is a genuine transaction before approving.",
+        "Payment date (06 Apr 2026) differs from receipt date (05 Apr 2026) — please confirm this is correct.",
+        "Item description is 'Office stationery' only — confirm no other line items are missing from this receipt."
       ]
     },
     "method": "pdf_text"
@@ -89,8 +89,8 @@
       "categoryId": "12345678-1234-4234-8234-123456789abc",
       "notes": [
         "Document is marked 'VIBECOUNT TEST ONLY - NO REAL TRANSACTION' — confirm this is a genuine receipt before approving.",
-        "Receipt date is 05 April 2026 but payment date shown as 06 April 2026 — please confirm both dates are correct.",
-        "Item described as 'Office stationery' — confirm this is a legitimate business expense."
+        "Receipt date is 05 April 2026 but payment date is 06 April 2026 — please confirm both dates are correct.",
+        "Item described as 'Office stationery' — confirm this is a business expense."
       ]
     },
     "method": "document_vision"
@@ -137,8 +137,7 @@
       "categoryId": "12345678-1234-4234-8234-123456789abc",
       "notes": [
         "Document is marked 'TEST ONLY - NO REAL TRANSACTION' — confirm this is a genuine receipt before approving.",
-        "Receipt date is 05 April 2026 but payment date is 06 April 2026 — please confirm the correct expense date to use.",
-        "Item described as 'Office stationery' — confirm this is wholly for business use."
+        "Receipt date (05 Apr) differs from payment date (06 Apr) — please confirm which date to use for accounting purposes."
       ]
     },
     "method": "document_vision"
@@ -179,8 +178,10 @@
       "kind": "expense",
       "categoryId": "12345678-1234-4234-8234-123456789abc",
       "notes": [
-        "Invoice explicitly marked UNPAID with 30-day payment terms — confirm payment date once settled.",
-        "Document is marked 'VIBECOUNT TEST ONLY - NO REAL TRANSACTION' — is this a real invoice or a test document that should be discarded?"
+        "Document is marked as a test transaction — confirm this is a real invoice before approving.",
+        "Invoice is unpaid with payment due within 30 days of 14 Oct 2026; confirm payment has been made before marking as paid.",
+        "VAT amount of £10.00 is stated explicitly — confirm supplier is VAT-registered and a VAT number appears on the original document.",
+        "Invoice date is in the future (2026) relative to typical processing — verify date is correct."
       ]
     },
     "method": "pdf_text"
@@ -221,10 +222,10 @@
       "kind": "expense",
       "categoryId": null,
       "notes": [
-        "Two conflicting grand totals are present (£120.00 and £125.00); which is correct?",
-        "VAT of £20.00 is consistent with 20% of £100.00 subtotal, giving £120.00 — but the 'corrected grand total' of £125.00 does not reconcile with the stated subtotal and VAT; please clarify.",
-        "No payment evidence found; payment status should be confirmed.",
-        "Document is marked 'VIBECOUNT TEST ONLY - NO REAL TRANSACTION' — is this a real expense?"
+        "Two conflicting grand totals are present (£120.00 and £125.00); please confirm which is correct before approving.",
+        "VAT of £20.00 is consistent with 20% of £100.00 subtotal, but does not reconcile with the £125.00 corrected total — please clarify.",
+        "This appears to be a test document ('VIBECOUNT TEST ONLY - NO REAL TRANSACTION'); confirm whether it represents a real expense.",
+        "Payment status is unknown; please provide evidence of payment if this is to be treated as a paid expense."
       ]
     },
     "method": "pdf_text"
@@ -251,7 +252,7 @@
       "categoryId": null,
       "notes": [
         "Receipt is marked as a test transaction only — confirm this represents a real expense before approving.",
-        "No VAT amount shown — confirm whether VAT is included or exempt.",
+        "No VAT amount shown — confirm whether VAT applies and if a VAT receipt is available.",
         "Currency is EUR — confirm this is correct for a UK freelancer expense claim."
       ]
     },
@@ -283,9 +284,9 @@
       "kind": "refund",
       "categoryId": null,
       "notes": [
-        "Document is marked 'VIBECOUNT TEST ONLY - NO REAL TRANSACTION' — confirm this is a genuine refund before approving.",
-        "No original purchase reference or invoice number is shown; consider linking to the original expense.",
-        "No category assigned — please select an appropriate category if this refund relates to a specific expense type."
+        "Document is marked 'VIBECOUNT TEST ONLY - NO REAL TRANSACTION' — confirm this is a real refund before approving.",
+        "No line items or subtotal provided; only total and VAT amounts are shown.",
+        "No category assigned — please select an appropriate expense category if applicable."
       ]
     },
     "method": "pdf_text"
