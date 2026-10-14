@@ -58,7 +58,7 @@ export default async function EditInvoicePage({
     .eq("id", user.id)
     .maybeSingle();
 
-  const existingClients = (clientRows ?? []) as any[];
+  const existingClients = clientRows ?? [];
 
   // Format dates from YYYY-MM-DD to DD/MM/YYYY
   const parts = invoice.invoice_date.split("-");

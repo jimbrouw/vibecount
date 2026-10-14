@@ -40,8 +40,8 @@ export default async function TaxPrepPage({
 
   const [recordsResult, taxYearsResult] = await Promise.all([
     supabase
-      .from("financial_records")
-      .select("record_type, amount, record_categories(name, sa103_box)")
+      .from("financial_record_reporting")
+      .select("record_type, amount:reporting_amount, record_categories(name, sa103_box)")
       .eq("user_id", user.id)
       .eq("status", "approved")
       .eq("tax_year_start", selectedTaxYearStart),
@@ -160,6 +160,8 @@ export default async function TaxPrepPage({
           </form>
         </div>
 
+        <p className="mb-4 text-sm text-[#4b8068]">Approved GBP records for {getTaxYearLabel(selectedTaxYearStart)}. Receipts use actual payment dates and business-use allocations; unpaid bills are excluded. Older records use their recorded dates. Recorded costs still need review for VAT and tax treatment.</p>
+        {recordsResult.error && <p role="alert" className="mb-4 rounded-lg bg-amber-50 p-3 text-amber-900">Could not load approved records. These figures are incomplete; retry before relying on them.</p>}
         <section className="mb-6 grid gap-4 sm:grid-cols-3">
           <SummaryTile label="Income" value={formatPounds(checklist.incomeTotal)} />
           <SummaryTile label="Expenses" value={formatPounds(checklist.expenseTotal)} />

@@ -27,6 +27,7 @@ import {
 import LogoutButton from "../LogoutButton";
 import PlainLanguageNote from "../PlainLanguageNote";
 import SuggestCategoryButton from "./SuggestCategoryButton";
+import ReceiptImporter from "../receipts/ReceiptImporter";
 
 export const metadata = {
   title: "Records — VibeCount",
@@ -48,6 +49,8 @@ type ManualRecordRow = {
   amount: string | number;
   status: "draft" | "review" | "approved" | "excluded";
   source_type: string;
+  gross_pence: number | null;
+  payment_status: string;
   category_id: string | null;
   tax_year_start: number;
   tax_quarter: number;
@@ -158,7 +161,7 @@ export default async function RecordsPage({
       supabase
         .from("financial_records")
         .select(
-          "id, record_type, record_date, description, amount, status, source_type, category_id, tax_year_start, tax_quarter, record_categories(name)"
+          "id, record_type, record_date, description, amount, status, source_type, gross_pence, payment_status, category_id, tax_year_start, tax_quarter, record_categories(name)"
         )
         .eq("user_id", user.id)
         .order("record_date", { ascending: false })
@@ -311,6 +314,11 @@ export default async function RecordsPage({
           </div>
         )}
 
+        <details className="mb-6 rounded-xl border border-[#bbf7d0] bg-white" data-testid="records-receipt-import">
+          <summary className="cursor-pointer p-5 font-semibold text-[#14532d]">Import and review receipts or supplier invoices</summary>
+          <ReceiptImporter />
+        </details>
+
         <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <SummaryTile
             label="Income"
@@ -436,7 +444,7 @@ export default async function RecordsPage({
                 Tax year and threshold tracker
               </h2>
               <p className="mt-1 text-sm text-[#4b8068]">
-                Self-employment totals by quarter, based on approved records only.
+                Approved GBP records by quarter. Receipts use actual payment dates; unpaid bills are excluded. Older manual, CSV and bank records use their recorded dates.
               </p>
             </div>
             <form className="flex items-center gap-2" action="/dashboard/records">
@@ -677,7 +685,7 @@ function ManualRecordsList({
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#4b8068]">
                     <span>
-                      {formatRecordDate(record.record_date)} ·{" "}
+                      {formatRecordDate(record.record_date)}{record.payment_status === "unpaid" ? " · Unpaid — excluded from paid totals" : ""} ·{" "}
                       {record.record_categories?.name ?? "No category"} · Quarter{" "}
                       {record.tax_quarter}
                     </span>
@@ -695,7 +703,7 @@ function ManualRecordsList({
                 </div>
               </summary>
               <div className="border-t border-[#f0fdf4] bg-[#f7fef9] px-5 py-4">
-                <form action={updateManualRecord} className="grid gap-4" data-testid={`record-review-form-${record.id}`}>
+                {record.gross_pence !== null ? <p className="text-sm text-[#14532d]">Use the receipt review panel above to correct amounts, payment dates, VAT and business use. <a href="/dashboard/records" className="underline">Open receipt review</a></p> : <form action={updateManualRecord} className="grid gap-4" data-testid={`record-review-form-${record.id}`}>
                   <input type="hidden" name="recordId" value={record.id} />
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="block">
@@ -784,9 +792,9 @@ function ManualRecordsList({
                       Save changes
                     </button>
                   </div>
-                </form>
+                </form>}
                 <div className="mt-4 flex flex-wrap gap-3">
-                  <ReviewButton recordId={record.id} status="approved" label="Approve" />
+                  {record.gross_pence === null && <ReviewButton recordId={record.id} status="approved" label="Approve" />}
                   <ReviewButton recordId={record.id} status="excluded" label="Exclude" />
                 </div>
               </div>

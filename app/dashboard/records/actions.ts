@@ -91,6 +91,9 @@ export async function updateManualRecord(formData: FormData) {
     );
   }
 
+  const { data: existing } = await supabase.from("financial_records").select("source_type, gross_pence").eq("id", recordId).eq("user_id", userId).maybeSingle();
+  if (existing && existing.gross_pence !== null) redirect("/dashboard/records?error=Use%20receipt%20review%20to%20correct%20this%20expense.");
+
   const { error } = await supabase
     .from("financial_records")
     .update({

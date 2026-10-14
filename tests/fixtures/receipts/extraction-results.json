@@ -1,0 +1,293 @@
+[
+  {
+    "file": "text-receipt.pdf",
+    "draft": {
+      "merchant": "Studio Supply Test Shop",
+      "documentDate": "2026-04-05",
+      "currency": "GBP",
+      "totalPence": 12000,
+      "vatPence": 2000,
+      "amounts": [
+        {
+          "label": "Subtotal",
+          "pence": 10000,
+          "role": "subtotal"
+        },
+        {
+          "label": "VAT",
+          "pence": 2000,
+          "role": "vat"
+        },
+        {
+          "label": "Grand total",
+          "pence": 12000,
+          "role": "total"
+        },
+        {
+          "label": "Cash tendered",
+          "pence": 15000,
+          "role": "tendered"
+        },
+        {
+          "label": "Change",
+          "pence": 3000,
+          "role": "change"
+        }
+      ],
+      "ambiguous": false,
+      "paymentStatus": "paid",
+      "paymentDate": "2026-04-06",
+      "kind": "expense",
+      "categoryId": "12345678-1234-4234-8234-123456789abc",
+      "notes": [
+        "Receipt is marked 'TEST ONLY – NO REAL TRANSACTION' — confirm this represents a genuine purchase before approving.",
+        "Payment date (06 Apr) differs from receipt date (05 Apr) — please confirm which is correct for your records.",
+        "Cash payment: no card or VAT registration details visible — confirm supplier is VAT-registered if reclaiming input VAT."
+      ]
+    },
+    "method": "pdf_text"
+  },
+  {
+    "file": "scanned-receipt.pdf",
+    "draft": {
+      "merchant": "Studio Supply Test Shop",
+      "documentDate": "2026-04-05",
+      "currency": "GBP",
+      "totalPence": 12000,
+      "vatPence": 2000,
+      "amounts": [
+        {
+          "label": "Subtotal",
+          "pence": 10000,
+          "role": "subtotal"
+        },
+        {
+          "label": "VAT",
+          "pence": 2000,
+          "role": "vat"
+        },
+        {
+          "label": "Grand total",
+          "pence": 12000,
+          "role": "total"
+        },
+        {
+          "label": "Cash tendered",
+          "pence": 15000,
+          "role": "tendered"
+        },
+        {
+          "label": "Change",
+          "pence": 3000,
+          "role": "change"
+        }
+      ],
+      "ambiguous": false,
+      "paymentStatus": "paid",
+      "paymentDate": "2026-04-06",
+      "kind": "expense",
+      "categoryId": "12345678-1234-4234-8234-123456789abc",
+      "notes": [
+        "Document is marked 'VIBECOUNT TEST ONLY - NO REAL TRANSACTION' — confirm this is a genuine receipt before approving.",
+        "Receipt date is 05 April 2026 but payment date shown as 06 April 2026 — please confirm both dates are correct.",
+        "Item described as 'Office stationery' — confirm this is a legitimate business expense."
+      ]
+    },
+    "method": "document_vision"
+  },
+  {
+    "file": "photo-style-receipt.jpg",
+    "draft": {
+      "merchant": "Studio Supply Test Shop",
+      "documentDate": "2026-04-05",
+      "currency": "GBP",
+      "totalPence": 12000,
+      "vatPence": 2000,
+      "amounts": [
+        {
+          "label": "Subtotal",
+          "pence": 10000,
+          "role": "subtotal"
+        },
+        {
+          "label": "VAT",
+          "pence": 2000,
+          "role": "vat"
+        },
+        {
+          "label": "Grand total",
+          "pence": 12000,
+          "role": "total"
+        },
+        {
+          "label": "Cash tendered",
+          "pence": 15000,
+          "role": "tendered"
+        },
+        {
+          "label": "Change",
+          "pence": 3000,
+          "role": "change"
+        }
+      ],
+      "ambiguous": false,
+      "paymentStatus": "paid",
+      "paymentDate": "2026-04-06",
+      "kind": "expense",
+      "categoryId": "12345678-1234-4234-8234-123456789abc",
+      "notes": [
+        "Document is marked 'TEST ONLY - NO REAL TRANSACTION' — confirm this is a genuine receipt before approving.",
+        "Receipt date is 05 April 2026 but payment date is 06 April 2026 — please confirm the correct expense date to use.",
+        "Item described as 'Office stationery' — confirm this is wholly for business use."
+      ]
+    },
+    "method": "document_vision"
+  },
+  {
+    "file": "unpaid-supplier.pdf",
+    "draft": {
+      "merchant": "Studio Supplier Test Ltd",
+      "documentDate": "2026-10-14",
+      "currency": "GBP",
+      "totalPence": 6000,
+      "vatPence": 1000,
+      "amounts": [
+        {
+          "label": "Subtotal",
+          "pence": 5000,
+          "role": "subtotal"
+        },
+        {
+          "label": "VAT",
+          "pence": 1000,
+          "role": "vat"
+        },
+        {
+          "label": "Grand total",
+          "pence": 6000,
+          "role": "total"
+        },
+        {
+          "label": "Balance due",
+          "pence": 6000,
+          "role": "balance"
+        }
+      ],
+      "ambiguous": false,
+      "paymentStatus": "unpaid",
+      "paymentDate": null,
+      "kind": "expense",
+      "categoryId": "12345678-1234-4234-8234-123456789abc",
+      "notes": [
+        "Invoice explicitly marked UNPAID with 30-day payment terms — confirm payment date once settled.",
+        "Document is marked 'VIBECOUNT TEST ONLY - NO REAL TRANSACTION' — is this a real invoice or a test document that should be discarded?"
+      ]
+    },
+    "method": "pdf_text"
+  },
+  {
+    "file": "ambiguous-total.pdf",
+    "draft": {
+      "merchant": "Test Shop",
+      "documentDate": "2026-10-14",
+      "currency": "GBP",
+      "totalPence": null,
+      "vatPence": 2000,
+      "amounts": [
+        {
+          "label": "Subtotal",
+          "pence": 10000,
+          "role": "subtotal"
+        },
+        {
+          "label": "VAT",
+          "pence": 2000,
+          "role": "vat"
+        },
+        {
+          "label": "Grand total",
+          "pence": 12000,
+          "role": "total"
+        },
+        {
+          "label": "Corrected grand total",
+          "pence": 12500,
+          "role": "total"
+        }
+      ],
+      "ambiguous": true,
+      "paymentStatus": "unknown",
+      "paymentDate": null,
+      "kind": "expense",
+      "categoryId": null,
+      "notes": [
+        "Two conflicting grand totals are present (£120.00 and £125.00); which is correct?",
+        "VAT of £20.00 is consistent with 20% of £100.00 subtotal, giving £120.00 — but the 'corrected grand total' of £125.00 does not reconcile with the stated subtotal and VAT; please clarify.",
+        "No payment evidence found; payment status should be confirmed.",
+        "Document is marked 'VIBECOUNT TEST ONLY - NO REAL TRANSACTION' — is this a real expense?"
+      ]
+    },
+    "method": "pdf_text"
+  },
+  {
+    "file": "foreign-currency.pdf",
+    "draft": {
+      "merchant": "Test Shop",
+      "documentDate": "2026-10-14",
+      "currency": "EUR",
+      "totalPence": 2500,
+      "vatPence": null,
+      "amounts": [
+        {
+          "label": "Grand total",
+          "pence": 2500,
+          "role": "total"
+        }
+      ],
+      "ambiguous": false,
+      "paymentStatus": "paid",
+      "paymentDate": "2026-10-14",
+      "kind": "expense",
+      "categoryId": null,
+      "notes": [
+        "Receipt is marked as a test transaction only — confirm this represents a real expense before approving.",
+        "No VAT amount shown — confirm whether VAT is included or exempt.",
+        "Currency is EUR — confirm this is correct for a UK freelancer expense claim."
+      ]
+    },
+    "method": "pdf_text"
+  },
+  {
+    "file": "refund.pdf",
+    "draft": {
+      "merchant": "Studio Supply Test Shop",
+      "documentDate": "2026-04-07",
+      "currency": "GBP",
+      "totalPence": 2400,
+      "vatPence": 400,
+      "amounts": [
+        {
+          "label": "Total refund",
+          "pence": 2400,
+          "role": "total"
+        },
+        {
+          "label": "VAT refunded",
+          "pence": 400,
+          "role": "vat"
+        }
+      ],
+      "ambiguous": false,
+      "paymentStatus": "paid",
+      "paymentDate": "2026-04-07",
+      "kind": "refund",
+      "categoryId": null,
+      "notes": [
+        "Document is marked 'VIBECOUNT TEST ONLY - NO REAL TRANSACTION' — confirm this is a genuine refund before approving.",
+        "No original purchase reference or invoice number is shown; consider linking to the original expense.",
+        "No category assigned — please select an appropriate category if this refund relates to a specific expense type."
+      ]
+    },
+    "method": "pdf_text"
+  }
+]

@@ -10,6 +10,15 @@ type RecordExportRow = {
   description: string;
   amount: string | number;
   source_type: string;
+  document_date: string | null;
+  payment_date: string | null;
+  payment_status: string;
+  currency: string;
+  gross_pence: number | null;
+  vat_pence: number | null;
+  business_use_percent: number;
+  expense_kind: string;
+  refund_of: string | null;
   source_reference: string | null;
   tax_year_start: number;
   tax_quarter: number;
@@ -47,12 +56,14 @@ export async function GET(request: Request) {
       record_date,
       description,
       amount,
+      document_date, payment_date, payment_status, currency, gross_pence, vat_pence,
+      business_use_percent, expense_kind, refund_of,
       source_type,
       source_reference,
       tax_year_start,
       tax_quarter,
       record_categories(name, sa103_box),
-      record_attachments(id, original_filename, content_type, size_bytes, status)
+      record_attachments!record_attachments_record_same_user_fk(id, original_filename, content_type, size_bytes, status)
     `
     )
     .eq("user_id", user.id)
@@ -116,6 +127,16 @@ export async function GET(request: Request) {
         date: record.record_date,
         description: record.description,
         amount: Number(record.amount),
+        documentDate: record.document_date,
+        paymentDate: record.payment_date,
+        paymentStatus: record.payment_status,
+        currency: record.currency,
+        grossPence: record.gross_pence,
+        vatPence: record.vat_pence,
+        businessUsePercent: record.business_use_percent,
+        kind: record.expense_kind,
+        refundOf: record.refund_of,
+        reviewQuestions: receiptQuestions(record),
         category: record.record_categories?.name ?? null,
         selfAssessmentHint: record.record_categories?.sa103_box ?? null,
         sourceType: record.source_type,
@@ -152,7 +173,8 @@ function toCsv(records: RecordExportRow[]) {
     "source_reference",
     "tax_year_start",
     "tax_quarter",
-    "attachment_count",
+    "attachment_count", "currency", "document_date", "payment_date", "payment_status",
+    "gross_pence", "vat_pence", "business_use_percent", "kind", "refund_of", "evidence_ids", "review_questions",
   ];
 
   const rows = records.map((record) => [
@@ -170,12 +192,28 @@ function toCsv(records: RecordExportRow[]) {
       record.record_attachments.filter((attachment) => attachment.status === "active")
         .length
     ),
+    record.currency, record.document_date ?? "", record.payment_date ?? "", record.payment_status,
+    String(record.gross_pence ?? ""), String(record.vat_pence ?? ""), String(record.business_use_percent),
+    record.expense_kind, record.refund_of ?? "", record.record_attachments.filter(a => a.status === "active").map(a => a.id).join("; "),
+    receiptQuestions(record).join("; "),
   ]);
 
   return [header, ...rows].map((row) => row.map(escapeCsv).join(",")).join("\n");
 }
 
+function receiptQuestions(record: RecordExportRow) {
+  if (record.record_type !== "expense") return [];
+  return [
+    !record.record_attachments.some(a => a.status === "active") ? "Missing receipt evidence" : null,
+    record.business_use_percent < 100 ? "Check private-use allocation" : null,
+    record.vat_pence !== null ? "Review VAT treatment; costs include VAT" : "VAT amount unknown",
+    record.payment_status === "unpaid" ? "Unpaid; outside paid expense totals" : null,
+    "Check category and equipment treatment before tax use",
+  ].filter((s): s is string => Boolean(s));
+}
+
 function escapeCsv(value: string) {
+  if (/^[=+@-]/.test(value)) value = "'" + value;
   if (/[",\n\r]/.test(value)) {
     return `"${value.replaceAll('"', '""')}"`;
   }

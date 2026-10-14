@@ -485,3 +485,110 @@ configured to auto-deploy production from `main`.
 
 Latest production deployment promoted on 2026-05-29:
 `https://vibecount-teal.vercel.app`
+
+## Receipt-first release — 14 October 2026
+
+User-approved scope: receipt/supplier-document import and the fifth dashboard
+bucket first; prove that flow before expanding bank import. This overrides the
+old expense-OCR exclusion. Bank parsing is unchanged in this release.
+
+Source inspection: the original checkout was `fae21ba` on main. The production
+alias reported deployment `dpl_5MeakNViMEUi1nCmneBuuAGWch8u` with CLI Git metadata
+`02edff6` from `claude/vibecount-ai-agents`. The current source on that branch was
+`5cb31c6`, including later PDF/dashboard fixes. Implementation is in the attached
+`codex/receipt-import` worktree, based on that newer source. The original checkout's
+uncommitted middleware and Next config edits were preserved.
+
+Implemented:
+
+- Expenses fifth bucket, immediately before Tax pot nudge; collapsible receipt
+  panel on Dashboard and Records. File picker and drag/drop; PDF/JPEG/PNG under
+  3 MB, PDFs at most 10 pages. Each item has Reading / Needs review / Saved /
+  Failed / Excluded state, with retry and manual correction.
+- Embedded PDF text first, Anthropic Sonnet 4.6 document vision for image-only
+  PDFs and receipt images. Structured response validated on the server; money
+  uses integer pence. Subtotal, VAT, total, tendered, change and balance stay
+  separate. Missing amounts/VAT stay missing; ambiguous totals require input.
+- Private owner-scoped `record-attachments` storage and an authenticated inline
+  source route. Source and editable details appear together; mandatory amount
+  figures-and-words check. Payment status and actual payment date are explicit.
+- Same `financial_records` ledger and existing immutable change history, extended
+  with document/payment dates, merchant, currency, gross/VAT pence, business use,
+  payment status and linked refund metadata. SHA-256 duplicate upload detection
+  is owner-scoped. Confirmation is a row-locked, invoker-security RPC; retries
+  reuse one record. Existing expense matches attach evidence without a second
+  cost; business-use allocation updates the matched cost.
+- GBP-only confirmation in this first release. Foreign currency stays in review.
+  Unpaid supplier bills can be recorded but do not enter paid expense totals.
+  Paid receipt record dates are actual payment dates, so generated tax-year and
+  quarter fields use the payment boundary.
+- One reporting view feeds quarterly summaries, Dashboard expenses and Tax prep.
+  Existing manual/CSV/bank rows retain their recorded-date basis. Tax pot nudge
+  on Dashboard retains its existing percentage of paid invoices.
+- Record exports include payment/document dates, currency, gross/VAT pence,
+  business-use allocation, refund/evidence links and review questions. Text tax
+  summary now uses currency figures rather than unlabeled pence. Financial form
+  autocapture and session recording are disabled; new receipt routes do not log
+  file contents or model output.
+- Applied additive migrations: `receipt_document_import`, `receipt_audit_access`,
+  `receipt_evidence_allocation`, `receipt_review_lock`. Audit trigger public RPC
+  access was revoked; normal trigger logging still passed the database tests.
+
+Verification (label the boundary):
+
+- `npm test`: 23 passing tests, including 9 receipt extraction/confirmation rules.
+- `npm run lint`: passes with three pre-existing unused-variable warnings.
+- `npm run build`: passes. `npm run scan:secrets` and `git diff --check`: pass.
+- `node --env-file=.env.local --import tsx scripts/check-receipt-extraction.mts`:
+  seven real Anthropic extraction calls passed: text PDF, scanned PDF, synthetic
+  photo-style JPEG, unpaid supplier invoice, conflicting totals, EUR and refund.
+  Synthetic originals and output receipts: `tests/fixtures/receipts/`.
+- `tests/receipt-database.sql`: ran against the actual project inside a rollback.
+  Passed idempotency, correction history, 5/6 April payment-date boundaries, mixed
+  use, unpaid exclusion, foreign currency rejection, confirmation gate, receipt
+  match to a bank-row fixture, linked refund, duplicate hash and two owner JWT
+  contexts. These were transient database fixtures, not two browser sign-ins.
+- Authenticated local browser: file-picker upload, PDF text extraction and source
+  display, unchecked confirmation gate, £120 gross at 50% business use => one
+  £60 approved record, refresh survival, repeat-upload reuse, matching £60 on
+  Dashboard / Records / Tax prep, and downloaded text summary. Scan and PNG
+  uploaded through the browser and read with document vision. Broken PDF persisted
+  Failed, with retry and manual correction. Keyboard bucket activation passed.
+  Narrow and desktop layouts inspected; the in-app browser clamped the requested
+  phone viewport to 520 CSS pixels, so this is not a physical-phone test.
+- Local Google auth needed port 3002 (existing allowlist). The downloaded
+  development public key was stale (`Unregistered API key`); refreshed only the
+  ignored local env using the project's current publishable key. Production and
+  preview CLI env downloads returned empty values, so no disposable Auth-account
+  browser test was available through those keys. No keys were committed.
+- Supabase security advisor: no receipt/storage/function access finding. The
+  existing leaked-password-protection setting remains disabled (outside this
+  receipt release).
+
+Still outside this receipt-first proof:
+
+- A real camera photograph, physical mobile device, and a second signed-in
+  browser account. Synthetic image and database owner-isolation tests are proof
+  of those specific boundaries only.
+- Paid-invoice income reconciliation: `markInvoicePaid` updates the invoice but
+  does not create/link an income financial_record. This explains paid Dashboard
+  invoices alongside zero Records/Tax prep income. No historical dates were
+  invented. Resolve this before adding “Money left after recorded expenses”.
+- Bank statement parser expansion, transfer/personal classifications, statement
+  reconciliation and broader tax-prep review/pack work from the original brief.
+- No HMRC filing or MTD-compatibility claim was added.
+
+Reusable checks:
+
+```bash
+npm run lint
+npm test
+npm run build
+npm run scan:secrets
+npx tsx scripts/create-receipt-fixtures.mts
+node --env-file=.env.local --import tsx scripts/check-receipt-extraction.mts
+# Run tests/receipt-database.sql via the authenticated management connection.
+# It rolls back all synthetic users and records; do not strip its transaction.
+```
+
+Live deployment and test cleanup receipts are appended after publishing below.
