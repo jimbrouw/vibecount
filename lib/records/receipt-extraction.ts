@@ -1,4 +1,6 @@
 import { PDFDocument } from "pdf-lib";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { validateReceiptExtraction, type ReceiptCategory } from "./receipts";
 
 export class UnsupportedReceiptError extends Error {}
@@ -55,7 +57,10 @@ async function createReceiptPdfParser(bytes: Buffer) {
   const { PDFParse } = await import("pdf-parse");
   // Inline worker data survives serverless file tracing.
   PDFParse.setWorker(getData());
-  return new PDFParse({ data: new Uint8Array(bytes), CanvasFactory });
+  const require = createRequire(import.meta.url);
+  const fontDirectory = join(dirname(require.resolve("pdfjs-dist/package.json")), "standard_fonts/");
+  return new PDFParse({ data: new Uint8Array(bytes), CanvasFactory,
+    standardFontDataUrl: fontDirectory, useSystemFonts: false, disableFontFace: true, useWorkerFetch: false });
 }
 
 export async function renderReceiptPdfPage(bytes: Buffer, page: number) {
