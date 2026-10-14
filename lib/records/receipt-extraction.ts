@@ -19,14 +19,7 @@ export async function extractReceipt(bytes: Buffer, contentType: string, categor
   if (contentType === "application/pdf") {
     const pdf = await PDFDocument.load(bytes); // Reject encrypted or malformed PDFs.
     if (pdf.getPageCount() > 10) throw new Error("Use a receipt or supplier PDF of 10 pages or fewer. Use Bank import for statements.");
-    // Real canvas implementation supplied by pdf-parse; no fake canvas globals.
-    const { DOMMatrix, Path2D, ImageData } = await import("@napi-rs/canvas");
-    Object.assign(globalThis, { DOMMatrix, Path2D, ImageData });
-    const { getData, CanvasFactory } = await import("pdf-parse/worker");
-    const { PDFParse } = await import("pdf-parse");
-    // An inline worker survives serverless file tracing; no remote worker download.
-    PDFParse.setWorker(getData());
-    const parser = new PDFParse({ data: new Uint8Array(bytes), CanvasFactory });
+    const parser = await createReceiptPdfParser(bytes);
     try { text = (await parser.getText()).text.trim(); } catch { /* Scans use document vision below. */ }
     finally { await parser.destroy(); }
   }
@@ -53,4 +46,25 @@ Do not include account numbers, addresses, tax IDs, card details or full documen
   const parsed = JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, ""));
   if (parsed.unsupported) throw new UnsupportedReceiptError("This looks like a bank statement or multiple documents. Use Bank import, or upload one receipt at a time.");
   return { draft: validateReceiptExtraction(parsed, categories), method };
+}
+
+async function createReceiptPdfParser(bytes: Buffer) {
+  const { DOMMatrix, Path2D, ImageData } = await import("@napi-rs/canvas");
+  Object.assign(globalThis, { DOMMatrix, Path2D, ImageData });
+  const { getData, CanvasFactory } = await import("pdf-parse/worker");
+  const { PDFParse } = await import("pdf-parse");
+  // Inline worker data survives serverless file tracing.
+  PDFParse.setWorker(getData());
+  return new PDFParse({ data: new Uint8Array(bytes), CanvasFactory });
+}
+
+export async function renderReceiptPdfPage(bytes: Buffer, page: number) {
+  const pdf = await PDFDocument.load(bytes);
+  if (pdf.getPageCount() > 10 || !Number.isInteger(page) || page < 1 || page > pdf.getPageCount()) throw new Error("Invalid receipt page");
+  const parser = await createReceiptPdfParser(bytes);
+  try {
+    const result = await parser.getScreenshot({ partial: [page], desiredWidth: 1200, imageBuffer: true, imageDataUrl: false });
+    if (!result.pages[0]?.data.length) throw new Error("Preview unavailable");
+    return result.pages[0].data;
+  } finally { await parser.destroy(); }
 }

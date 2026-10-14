@@ -604,3 +604,15 @@ Production proof update:
   extraction fixtures, lint and build successfully before the replacement deploy.
 - Records' approved count now filters status and selected tax year, so excluded
   test costs are not described as approved records.
+
+- Embedded text reading was confirmed on the final deployed worker build using a
+  fresh text PDF (`pdf_text`, 12000 pence). Live Tax prep and downloaded text
+  summary matched the £60 synthetic business expense.
+- The in-app browser showed blank native PDF frames during visual inspection.
+  PDF source review now renders authenticated PNG page previews with page
+  navigation; original PDFs remain available. Text and scan preview pixels were
+  inspected locally, a second page rendered, and out-of-range pages rejected.
+  Verify the preview on the final live deployment before claiming this rung.
+- Preview check: `npx tsx scripts/check-receipt-preview.mts`. Generated local
+  proof lives under ignored `tests/receipt-verification/`; no private browser
+  screenshots are committed.

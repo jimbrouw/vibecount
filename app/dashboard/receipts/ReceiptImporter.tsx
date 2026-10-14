@@ -167,10 +167,7 @@ function ReceiptReview({ receipt, categories, expenses, reading, onSaved }: { re
   const source = `/api/receipts/${receipt.id}/source`;
   return <div className="grid items-start gap-5 lg:grid-cols-2" data-testid="receipt-review">
     <div className="min-w-0"><h3 className="mb-2 font-semibold text-[#14532d]">Source document</h3>
-      {receipt.content_type === "application/pdf" ? <iframe src={source} title={`Source receipt: ${receipt.original_filename}`} className="h-[34rem] w-full rounded-lg border border-[#bbf7d0]" /> :
-        // Authenticated local source endpoint; preserve the complete receipt for review.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={source} alt={`Source receipt: ${receipt.original_filename}`} className="max-h-[40rem] w-full rounded-lg border border-[#bbf7d0] object-contain" />}
+      <ReceiptSource receipt={receipt} source={source} />
       <a className="mt-2 inline-block text-sm text-[#166534] underline" href={source} target="_blank" rel="noreferrer">Open source document in a new tab</a>
       <p className="mt-1 text-xs text-[#4b8068]">{receipt.extraction_method === "pdf_text" ? "Read embedded PDF text" : receipt.extraction_method === "document_vision" ? "Read with document vision" : "Manual correction available"}. Always check against the source.</p>
     </div>
@@ -206,5 +203,33 @@ function ReceiptReview({ receipt, categories, expenses, reading, onSaved }: { re
       <div className="flex flex-wrap gap-3"><button type="submit" disabled={pending || reading || !confirmed || currency !== "GBP" || paymentStatus === "unknown"} className="min-h-12 rounded-lg bg-[#15803d] px-5 py-3 font-semibold text-white disabled:opacity-50" data-testid="receipt-confirm-expense">{pending ? "Saving…" : receipt.record_id ? "Confirm correction" : "Confirm expense"}</button>
         {!receipt.record_id && <button type="button" onClick={() => void exclude()} className={buttonStyle} disabled={pending} data-testid="receipt-exclude">Exclude personal / unwanted</button>}</div>
     </form>
+  </div>;
+}
+
+function ReceiptSource({ receipt, source }: { receipt: Receipt; source: string }) {
+  const [page, setPage] = useState(1);
+  const [pageCount, setPageCount] = useState(1);
+  const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const isPdf = receipt.content_type === "application/pdf";
+  useEffect(() => {
+    if (!isPdf) return;
+    let active = true;
+    fetch(`${source}?info=1`, { cache: "no-store" }).then(r => r.json()).then(info => {
+      if (active && Number.isInteger(info.pageCount) && info.pageCount >= 1 && info.pageCount <= 10) setPageCount(info.pageCount);
+    }).catch(() => { /* Original PDF link remains available. */ });
+    return () => { active = false; };
+  }, [source, isPdf]);
+  return <div>
+    {!failed && !loaded && <p role="status" className="mb-2 text-sm text-[#4b8068]">Reading source page…</p>}
+    {failed ? <p role="alert" className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">Preview unavailable. Open the source document below to check it.</p> :
+      // Authenticated images also make PDF pages readable in browsers without an embedded PDF viewer.
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={isPdf ? `${source}?preview=1&page=${page}` : source} alt={`Source receipt: ${receipt.original_filename}, page ${page}`} onLoad={() => setLoaded(true)} onError={() => setFailed(true)} className="max-h-[40rem] w-full rounded-lg border border-[#bbf7d0] object-contain" data-testid="receipt-source-preview" />}
+    {isPdf && <div className="mt-2 flex items-center justify-between gap-2 text-sm text-[#14532d]">
+      <button type="button" className={buttonStyle} disabled={page <= 1} onClick={() => { setPage(page - 1); setFailed(false); setLoaded(false); }} data-testid="receipt-source-previous">Previous page</button>
+      <span>Page {page} of {pageCount}</span>
+      <button type="button" className={buttonStyle} disabled={page >= pageCount} onClick={() => { setPage(page + 1); setFailed(false); setLoaded(false); }} data-testid="receipt-source-next">Next page</button>
+    </div>}
   </div>;
 }
