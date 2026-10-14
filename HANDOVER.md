@@ -612,7 +612,40 @@ Production proof update:
   PDF source review now renders authenticated PNG page previews with page
   navigation; original PDFs remain available. Text and scan preview pixels were
   inspected locally, a second page rendered, and out-of-range pages rejected.
-  Verify the preview on the final live deployment before claiming this rung.
+  Readable source pixels were subsequently verified on the final live deployment.
 - Preview check: `npx tsx scripts/check-receipt-preview.mts`. Generated local
   proof lives under ignored `tests/receipt-verification/`; no private browser
   screenshots are committed.
+
+Final receipt-first release (14 October 2026): **integrated/live verified with
+labelled synthetic documents; not production proven with real receipts**.
+
+- Code commit `9583eba`; promoted deployment `dpl_AH61dvFRFtyc2rHVABJnmoaWz8e4`
+  serves `https://vibecount-teal.vercel.app`. Draft PR:
+  `https://github.com/jimbrouw/vibecount/pull/5`.
+- Text and scanned PDF previews are readable in the authenticated live browser.
+  Deployment bundles include PDF standard fonts; the parser resolves them from
+  the application root because Turbopack transforms `require.resolve` to a module
+  identifier. A compiled local production server also returned readable pixels.
+- A fresh upload on this final deployment returned `pdf_text`, 12000 pence,
+  Needs review, and no linked financial record. Earlier live confirmation of
+  £120 gross at 50% business use produced one £60 expense; Dashboard, Records,
+  Tax prep, JSON export and text summary agreed. Refresh and repeat upload passed.
+- All eight labelled test attachments are excluded; both synthetic expense rows
+  are excluded, Expenses is £0 and awaiting-review count is zero. Private source
+  evidence and audit history remain available. Existing invoices were untouched.
+- Unauthenticated receipt/source requests returned 401. Database fixture tests
+  passed cross-owner access rejection. Two actual browser accounts remain an
+  explicit proof gap, alongside real camera photos and a physical phone.
+- Final screenshot is local and ignored:
+  `tests/receipt-verification/final-live-receipt-proof.jpg`.
+- Original checkout edits in `lib/supabase/middleware.ts` and `next.config.ts`
+  were preserved. Implementation remains in the attached receipt-import worktree.
+
+For compiled local browser checks, use the existing allowlisted port 3002 after
+stopping any task-owned development server on that port:
+
+```bash
+npm run build
+npm run start -- --port 3002
+```
