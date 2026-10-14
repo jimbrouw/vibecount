@@ -11,6 +11,7 @@
     "scan:secrets": "bash scripts/scan-secrets.sh"
   },
   "dependencies": {
+    "@napi-rs/canvas": "0.1.80",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.2",
     "@vercel/config": "^0.5.1",

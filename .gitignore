@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local browser proof can contain account details; keep it out of Git.
+/tests/receipt-verification/

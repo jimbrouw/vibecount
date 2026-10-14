@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { formatPounds } from "@/lib/invoices/money";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentTaxYearStart, getTaxYearLabel } from "@/lib/records/tax-periods";
 import {
@@ -25,8 +26,8 @@ export async function GET(request: Request) {
   const format = url.searchParams.get("format") === "txt" ? "txt" : "csv";
 
   const { data, error } = await supabase
-    .from("financial_records")
-    .select("record_type, amount, record_categories(name, sa103_box)")
+    .from("financial_record_reporting")
+    .select("record_type, amount:reporting_amount, record_categories(name, sa103_box)")
     .eq("user_id", user.id)
     .eq("status", "approved")
     .eq("tax_year_start", taxYearStart);
@@ -49,9 +50,10 @@ export async function GET(request: Request) {
     outputContent += `Estimate and review pack only. This is not tax advice, not a filing calculation, and not a tax return submission.\n`;
     outputContent += `Review with the user or accountant before using any figure.\n\n`;
 
-    outputContent += `Total Income: ${checklist.incomeTotal}\n`;
-    outputContent += `Total Expenses: ${checklist.expenseTotal}\n`;
-    outputContent += `Net Profit: ${checklist.profitTotal}\n\n`;
+    outputContent += `Basis: approved GBP records; receipt payment dates and business-use allocation. Unpaid bills excluded. Legacy rows use their recorded dates.\nReview VAT, equipment and other adjustments before tax use.\n\n`;
+    outputContent += `Total Income: ${formatPounds(checklist.incomeTotal)}\n`;
+    outputContent += `Total Expenses: ${formatPounds(checklist.expenseTotal)}\n`;
+    outputContent += `Net Profit: ${formatPounds(checklist.profitTotal)}\n\n`;
 
     outputContent += `Self Assessment Checklist:\n`;
     outputContent += `-------------------------------------------------\n`;
@@ -102,7 +104,7 @@ export async function GET(request: Request) {
 
   await supabase.from("record_exports").insert({
     user_id: user.id,
-    export_type: format === "txt" ? "accountant_pack_txt" : "accountant_pack",
+    export_type: "accountant_pack",
     tax_year_start: taxYearStart,
     completed_at: new Date().toISOString(),
     record_count: checklist.incomeCount + checklist.expenseCount,

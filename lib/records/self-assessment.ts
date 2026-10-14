@@ -93,11 +93,11 @@ export function buildSelfAssessmentChecklist(records: SelfAssessmentRecord[]) {
     {
       id: "total-expenses",
       form: "SA103S / SA103F",
-      officialLabel: "Total allowable business expenses",
+      officialLabel: "Recorded business expenses (tax treatment needs review)",
       plainEnglish: "Business costs you may be able to take off your income.",
       whyItMatters: "Expenses reduce the profit figure used for Self Assessment.",
       dataSource: "Approved expense records",
-      fillMode: expenseCount > 0 ? "suggested" : "needs_user",
+      fillMode: expenseCount > 0 ? "accountant_review" : "needs_user",
       suggestedValue: expenseCount > 0 ? formatPounds(expenseTotal) : "Needs records",
       evidence: `${expenseCount} approved expense records`,
       reviewNote:

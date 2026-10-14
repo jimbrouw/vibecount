@@ -16,6 +16,7 @@ import PlainLanguageNote from "./PlainLanguageNote";
 import EmailInvoiceButton from "./EmailInvoiceButton";
 import ChaseInvoiceButton from "./ChaseInvoiceButton";
 import DeleteInvoiceButton from "./DeleteInvoiceButton";
+import DashboardTotals from "./receipts/DashboardTotals";
 
 export const metadata = {
   title: "Dashboard — VibeCount",
@@ -134,6 +135,13 @@ export default async function DashboardPage({
       }
     }
   });
+
+  const [expenseSummaries, expensePending] = await Promise.all([
+    supabase.from("financial_record_quarter_summaries").select("expense_total").eq("user_id", user.id),
+    supabase.from("record_attachments").select("id", { count: "exact", head: true })
+      .eq("user_id", user.id).eq("status", "active").in("receipt_state", ["reading", "review", "failed"]),
+  ]);
+  const expenseTotal = (expenseSummaries.data ?? []).reduce((sum, row) => sum + Math.round(Number(row.expense_total) * 100), 0);
 
   const taxPotPercentage = settingsRow?.tax_pot_percentage ?? 27.00;
   const taxPotEstimate = Math.round(totalPaid * (taxPotPercentage / 100));
@@ -321,44 +329,9 @@ export default async function DashboardPage({
           </div>
         )}
 
-        {/* Home totals */}
-        <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-[#bbf7d0] bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
-              Total Invoiced
-            </p>
-            <p className="mt-2 text-xl font-semibold text-[#14532d]">
-              {formatPounds(totalInvoiced)}
-            </p>
-          </div>
-          <div className="rounded-xl border border-[#bbf7d0] bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
-              Total Paid
-            </p>
-            <p className="mt-2 text-xl font-semibold text-[#14532d]">
-              {formatPounds(totalPaid)}
-            </p>
-          </div>
-          <div className="rounded-xl border border-[#bbf7d0] bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
-              Outstanding
-            </p>
-            <p className="mt-2 text-xl font-semibold text-[#14532d]">
-              {formatPounds(totalOutstanding)}
-            </p>
-          </div>
-          <div className="rounded-xl border border-[#dcfce7] bg-[#f7fef9] p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
-              Tax Pot Nudge
-            </p>
-            <p className="mt-2 text-xl font-semibold text-[#14532d]">
-              {formatPounds(taxPotEstimate)}
-            </p>
-            <p className="mt-1 text-xs text-[#4b8068]">
-              {taxPotPercentage}% of paid invoices
-            </p>
-          </div>
-        </section>
+        <DashboardTotals invoiced={totalInvoiced} paid={totalPaid} outstanding={totalOutstanding}
+          expenses={expenseTotal} awaitingReview={expensePending.count ?? 0}
+          taxPot={taxPotEstimate} percentage={taxPotPercentage} expenseError={Boolean(expenseSummaries.error || expensePending.error)} />
 
         {/* Hero action */}
         <div className="mb-8 flex items-center justify-between">
@@ -568,7 +541,7 @@ export default async function DashboardPage({
                       senderName={settingsRow?.legal_name ?? ""}
                       paymentLinkUrl={settingsRow?.payment_link_url ?? ""}
                       hasPdf
-                      pdfShareUrl={(inv as any).pdfShareUrl}
+                      pdfShareUrl={inv.pdfShareUrl}
                     />
                     {lateInterest && lateInterest.daysOverdue > 0 && (
                       <ChaseInvoiceButton
@@ -582,7 +555,7 @@ export default async function DashboardPage({
                         senderName={settingsRow?.legal_name ?? ""}
                         paymentLinkUrl={settingsRow?.payment_link_url ?? ""}
                         hasPdf
-                        pdfShareUrl={(inv as any).pdfShareUrl}
+                        pdfShareUrl={inv.pdfShareUrl}
                         daysOverdue={lateInterest.daysOverdue}
                         lateFeePence={lateInterest.totalLateFeePence}
                       />
