@@ -1,487 +1,122 @@
-# VibeCount — Handover Document
-
-_Last updated: 2026-05-29_
-
----
-
-## What this project is
-
-VibeCount is a freelancer invoicing tool built for people who find finance admin overwhelming — specifically dyslexic/dyscalculic users and creatives. Two hero features for v1:
-
-1. **Structured Invoice Creation** — voice first (speak an invoice), never voice only (typing is a full equal path). Mandatory read-back of amounts in figures and words before the user confirms.
-2. **Explain Simply** — a static, accountant-reviewed glossary of tax/accounting terms in plain English.
-
-**Spec:** `/spec.md` — read this before making any product decisions. The principles section (Section 3) overrides everything.
-**Task list:** `/tasks.md` — ordered build plan, do not skip ahead.
-**Validation result:** `/validation-result-v2.md` — the extraction prompt was proven at 93% accuracy. Voice is safe to build.
-
----
-
-## Stack
-
-| Layer | Choice |
-|---|---|
-| Frontend + routing | Next.js 16 (App Router, TypeScript, Tailwind) |
-| Auth + database | Supabase (Auth + Postgres + Storage) |
-| AI extraction | Anthropic `claude-sonnet-4-6` — use `SYSTEM_PROMPT` from `validation_gate_v2.py` verbatim |
-| Speech (Task 6 only) | Whisper |
-| PDF | Server-side with `pdf-lib` |
-| Hosting | Vercel (auto-deploys from `main`) |
-| Analytics | PostHog |
-
----
-
-## Repos and URLs
-
-| Thing | URL |
-|---|---|
-| GitHub | https://github.com/jimbrouw/vibecount |
-| Snapshot repo for current Phase 2/3 work | https://github.com/jimbrouw/vibecount-phase-3-invoice-reminders |
-| Vercel project | https://vercel.com/jims-projects-b7cb6c2e/vibecount |
-| Live URL (stable alias) | https://vibecount-teal.vercel.app |
-| Latest Vercel Preview | https://vibecount-nrdh9zfjq-jims-projects-b7cb6c2e.vercel.app |
-| Latest Vercel Preview inspect | https://vercel.com/jims-projects-b7cb6c2e/vibecount/BxXVNTZ9HTF48cE2AZADoTWZjup8 |
-| Vercel env vars page | https://vercel.com/jims-projects-b7cb6c2e/vibecount/settings/environment-variables |
-| Supabase project | https://supabase.com/dashboard/project/lazorvlkgxgzdgflzhjm |
-
----
-
-## Current status as of 2026-05-29
-
-- Current working branch: `codex/phase-3-invoice-reminders`
-- Worktree was clean before deployment.
-- Current branch has been pushed to the existing repo as
-  `origin/codex/phase-3-invoice-reminders`.
-- A separate private snapshot repo was created and pushed with this branch as
-  `main`: https://github.com/jimbrouw/vibecount-phase-3-invoice-reminders
-- Vercel Preview deployment is ready:
-  https://vibecount-nrdh9zfjq-jims-projects-b7cb6c2e.vercel.app
-- Preview is behind Vercel deployment protection and returns `401` unless the
-  tester is authorised on the Vercel project.
-- Verification immediately before deployment:
-  - `npm run lint` passed
-  - `npm test` passed
-  - `npm run build` passed
-- Vercel CLI on this machine is outdated (`54.5.1`; latest seen `54.6.1`).
-  Upgrade with `npm i -g vercel@latest` or `pnpm add -g vercel@latest`.
+# VibeCount engineering handover
 
-## What's been built
+Updated: 18 October 2026 (Europe/London).
 
-### ✅ Task 0 — Skeleton live
-
-- Next.js 16 app scaffolded with TypeScript + Tailwind
-- Packages installed: `@supabase/supabase-js`, `@supabase/ssr`, `posthog-js`, `posthog-node`
-- Supabase client helpers created:
-  - `lib/supabase/client.ts` — browser client
-  - `lib/supabase/server.ts` — server component client
-  - `lib/supabase/middleware.ts` — session refresh for proxy
-- `proxy.ts` — Next.js 16 proxy (replaces middleware) wired up, protects `/dashboard`, redirects logged-in users away from auth pages
-- `.env.local` and `.env.local.example` present with all keys
-- Git repo initialised on `main`, pushed to GitHub
-- Connected to Vercel, auto-deploys on push to `main`
-- Hello world page live at https://vibecount-teal.vercel.app
+## Read this first
 
-### ✅ Task 1 — Auth
+The private test app is running and its synthetic GBP import-to-export journey has passed. The original `handover2.md` specification is **not complete** and this is **not a production release**.
 
-- `app/login/page.tsx` — email + password login form
-- `app/signup/page.tsx` — signup form, handles both "email confirmation required" and "straight through" cases
-- `app/dashboard/page.tsx` — server-side protected page, shows user email, redirects to `/login` if not authed
-- `app/dashboard/LogoutButton.tsx` — client component, calls `supabase.auth.signOut()` then redirects
-- `app/auth/callback/route.ts` — handles Supabase email confirmation redirect, exchanges code for session
-- Home page (`app/page.tsx`) updated with "Create account" and "Sign in" links
+The user's latest delivery constraint is to stop adding features, protect the live app, fix demonstrated blockers and keep time/token use bounded. Do not restart open-ended implementation from older plans. The next step below is a recommendation, not authorization to build every outstanding item.
 
-### ✅ Task 2 — Schema
+## Code and recovery
 
-- Supabase migrations added under `supabase/migrations/`
-- `public.clients` — saved client entity with zero-friction inline-create shape: `id`, `user_id`, `name`
-- `public.invoices` — user-owned invoice rows with `client_id`, `number`, `invoice_date`, `description`, `amount`, `payment_terms`, `status`, `pdf_path`
-- `public.glossary_terms` — static Explain Simply glossary seed rows
-- Row-level security enabled on all three public tables
-- Client and invoice policies restrict reads/writes to the signed-in user
-- Glossary terms are read-only to app users and public-readable for the static Explain Simply UI
-- Supabase security advisor is clean after migration
-- Verified by inserting and reading a test invoice in Supabase, then cleaning it up
+- Workspace: `/Users/standard/Developer/vibecount`.
+- Current branch: `codex/session-backup-2026-10-18`.
+- Private backup repository: https://github.com/jimbrouw/vibecount-private-backup
+- Verified recovery checkpoint: `6c30f26639ee9c30ddfc80be13202b8c54f0dc78`.
+- Backup remote: `private-backup`; original public remote: `origin` (`jimbrouw/vibecount`).
+- The checkpoint preserves 801 changed/new source, migration, fixture, test and documentation files. This document is a subsequent update.
+- The original public branch `claude/vibecount-ai-agents` remains at `5cb31c6`. Do not push this handover or personal financial scenarios to the public repository.
+- Local environment files, credentials, browser sessions and deployment secrets are excluded. A source backup is not a database, Storage or encryption-key backup.
+- The local Supabase CLI version cache remains modified outside the checkpoint; it is not application work.
 
-### 🟡 Task 3 — The Spine (typed invoice → PDF)
+## Environments: keep them separate
 
-Implemented locally:
+| | Private test | Live production |
+|---|---|---|
+| App | https://vibecount-private-test.vercel.app | https://vibecount-jims-projects-b7cb6c2e.vercel.app |
+| Vercel project | `vibecount-private-test` / `prj_4HsGcxALjmvHQNk2kijYl6Iu0w8j` | `vibecount` / `prj_XjqoAX8mMF1G589I6Tgu7qnVzvRR` |
+| Supabase ref | `xgpozyxnckwetlxqners` | `lazorvlkgxgzdgflzhjm` |
+| Applied migrations at last verification | 113 | 28 |
 
-- `/dashboard/invoices/new` protected page with typed invoice form
-- Live editable preview beside the form
-- Client name uses saved-client model: exact normalized match or inline create on confirm
-- Amount appears in figures and words in the form preview
-- `/api/invoices/pdf` authenticated route validates the user, creates/reuses client, inserts finalised invoice row, generates a server-side PDF, and returns it as a download
-- `pdf-lib` added for server-side PDF generation
-- Dashboard now links to "Create invoice"
-- Google sign-in added on login and signup once Supabase/Google OAuth is configured
-- Invoice date defaults to today's date in UK format (`day/month/year`)
-- Payment terms default to 30 days
+The separate Supabase test project was explicitly approved only after a $0/month quote. No plan upgrade was authorized. Branching was unavailable on the Free plan. No live data was copied.
 
-Verified:
+Last verified live deployment: `dpl_AH61dvFRFtyc2rHVABJnmoaWz8e4`. No live deployment promotion, database migration or production environment change occurred during the private acceptance work.
 
-- `npm run lint` passes
-- `npm run build` passes
-- Unauthenticated `/dashboard/invoices/new` redirects to `/login`
-- Unauthenticated `/api/invoices/pdf` returns `401`
-- Logged-in browser flow reaches `/dashboard/invoices/new` and `POST /api/invoices/pdf` returns `200`
-
-### ✅ Task 4 — Explain Simply
+**Root `.vercel/project.json` points at the live project.** Never deploy this workspace blindly. The test release was built from a separate snapshot whose project link points at the test project. It excludes parked agent/MCP endpoints, cron jobs, local secrets and production-provider credentials. The full checkpoint contains additional work that was not shipped in that snapshot.
 
-Implemented locally:
-
-- `/dashboard/glossary` protected page loads glossary terms from Supabase
-- Searchable glossary browser with tap-to-expand term cards
-- Display rule is implemented: official term stays visible, explanation and example expand beneath it
-- Dashboard layout now provides glossary data to logged-in routes
+Private test protection uses Vercel SSO with `deploymentType: all`. Anonymous stable-alias requests were verified to redirect to Vercel sign-in. Keep this protection enabled.
 
-Verified:
-
-- `npm run lint` passes
-- `npm run build` passes
-- `/dashboard/glossary` is included in the build output
-
-### ✅ Task 5 — Accessibility layer
+Test VibeCount credentials are in the ignored, owner-readable `.vercel/private-test-login.json`. Do not paste or commit its contents. Vercel sign-in and VibeCount email/password sign-in are separate gates. Google OAuth is not configured on the test Supabase project; preview-only `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=false` hides that option with an explanation. Unset configuration retains the existing Google UI.
 
-Implemented locally:
-
-- Shared accessibility provider for logged-in routes
-- Floating accessibility controls for large text, relaxed spacing, and plain-language mode
-- Read-aloud buttons for invoice amount summary and invoice preview summary using Web Speech API
-- Plain-language helper notes added to dashboard, invoice creation, and settings
-- Money displays on the dashboard now show figures and words, not figures only
-
-Verified:
-
-- `npm run lint` passes
-- `npm run build` passes
-
-Pending final check:
-
-- Browser-test the accessibility toolbar and read-aloud controls in a logged-in session
-
-### 🟡 Task 6 — Voice path
-
-Implemented locally:
-
-- `/dashboard/invoices/voice` protected voice-entry page
-- `/api/voice/draft` authenticated route that accepts either recorded audio or an edited transcript
-- Whisper transcription via OpenAI `audio/transcriptions`
-- Structured extraction using the validated `SYSTEM_PROMPT` from `validation_gate_v2.py`
-- Ambiguous amount hard-stop with candidate selection
-- Mandatory spoken read-back before continuing
-- Confirmed voice draft hands off into the existing typed invoice preview flow
-
-Verified:
-
-- `npm run lint` passes
-- `npm run build` passes
-- `/api/voice/draft` and `/dashboard/invoices/voice` are included in the build output
-
-Remaining before this task can be called done:
-
-- add `OPENAI_API_KEY` for Whisper transcription
-- run the Whisper sub-gate with real founder recordings
-- browser-test the logged-in voice flow end to end
-
-### 🟡 Settings groundwork
-
-Implemented locally:
-
-- `user_settings` migration added with RLS
-- `/dashboard/settings` protected page and `/api/settings` read/write route
-- Settings form for legal name, address, contact details, bank details, VAT, invoice prefix, payment terms, and late-payment wording
-- Invoice creation now reads saved defaults from `user_settings`
-- PDF generation now uses saved sender identity, bank details, VAT details, invoice prefix, and late-payment wording
-- Private UTR storage is supported in settings but intentionally not shown on invoices
-
-### ✅ Phase 2 — MTD-ready records foundation
-
-Implemented on the current branch:
+## What exists
 
-- Unified `financial_records` model for income and expenses, not separate
-  `income_records` / `expenses` tables
-- Default and user record categories with SA103 mapping support
-- Source import tracking through `record_imports`
-- Generated `tax_year_start` and `tax_quarter` columns in the database
-- Quarter summary view: `financial_record_quarter_summaries`
-- Audit-friendly record change logging
-- Secure records storage support:
-  - record attachments
-  - private signed attachment URLs
-  - export history
-  - delete/export routes
-- `/dashboard/records` with manual record entry, review, tax-year selection,
-  threshold tracker, quarterly summaries, CSV import, bank import, and exports
-- CSV import staging via `csv_import_rows`; only approved rows are committed
-  into `financial_records`
-- Bank statement import prototype via `bank_statement_import_rows`; raw PDFs
-  are not stored by default and rows are reviewed before commit
-- `/dashboard/tax-prep` plain-English Self Assessment preparation page
-- `/api/tax-prep/export` accountant review export
-- Agent-native selector pass completed across auth, dashboard navigation,
-  invoice creation and voice confirmation, records/manual review, CSV and bank
-  import review controls, records exports, tax-prep export, settings, and
-  invoice status/reminder confirmation controls.
+The existing stack is Next.js 16 App Router, TypeScript, Tailwind and Supabase Auth/Postgres/RLS/Storage. Reuse its invoice, records, review, authentication and export surfaces. Read the relevant installed Next.js documentation before changing framework code.
 
-Important implementation note:
+Implemented foundations include immutable source preservation, import observations, duplicate handling, explicit classification review, invoice/payment allocation, source provenance, reviewed tax facts, versioned calculations, draft filing artifacts and cash planning. Their presence does not establish completion of all supported financial cases.
 
-- Do **not** add new `income_records` and `expenses` tables from older planning
-  notes unless a future migration plan proves the unified `financial_records`
-  model is blocking the product.
-- Phase 2 is now a stabilisation and verification phase, not a from-scratch
-  schema build.
+There are 109 canonical local migrations plus four captured hosted receipt migrations. Together they replay as the 113-migration private baseline. The captured migrations are under `fixtures/hosted-baseline/`; do not rewrite deployed history or assume live matches a fresh local schema.
 
-Latest selector-pass verification:
+Recent receipt work aligns paid/unpaid/refund cash effects across reports, tax inputs and direct readers, and prevents inconsistent or excessive receipt refunds, including concurrent changes. Migration 109 preflight rejects invalid existing refund families rather than silently modifying them.
 
-- `npm run lint` passed
-- `npm test` passed
-- `npm run build` passed
-- Local Playwright check against `http://localhost:3002/login` and
-  `/signup` confirmed the auth selectors render in the browser.
+## What was demonstrated
 
-Latest review-gate audit:
+The hosted private journey used synthetic data and explicit review:
 
-- Invoice PDF creation now requires the invoice UI to send
-  `humanConfirmed: true` after the review button is pressed.
-- Manual financial records are created with `status = review`; approval happens
-  only from the review list/import review controls.
-- Due invoice reminder automation now writes pending reminder drafts and disables
-  the due reminder rather than sending email from the cron route.
-- `npm run lint`, `npm test`, targeted guardrail searches, and `npm run build`
-  pass after the audit changes.
+1. Imported three CSV rows: £1,000 income, £125.50 business cost and £24 personal cost.
+2. Approved only the two business records. Records showed £874.50 net.
+3. Downloaded the original through its explicit confirmation gate; bytes matched the uploaded source and SHA-256 manifest.
+4. Reimported identical bytes without duplicating the two approved records.
+5. Created/confirmed a synthetic £1,000 invoice and generated its PDF without sending email.
+6. Matched the £1,000 receipt: invoice outstanding and receipt unallocated balances became zero; income stayed £1,000.
+7. Downloaded records JSON/CSV, source ledger, decisions, manifest and reconciliation exports.
+8. Verified a second authenticated user could not read the first user's records, imports, source rows or source files.
 
-Latest tax estimate verification:
+Visible browser checks also passed login, dashboard, Records, tax preparation and cash planning with no browser error/warning logs. Missing tax/cash facts remained unresolved.
 
-- Tax-prep UI labels the calculation base as net profit and shows visible
-  estimate-only caveat copy: not tax advice, not a filing calculation, and not
-  a tax return submission.
-- Tax-prep CSV export now includes an estimate/review-pack caveat row and
-  `suggested_value_estimate` header wording.
-- Targeted searches confirm no app/lib usage of gross-profit wording in tax
-  estimate surfaces; `npm run lint`, `npm test`, and `npm run build` pass.
+No real financial approvals, customer email, payment, bank connection or tax filing were performed.
 
-Latest records/import QA fixes:
+Hosted acceptance found and fixed an ambiguous PostgREST attachment relationship in `app/api/records/export/route.ts`: the query now explicitly selects `record_attachments_record_same_user_fk`. The later sign-in fix changes only login/signup display when the private flag is false.
 
-- Records now self-heal missing category seed data by creating user-owned
-  fallback income and expense categories when no usable categories are present.
-- CSV import accepts common bank/spreadsheet headers such as details,
-  debit/credit, paid in/paid out, and stages rows for review.
-- Bank statement import now extracts text from text-readable PDFs before
-  redaction/parsing; scanned image-only PDFs still need CSV or text export.
-- CSV and bank file inputs are styled as explicit choose-file controls.
-- Payment reminders page now explains that VibeCount prepares reminder drafts
-  for human review rather than silently emailing clients.
+## Verification and its limits
 
-### ✅ Phase 3 — Commercial invoice workflow groundwork
+- The full suite passed 838 tests before migration 109 and the final export/login fixes; the production build passed at that checkpoint.
+- Migration 109 subsequently passed focused hosted-upgrade and receipt checks, including five native PostgreSQL concurrency races.
+- The export fix passed its focused route test and hosted downloads.
+- The login display fix passed lint, the deployed build and visible browser checks.
+- Do not describe the earlier full suite as covering all subsequent changes. Do not rerun every check without a concrete reason.
 
-Implemented on the current branch:
-
-- Left-sidebar dashboard shell with centralised navigation in
-  `app/dashboard/DashboardShell.tsx`
-- Quotes and reusable services
-- Quote status flow and quote-to-invoice conversion
-- Payment link settings and invoice rendering support
-- Repeating invoice templates
-- Invoice delivery/reminder database support and reminder copy utilities
-
-Remaining Phase 3 caution:
-
-- User-approved invoice sending / automated follow-up reminders should remain
-  strictly user-approved. Do not silently send invoices or reminders.
-
----
-
-## Incomplete / needs doing before moving forward
-
-### ✅ Env vars added to Vercel
-
-Vercel now has these variables across Production, Preview, and Development:
-
-| Variable | Value (from `.env.local`) |
-|---|---|
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Set in Vercel and local `.env.local`; do not paste literal values into docs. |
-| `ANTHROPIC_API_KEY` | Server side only; do not paste literal values into docs. |
-| `NEXT_PUBLIC_POSTHOG_KEY` | Set in Vercel and local `.env.local`; do not paste literal values into docs. |
-| `NEXT_PUBLIC_POSTHOG_HOST` | `https://app.posthog.com` |
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://lazorvlkgxgzdgflzhjm.supabase.co` |
-
-Verified with `vercel env list` on 2026-05-26. Production was redeployed after the env change, and the stable alias is live at `https://vibecount-teal.vercel.app`.
-
-### ✅ Supabase auth callback URL configured
-
-In Supabase dashboard → **Authentication → URL Configuration**:
-- **Site URL:** `https://vibecount-teal.vercel.app`
-- **Redirect URLs:** include:
-  - `https://vibecount-teal.vercel.app/auth/callback`
-  - `http://localhost:3000/auth/callback`
-  - `http://localhost:3002/auth/callback`
-
-Google OAuth also needs this Supabase callback URL registered in Google Cloud:
-`https://lazorvlkgxgzdgflzhjm.supabase.co/auth/v1/callback`
-
-### ✅ Founder decision for Task 2
-
-Task 2 used the recommended model: **Client is a saved entity with zero-friction inline create.**
-
-No separate client-management flow is part of MVP.
-
----
-
-## Remaining tasks
-
-### Task 3 — The Spine (typed invoice → PDF)
-Implementation is in place and logged-in PDF generation has been verified locally.
-
-### Task 4 — Explain Simply (static glossary UI)
-Implementation is in place and builds cleanly. Glossary terms can also be opened
-from supported finance labels inside the app, not only on the glossary page.
-
-Remaining before launch:
-- founder-written glossary content
-- accountant review of glossary wording
-
-### Task 5 — Accessibility layer
-- Large-text mode, spacing controls, plain-language toggle
-- Read-aloud (Web Speech API) for amounts and invoice summary
-- Confirm figures+words+chunking from Task 3 applied everywhere money appears
-
-Done when: accessibility toggles work, money is always shown figures + words everywhere.
-
-### Task 6 — Voice path (uses the validated extraction prompt)
-- **Whisper sub-gate first:** record ~20 real invoice amounts, run audio → Whisper → extraction. If Whisper mangles numbers badly, keep voice behind typing.
-- Mic capture → Whisper → extraction (using `SYSTEM_PROMPT` from `validation_gate_v2.py` verbatim) → draft
-- **Mandatory read-back** (figures + words + spoken). Cannot be skipped.
-- If `amount_ambiguous` is true → hard stop, show candidates, user must pick/confirm. Never auto-trust.
-- Confirmed draft flows into the same preview/PDF flow from Task 3.
-
-Done when: speak an invoice → ambiguous amounts force a choice → lands in Task 3 preview flow.
-
-### Task 7 — Tone, metrics, polish
-- Done in code:
-  - Tone pass applied across the public, auth, and invoice flows without using the banned claims from spec Section 10.
-  - PostHog hooks added for `voice_invoice_attempt`, `invoice_draft_completion`, `pdf_invoices_generated`, `glossary_term_opened`, `failed_voice_attempt`, and `manual_entry_usage`.
-  - Small visual pass pushed the main cards and panels further into the British green / warm cream direction.
-
-### Phase 2 note — MTD-ready records are now implemented and need verification
-
-- `knowledge-base/making-tax-digital.md` now captures the verified HMRC position as
-  of 27 May 2026.
-- MTD is no longer a vague Phase 3 awareness note.
-- Phase 2 now has the **MTD-ready records** foundation implemented without
-  claiming HMRC-recognised compliance:
-  - unified structured income / expense records
-  - secure per-user cloud record storage
-  - attachment storage with signed access and export/deletion paths
-  - CSV import with review before commit
-  - privacy-first bank statement PDF import prototype
-  - quarterly summaries
-  - threshold tracking
-  - tax estimate support
-  - plain-English Self Assessment prep for SA103S / SA103F
-- Direct HMRC submission should remain later until the records model and user
-  workflow are proven.
-- Near-term Phase 2 work should focus on verification and hardening:
-  - add any missing `data-testid` selectors
-  - verify HMRC quarter boundaries with real test rows
-  - verify CSV approve/reject/commit behaviour
-  - verify bank statement redaction and no raw PDF persistence
-  - confirm every tax estimate UI/API/export includes disclaimer copy
-  - verify figures-and-words formatting on tax-prep money values
-- `knowledge-base/bank-statement-import.md` captures the bank PDF idea:
-  extract transactions, redact before LLM/database use, suggest categories, and
-  commit only user-approved rows into records.
-- `knowledge-base/self-assessment-plain-english.md` captures the tax return prep
-  idea: map HMRC sole trader questions to simple language, VibeCount data
-  sources, and exportable accountant review packs before attempting filing.
-
-### Phase 3 note — commercial workflow is partly implemented
-
-- Phase 3 has started adding the lightweight Xero/SoloPad-style workflow around
-  the current invoice product:
-  - branded quotes and invoices
-  - saved services / line items
-  - quote-to-invoice conversion
-  - hosted payment links
-  - repeating invoice drafts
-- User-approved payment follow-up reminders are the remaining risky area:
-  keep reminder generation and sending explicitly user-approved.
-- Keep the data model reusable so proposal and contract documents can inherit
-  client, service, scope, price, and payment-term data later.
-- `knowledge-base/freelancer-operating-system.md` captures the smart document
-  direction and the guardrail against becoming a full project-management suite
-  too early.
-
-### Records QA note — category fallback
-
-- The records page now self-heals missing category seeds and also renders
-  fallback manual category options if production still returns no category rows.
-- Saving a manual record from a fallback option creates the real user-owned
-  category before inserting the review record.
-- Production Supabase initially only had the older invoice/client schema, so CSV
-  import failed at `record_imports`. On 29 May 2026, the Phase 2 records
-  foundation, secure records storage, CSV import review, and bank statement
-  import migrations were applied to project `lazorvlkgxgzdgflzhjm`.
-- Verified live tables now exist for `record_imports`, `csv_import_rows`,
-  `bank_statement_import_rows`, `financial_records`, attachments, exports, and
-  10 default categories.
-
-### Phase 4 note — agentic tax copilot
-
-- `knowledge-base/agentic-tax-copilot.md` captures the later agent idea.
-- Agent/MCP work on branch `claude/vibecount-ai-agents-1i5ob` is Phase 4 work
-  and should stay parked until Phase 2 records are stable and verified.
-- Treat Hermes-style autonomy as inspiration, not the immediate architecture.
-- The first agentic version should be read-only: inspect approved records, explain
-  issues, and create a review queue.
-- Later versions can suggest draft actions and write only after explicit user
-  approval.
-- Hard boundary: no silent HMRC submission, invoice sending, expense approval,
-  or record changes.
-- MCP tools such as `get_pl_summary`, `list_expenses`, browser-agent login, and
-  `finalise_invoice` are future Phase 4 acceptance criteria. Do not build or
-  merge them as part of Phase 2.
-- Any future `finalise_invoice` tool needs audit logging, ownership checks,
-  idempotency, valid status transitions, short-lived scoped tokens, permission
-  gating, and per-action confirmation before external testing.
-- Creators Base-style proposals, contracts, e-signatures, client portals, and
-  scope tracking belong here unless they directly support Phase 3 quotes,
-  invoices, payments, or records.
-
----
-
-## Important rules (do not forget)
-
-- **AI drafts. Humans confirm. AI never commits.** The read-back is the safety gate, not the confidence colour.
-- **The amount field always requires human review** — even a green confidence badge does not remove this.
-- **No LLM-generated glossary content** — static, human-written, accountant-reviewed only.
-- **No auto-sending invoices, no payment processing, no reminders** — user sends the PDF themselves.
-- The spec's NO list: no bookkeeping, no banking integrations, no expense OCR, no tax filing, no CRM, no spreadsheet migration, no AI finance checking, no payment chasing, no automated delivery tracking, no LLM-generated glossary.
-- Phase 2 can now introduce bookkeeping-adjacent digital records, but keep the
-  claim as **MTD-ready records**, not HMRC-recognised MTD software.
-- Use **net profit**, not gross profit. VibeCount does not currently model
-  cost of sales.
-- Every tax estimate surface must include caveat/disclaimer copy. Treat tax
-  estimates as planning aids, not filing-accurate calculations.
-- Do not duplicate the records schema with separate `income_records` and
-  `expenses` tables unless there is a deliberate migration away from
-  `financial_records`.
-
----
-
-## Local dev
-
-```bash
-cd /Users/standard/Developer/vibecount
-npm install
-npm run dev        # starts at http://localhost:3000
-```
-
-`.env.local` is present with all keys. Do not commit it (it is gitignored).
-
-To deploy a preview manually: `vercel deploy --yes`.
-
-To deploy production: `vercel deploy --prod` or push to `main` if the project is
-configured to auto-deploy production from `main`.
-
-Latest production deployment promoted on 2026-05-29:
-`https://vibecount-teal.vercel.app`
+Detailed acceptance: `docs/private-preview-acceptance-2026-10-18.md`.
+
+Local artifacts currently include `/tmp/vibecount-private-acceptance/` and `/tmp/vibecount-private-browser-check.jpg`. `/tmp` is temporary, not durable recovery storage. Browser-state files and test setup files there contain secrets and must not be shared.
+
+The isolated release snapshot path is recorded in `/tmp/vibecount-private-preview-path`; its release manifest records source hashes. Private database setup is under `/tmp/vibecount-private-test-db`. Check these still exist before relying on them.
+
+## Recommended next bounded task
+
+Prove one representative 2025/26 bank file through the existing review flow to a draft export in the private app. Agree that scope before implementation. Use representative redacted/synthetic bank formats first; real personal data requires the user's deliberate selection and review.
+
+Acceptance should establish: source preserved, dates/amounts parsed correctly, duplicate/transfer/refund ambiguity visible, only explicitly reviewed business amounts included, export totals independently reconciled, and unresolved tax facts clearly identified. Fix only blockers encountered in that journey. Record the outcome and stop for review.
+
+After that, expand acceptance to Starling, Nationwide, Amex and invoice inputs, then independently verify the 2025/26 draft tax pack. Do not estimate liability from missing facts treated as zero.
+
+## Still incomplete / release gates
+
+- Representative multi-bank and invoice-file acceptance for the actual 2025/26 workflow.
+- Independent annual tax calculation and SA100/SA102/SA103 mapping review; complete evidenced tax facts and independently reconciled draft pack.
+- Full foreign-currency lifecycle, including fees, cross-currency refunds and transfers.
+- Canonical bank-linked receipt attachment/enrichment compatibility; do not duplicate postings to attach evidence.
+- Verified accessible cash, buffers, tax reserves and unresolved reminder/provider delivery cases.
+- Durable evidence-deletion ledger, hosted key/object/database restore acceptance and recovery proof. Public deletion remains disabled.
+- Advanced OCR, accountant locking and retirement work are not complete. MTD is separate; draft exports are not filing software.
+
+No production promotion until the relevant migration, recovery and financial acceptance gates are proven. The private synthetic success does not certify the entire product.
+
+## Non-negotiable operating rules
+
+- AI drafts; humans confirm financial changes. Preserve explicit review/read-back gates.
+- Money uses exact arithmetic; distinguish invoiced, received, taxable profit and accessible cash. Use net profit.
+- Keep missing facts distinct from reviewed zero. Show tax caveats in UI/API/exports.
+- Never expose raw bank PDFs, unredacted bank details, encryption keys or credentials to LLM/browser surfaces.
+- Preserve evidence and audit history. Evidence deletion is by explicit user request only; no scheduled deletion.
+- Do not add Phase 4 MCP/browser-agent capabilities to the release. Do not enable automatic invoicing, sending, payments or HMRC submission.
+- Keep secrets out of Git; use the private backup for sensitive documentation. Do not connect it to deployment automation without a deliberate release decision.
+
+## Supporting documents
+
+- `handover2.md`: original product specification and private personal scenario; not a completion report.
+- `docs/milestone-0-audit-and-plan.md`: architecture audit and original plan.
+- `docs/handover-checkpoint.md`: chronological engineering record; later entries supersede older local-only/blocked status.
+- `docs/hosted-baseline-review.md`: hosted schema compatibility and upgrade evidence.
+- `docs/private-preview-acceptance-2026-10-18.md`: current hosted acceptance and auth/privacy fixes.
+- `docs/deployment-readiness-2026-10-18.md`: earlier readiness assessment, partly superseded by private hosted acceptance.
