@@ -134,22 +134,12 @@ export default async function ImportsPage({
     <main className="mx-auto max-w-5xl space-y-6 p-5 text-[#17251d]">
       <header>
         <h1 className="text-2xl font-semibold">
-          Imports and transaction review
+          Import your files
         </h1>
         <p className="mt-2">
-          Preserve a source once, then review how its transactions affect your
-          business records.
+          Start with a CSV file. Check the preview, then review your payments.
         </p>
       </header>
-      <BankSourceCoverageReadback coverage={coverage}/>
-      {focused && <Link data-testid="source-all-transactions" className="block underline" href={selected ? `/dashboard/imports?import=${selected}` : '/dashboard/imports'}>Show all transactions in this source</Link>}
-      <Link
-        href="/dashboard/imports/recovery"
-        data-testid="imports-recovery-link"
-        className="block underline"
-      >
-        Review upload status and recover failed evidence
-      </Link>
       {typeof params.error === "string" && (
         <p
           role="alert"
@@ -181,6 +171,18 @@ export default async function ImportsPage({
           evidence and decision history remain preserved.
         </p>
       )}
+      <details className="rounded-xl border bg-white p-4" data-testid="source-tools"><summary className="cursor-pointer font-semibold">Source checks and upload recovery</summary>
+      <BankSourceCoverageReadback coverage={coverage}/>
+      {focused && <Link data-testid="source-all-transactions" className="block underline" href={selected ? `/dashboard/imports?import=${selected}` : '/dashboard/imports'}>Show all transactions in this source</Link>}
+      <Link
+        href="/dashboard/imports/recovery"
+        data-testid="imports-recovery-link"
+        className="block underline"
+      >
+        Review upload status and recover failed evidence
+      </Link>
+      </details>
+      <details className="rounded-xl border bg-white p-4" data-testid="document-tools"><summary className="cursor-pointer font-semibold">Upload receipts, invoices or other documents</summary>
       <Link href="/dashboard/reconciliation/fx/evidence" data-testid="imports-fx-evidence-link" className="block underline">Review invoice and FX conversion document facts</Link>
       <DocumentIntake currentYear={getCurrentTaxYearStart()} />
       <section
@@ -272,6 +274,7 @@ export default async function ImportsPage({
           )}
         </nav>
       </section>
+      </details>
       {!available ? (
         <p role="alert">
           Imports are currently unavailable. Your existing records are

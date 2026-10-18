@@ -109,14 +109,14 @@ export function suggestMapping(
       "name",
       "payee",
     ),
-    amount: find("amount", "amount gbp", "amount in gbp", "value"),
+    amount: find("outflow gbp") >= 0 ? find("outflow gbp") : find("amount", "amount gbp", "amount in gbp", "value"),
     debit: find("paid out", "debit", "money out", "withdrawals"),
     credit: find("paid in", "credit", "money in", "deposits"),
     currency: find("currency", "currency code"),
     reference: find("reference", "payment reference"),
     dateFormat: "dmy",
     amountMode:
-      provider === "amex"
+      find("outflow gbp") >= 0 || provider === "amex"
         ? "card_charges"
         : find("paid out", "debit", "money out") >= 0
           ? "debit_credit"

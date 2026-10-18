@@ -108,3 +108,17 @@ test("business-use apportionment is exact and uses a defined penny rounding rule
   assert.equal(apportionPence(-1, 5000), -1);
   assert.throws(() => apportionPence(10, 10001));
 });
+
+
+test("reviewed expenses use Outflow_GBP as money out without approving spreadsheet claims", () => {
+  const table = readSourceCsv("Account,Date,Description,Outflow_GBP,Claim_status\nStarling,2026-04-01,Synthetic expense,12.50,Claim\nStarling,2026-04-02,Synthetic refund,-2.50,Claim");
+  const mapping = suggestMapping(table[0], "generic");
+  assert.equal(mapping.amount, 3);
+  assert.equal(mapping.amountMode, "card_charges");
+  mapping.dateFormat = "iso";
+  const rows = normalizeSourceCsv(table, mapping);
+  assert.deepEqual(rows.map((row) => row.signedPence), [-1250, 250]);
+  assert.equal(rows[0].date, "2026-04-01");
+  assert.equal(rows[0].rawCells[4], "Claim");
+  assert.equal("classification" in rows[0], false);
+});

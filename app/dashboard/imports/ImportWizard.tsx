@@ -31,6 +31,7 @@ export default function ImportWizard({
   const [mapping, setMapping] = useState<CsvMapping | null>(null);
   const [error, setError] = useState("");
   const [confirmed, setConfirmed] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const readGeneration = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const preview = useMemo(() => {
@@ -45,6 +46,20 @@ export default function ImportWizard({
     }
   }, [table, mapping]);
   const dates = preview?.rows.map((r) => r.date).sort() ?? [];
+  const accountColumn = table?.[0].findIndex((h) => h.trim().toLowerCase() === "account") ?? -1;
+  const fileAccounts = accountColumn < 0 ? [] : [...new Set(table!.slice(1)
+    .filter((row) => row.some((cell) => cell.trim()))
+    .map((row) => row[accountColumn].trim()).filter(Boolean))];
+  const multipleAccounts = fileAccounts.length > 1;
+  const moneyIn = preview?.rows.reduce((sum, row) => sum + Math.max(0, row.signedPence), 0) ?? 0;
+  const moneyOut = preview?.rows.reduce((sum, row) => sum + Math.max(0, -row.signedPence), 0) ?? 0;
+  const missing = mapping ? [
+    mapping.date < 0 ? "Which column contains the payment date?" : "",
+    mapping.description < 0 ? "Which column describes the payment?" : "",
+    (mapping.amountMode === "debit_credit" ? mapping.debit < 0 || mapping.credit < 0 : mapping.amount < 0)
+      ? "Which column contains the money amount?" : "",
+  ].filter(Boolean) : [];
+  const previewError = missing.length ? missing.join(" ") : preview?.error;
   function patch(values: Partial<CsvMapping>) {
     setConfirmed(false);
     setMapping((m) => (m ? { ...m, ...values } : m));
@@ -55,6 +70,7 @@ export default function ImportWizard({
     setTable(null);
     setMapping(null);
     setError("");
+    setShowSettings(false);
     if (!file) return;
     try {
       if (file.size > MAX_SOURCE_BYTES || !file.size)
@@ -66,26 +82,21 @@ export default function ImportWizard({
       );
       if (generation !== readGeneration.current) return;
       setTable(parsed);
-      setMapping(suggestMapping(parsed[0], provider));
+      const suggested = suggestMapping(parsed[0], provider);
+      if (suggested.date >= 0 && parsed.slice(1).filter((row) => row.some((cell) => cell.trim()))
+        .every((row) => /^\d{4}-\d{2}-\d{2}$/.test(row[suggested.date].trim()))) {
+        suggested.dateFormat = "iso";
+      }
+      setMapping(suggested);
     } catch (e) {
       if (generation === readGeneration.current)
         setError(e instanceof Error ? e.message : "Could not read CSV.");
     }
   }
 
-  return (
-    <form
-      action={importSourceCsv}
-      data-testid="source-import-form"
-      className="space-y-5 rounded-xl border bg-white p-5"
-    >
-      <h2 className="text-lg font-semibold">Import a bank or card CSV</h2>
-      <p className="text-sm">
-        Importing creates transactions for review. It does not add income or
-        expenses to your approved records.
-      </p>
-      <label className="block" htmlFor="source-account">
-        Account label
+  const accountElement = (
+<label className="block" htmlFor="source-account">
+        Which account is this file from?
         <select
           id="source-account"
           name="accountId"
@@ -102,7 +113,7 @@ export default function ImportWizard({
             );
           }}
         >
-          <option value="">Choose account</option>
+          <option value="">Choose an account</option>
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
               {a.label} · ending {a.masked_identifier}
@@ -110,8 +121,22 @@ export default function ImportWizard({
           ))}
         </select>
       </label>
+  );
+
+  return (
+    <form
+      action={importSourceCsv}
+      data-testid="source-import-form"
+      className="space-y-5 rounded-xl border bg-white p-5"
+    >
+      <h2 className="text-xl font-semibold">Import your payments</h2>
+      <p className="text-sm font-semibold">1. Choose a file → 2. Check the preview → 3. Import for review</p>
+      <p className="text-sm">
+        Choose a bank, card or expenses CSV. You will review the payments before
+        they count as income or expenses. Nothing is approved here.
+      </p>
       <label className="block" htmlFor="source-file">
-        CSV file (UTF-8, up to 1 MB)
+        Choose your CSV file (up to 1 MB)
         <input
           ref={fileInput}
           id="source-file"
@@ -130,18 +155,23 @@ export default function ImportWizard({
         />
       </label>
       {table && mapping && (
+        <details open={showSettings || Boolean(previewError)}
+          onToggle={(event) => setShowSettings(event.currentTarget.open)}
+          className="rounded-lg border p-4" data-testid="source-settings">
+          <summary className="cursor-pointer font-semibold" data-testid="source-settings-toggle">Change how this file is read</summary>
+          <p className="my-3 text-sm">Only change these if the preview looks wrong. Choose the column from your file for each item.</p>
         <fieldset
           className="grid gap-4 sm:grid-cols-2"
           data-testid="source-mapping-fields"
         >
-          <legend className="font-semibold">Check field mapping</legend>
+          <legend className="sr-only">File columns</legend>
           {(
             [
               ["date", "Date"],
               ["description", "Description / counterparty"],
-              ["amount", "Signed amount"],
-              ["debit", "Money out / debit"],
-              ["credit", "Money in / credit"],
+              ["amount", "Money amount"],
+              ["debit", "Money paid out (separate column)"],
+              ["credit", "Money received (separate column)"],
               ["currency", "Currency (optional)"],
               ["reference", "Reference (optional)"],
             ] as const
@@ -155,7 +185,7 @@ export default function ImportWizard({
                 className={control}
                 onChange={(e) => patch({ [key]: Number(e.target.value) })}
               >
-                <option value={-1}>Not mapped</option>
+                <option value={-1}>Choose a column</option>
                 {table[0].map((h, i) => (
                   <option value={i} key={i}>
                     {redactBankDetailsForPrompt(h).slice(0, 100)}
@@ -182,7 +212,7 @@ export default function ImportWizard({
             </select>
           </label>
           <label htmlFor="mapping-sign">
-            Amount meaning
+            How are amounts shown?
             <select
               id="mapping-sign"
               data-testid="source-amount-mode"
@@ -201,19 +231,20 @@ export default function ImportWizard({
                 Separate positive debit and credit columns
               </option>
               <option value="card_charges">
-                Card: positive = purchase; negative = repayment/refund
+                Positive = money out; negative = money in
               </option>
             </select>
           </label>
         </fieldset>
+        </details>
       )}
-      {error || preview?.error ? (
+      {error || previewError ? (
         <p
           role="alert"
           className="text-red-800"
           data-testid="source-preview-error"
         >
-          {error || preview?.error}
+          {error || previewError}
         </p>
       ) : null}
       {preview && !preview.error && preview.rows.length > 0 && (
@@ -221,10 +252,13 @@ export default function ImportWizard({
           data-testid="source-preview"
           className="space-y-3 rounded-md bg-[#f2f6f2] p-4"
         >
-          <p>
-            {preview.rows.length} transactions · {dates[0]} to {dates.at(-1)} ·
-            GBP
-          </p>
+          <h3 className="text-lg font-semibold">2. Does this look right?</h3>
+          <p>We found {preview.rows.length} payments, from {dates[0]} to {dates.at(-1)}.</p>
+          <dl className="grid gap-3 sm:grid-cols-2">
+            <div><dt className="font-semibold">Money paid out</dt><dd>{formatPounds(moneyOut)} ({amountToWords(moneyOut)})</dd></div>
+            <div><dt className="font-semibold">Money received</dt><dd>{formatPounds(moneyIn)} ({amountToWords(moneyIn)})</dd></div>
+          </dl>
+          <p className="text-sm">These are file totals in pounds, before business-use decisions. Existing spreadsheet labels do not approve any payment.</p>
           <p className="text-sm">
             First five transactions. Check that receipts are money in and
             purchases are money out. Card repayments still need transfer review.
@@ -239,7 +273,13 @@ export default function ImportWizard({
               </li>
             ))}
           </ul>
-          <label className="flex items-start gap-2">
+          {multipleAccounts ? (
+            <div role="alert" data-testid="source-multiple-accounts" className="rounded-md border border-amber-300 bg-amber-50 p-4">
+              <p className="font-semibold">This file combines {fileAccounts.length} accounts.</p>
+              <p className="mt-2">You can check the preview, but this importer needs one account per file. Upload the original CSV from each bank or card separately so payments keep the right source. We have not imported anything from this file.</p>
+            </div>
+          ) : accountElement}
+          {!multipleAccounts && <label className="flex items-start gap-2">
             <input
               type="checkbox"
               name="mappingConfirmed"
@@ -249,9 +289,8 @@ export default function ImportWizard({
               data-testid="source-mapping-confirm"
               onChange={(e) => setConfirmed(e.target.checked)}
             />
-            I confirm the selected account, dates, GBP currency and direction of
-            the amounts. Preserve the encrypted original and import for review.
-          </label>
+            The account, dates and money in/out look right. Save the original securely and add these payments for review.
+          </label>}
         </div>
       )}
       <input type="hidden" name="mapping" value={JSON.stringify(mapping)} />
@@ -260,13 +299,14 @@ export default function ImportWizard({
         data-testid="source-import-submit"
         disabled={
           !accountId ||
+          multipleAccounts ||
           !confirmed ||
           !preview?.rows.length ||
           Boolean(preview.error)
         }
         className="rounded-md bg-[#15803d] px-4 py-2 font-semibold text-white disabled:opacity-40"
       >
-        Preserve source and import for review
+        3. Import for review
       </button>
     </form>
   );

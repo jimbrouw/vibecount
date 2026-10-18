@@ -81,6 +81,11 @@ export async function importSourceCsv(form: FormData) {
     const table = readSourceCsv(
       new TextDecoder("utf-8", { fatal: true }).decode(bytes),
     );
+    const accountColumn = table[0].findIndex((header) => header.trim().toLowerCase() === "account");
+    if (accountColumn >= 0 && new Set(table.slice(1).filter((row) => row.some((cell) => cell.trim()))
+      .map((row) => row[accountColumn].trim()).filter(Boolean)).size > 1) {
+      throw new Error("This file combines accounts. Upload the original CSV from each bank or card separately; nothing has been imported.");
+    }
     const rows = normalizeSourceCsv(table, mapping);
     if (!rows.length) throw new Error("CSV has no transaction rows.");
     result = await storeSourceCsv({

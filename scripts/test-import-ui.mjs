@@ -143,6 +143,7 @@ try {
     await page.getByTestId("source-import-submit").isEnabled(),
     true,
   );
+  await page.getByTestId("source-settings-toggle").click();
   await page.getByTestId("source-date-format").selectOption("iso");
   assert.equal(await page.getByTestId("source-mapping-confirm").count(), 0);
   assert.equal(

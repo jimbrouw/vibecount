@@ -120,3 +120,14 @@ No production promotion until the relevant migration, recovery and financial acc
 - `docs/hosted-baseline-review.md`: hosted schema compatibility and upgrade evidence.
 - `docs/private-preview-acceptance-2026-10-18.md`: current hosted acceptance and auth/privacy fixes.
 - `docs/deployment-readiness-2026-10-18.md`: earlier readiness assessment, partly superseded by private hosted acceptance.
+
+
+## Private import usability update — 18 October 2026
+
+The user authorized simplifying the private import screen. It now leads with file selection, a payment-count/date/total preview and explicit confirmation. Column controls, source diagnostics and document tools are collapsed by default. The exact `Outflow_GBP` expense header is recognised using the retained positive-outflow mapping; unambiguous ISO dates are suggested automatically. Existing spreadsheet claim labels do not approve records.
+
+The user's local reviewed-expenses CSV was tested locally and in the signed-in browser: all 701 rows parsed, with £15,893.96 outflows and no inflows, spanning 6 April 2025–3 April 2026. This is a file total, not an allowable-expense calculation. It combines three account labels. Import remains blocked for this combined file in both UI and server action; the current source ledger expects one account per import. Use each bank/card's original CSV separately. No real rows were imported or approved. Supporting combined-account imports is a separate scope decision.
+
+Hosted synthetic single-account preview, explicit confirmation and duplicate reimport passed without new transactions. Invalid calendar dates remain blocked. Nine focused parser/route checks, TypeScript, lint and the deployed build passed; the full suite was not rerun. The existing browser test script was adjusted to open the newly collapsed column controls, but was not executed as a separate suite in this update. Browser warning/error logs were empty.
+
+Private deployment: `https://vibecount-private-test-abt6kwqc7-jims-projects-b7cb6c2e.vercel.app`, assigned to the stable private alias. Only the isolated test project was deployed; live deployment remained `dpl_AH61dvFRFtyc2rHVABJnmoaWz8e4`. No database migrations or auth/protection changes were made. Local screenshot: `/tmp/vibecount-simplified-import.jpg` (contains private preview data; do not publish).
