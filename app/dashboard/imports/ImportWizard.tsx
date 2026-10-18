@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   normalizeSourceCsv,
   readSourceCsv,
@@ -11,6 +11,8 @@ import {
 import { redactBankDetailsForPrompt } from "@/lib/ai/redaction";
 import { amountToWords, formatPounds } from "@/lib/invoices/money";
 import { importSourceCsv } from "./actions";
+import GroupedImportReview from "./GroupedImportReview";
+import { sourceGroups } from "@/lib/records/source-groups";
 
 export type AccountOption = {
   id: string;
@@ -18,6 +20,9 @@ export type AccountOption = {
   provider: string;
   masked_identifier: string;
 };
+const subscribeReady = () => () => {};
+const clientReady = () => true;
+const serverReady = () => false;
 const control =
   "mt-1 block w-full rounded-md border border-[#c8d4cb] bg-white p-2 text-sm";
 
@@ -26,7 +31,10 @@ export default function ImportWizard({
 }: {
   accounts: AccountOption[];
 }) {
+  const ready = useSyncExternalStore(subscribeReady, clientReady, serverReady);
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
+  const [fileRevision, setFileRevision] = useState(0);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [table, setTable] = useState<string[][] | null>(null);
   const [mapping, setMapping] = useState<CsvMapping | null>(null);
   const [error, setError] = useState("");
@@ -37,7 +45,9 @@ export default function ImportWizard({
   const preview = useMemo(() => {
     if (!table || !mapping) return null;
     try {
-      return { rows: normalizeSourceCsv(table, mapping), error: "" };
+      const rows = normalizeSourceCsv(table, mapping);
+      if (table[0].some(h => h.trim().toLowerCase() === 'account')) sourceGroups(table, mapping);
+      return { rows, error: "" };
     } catch (e) {
       return {
         rows: [],
@@ -66,7 +76,9 @@ export default function ImportWizard({
   }
   async function loadFile(file: File | undefined, provider: string) {
     const generation = ++readGeneration.current;
+    setFileRevision(generation);
     setConfirmed(false);
+    setSelectedFile(null);
     setTable(null);
     setMapping(null);
     setError("");
@@ -81,6 +93,7 @@ export default function ImportWizard({
         ),
       );
       if (generation !== readGeneration.current) return;
+      setSelectedFile(file);
       setTable(parsed);
       const suggested = suggestMapping(parsed[0], provider);
       if (suggested.date >= 0 && parsed.slice(1).filter((row) => row.some((cell) => cell.trim()))
@@ -124,6 +137,7 @@ export default function ImportWizard({
   );
 
   return (
+    <div className="space-y-5">
     <form
       action={importSourceCsv}
       data-testid="source-import-form"
@@ -142,6 +156,7 @@ export default function ImportWizard({
           id="source-file"
           name="sourceFile"
           type="file"
+          disabled={!ready}
           accept=".csv,text/csv"
           required
           data-testid="source-file-input"
@@ -273,12 +288,7 @@ export default function ImportWizard({
               </li>
             ))}
           </ul>
-          {multipleAccounts ? (
-            <div role="alert" data-testid="source-multiple-accounts" className="rounded-md border border-amber-300 bg-amber-50 p-4">
-              <p className="font-semibold">This file combines {fileAccounts.length} accounts.</p>
-              <p className="mt-2">You can check the preview, but this importer needs one account per file. Upload the original CSV from each bank or card separately so payments keep the right source. We have not imported anything from this file.</p>
-            </div>
-          ) : accountElement}
+          {!multipleAccounts && accountElement}
           {!multipleAccounts && <label className="flex items-start gap-2">
             <input
               type="checkbox"
@@ -294,7 +304,7 @@ export default function ImportWizard({
         </div>
       )}
       <input type="hidden" name="mapping" value={JSON.stringify(mapping)} />
-      <button
+      {!multipleAccounts && <button
         type="submit"
         data-testid="source-import-submit"
         disabled={
@@ -307,7 +317,10 @@ export default function ImportWizard({
         className="rounded-md bg-[#15803d] px-4 py-2 font-semibold text-white disabled:opacity-40"
       >
         3. Import for review
-      </button>
+      </button>}
     </form>
+    {multipleAccounts && table && mapping && selectedFile && preview?.rows.length && !preview.error ?
+      <GroupedImportReview table={table} mapping={mapping} file={selectedFile} accounts={accounts} key={fileRevision + JSON.stringify(mapping)} /> : null}
+    </div>
   );
 }

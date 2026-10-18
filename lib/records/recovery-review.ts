@@ -1,3 +1,4 @@
+import { GROUPED_SOURCE_PARSER } from "./source-groups";
 import { minorPence } from "./allocations";
 import { currencyCode, FX_CURRENCIES, FX_CURRENCY_RULESET } from '../fx/currency';
 export type RecoveryChoice = {
@@ -59,7 +60,8 @@ export function recoveryReview(choice: RecoveryChoice) {
       incoming = minorPence(choice.incoming_pence ?? ""),
       outgoing = minorPence(choice.outgoing_pence ?? "");
     if (
-      choice.parser !== "mapped-csv/1" ||
+      !["mapped-csv/1", GROUPED_SOURCE_PARSER].includes(choice.parser ?? "") ||
+      (choice.parser === GROUPED_SOURCE_PARSER && choice.plan_version !== "1") ||
       (choice.account_currency != null && choice.account_currency !== 'GBP') ||
       !Number.isInteger(count) ||
       count < 1 ||

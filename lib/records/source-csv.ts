@@ -5,6 +5,7 @@ export const MAX_SOURCE_BYTES = 1_000_000;
 export const MAX_SOURCE_ROWS = 5000;
 export const SOURCE_PARSER_VERSION = "mapped-csv/1";
 export type CsvMapping = {
+  accountScope?: { column: number; value: string };
   date: number;
   description: number;
   amount: number;

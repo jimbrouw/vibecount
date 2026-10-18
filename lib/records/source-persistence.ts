@@ -1,3 +1,4 @@
+import { GROUPED_SOURCE_PARSER, scopedSourceRows } from "./source-groups";
 import { randomUUID } from "node:crypto";
 import { redactBankDetailsForPrompt } from "../ai/redaction";
 import { sumPence } from "../money";
@@ -54,7 +55,7 @@ export function sourcePlan(
   const table = readSourceCsv(
       new TextDecoder("utf-8", { fatal: true }).decode(bytes),
     ),
-    rows = normalizeSourceCsv(table, mapping);
+    rows = mapping.accountScope ? scopedSourceRows(table, mapping) : normalizeSourceCsv(table, mapping);
   const index = (value: number) =>
     Number.isInteger(value) && value >= -1 && value < table[0].length
       ? value
@@ -62,6 +63,7 @@ export function sourcePlan(
   if (!rows.length) throw new Error("CSV has no transaction rows.");
   // Copy only recognised mapping fields; never persist arbitrary browser JSON properties.
   const confirmed: CsvMapping = {
+    ...(mapping.accountScope ? { accountScope: { column: mapping.accountScope.column, value: mapping.accountScope.value } } : {}),
     date: index(mapping.date),
     description: index(mapping.description),
     amount: index(mapping.amount),
@@ -75,7 +77,7 @@ export function sourcePlan(
   const dates = rows.map((r) => r.date).sort();
   const plan: SourceRecoveryPlan = {
     version: 1,
-    parser: SOURCE_PARSER_VERSION,
+    parser: mapping.accountScope ? GROUPED_SOURCE_PARSER : SOURCE_PARSER_VERSION,
     filename: redactBankDetailsForPrompt(filename).slice(0, 200),
     mapping: confirmed,
     row_count: rows.length,

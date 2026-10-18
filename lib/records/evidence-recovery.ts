@@ -1,3 +1,4 @@
+import { GROUPED_SOURCE_PARSER } from "./source-groups";
 import type { EvidenceKeyring } from "./evidence-keyring";
 import {
   decryptSource,
@@ -83,7 +84,7 @@ export async function verifySourceRecovery(
   if (
     !plan ||
     plan.version !== 1 ||
-    plan.parser !== SOURCE_PARSER_VERSION ||
+    ![SOURCE_PARSER_VERSION, GROUPED_SOURCE_PARSER].includes(plan.parser) ||
     a.object_path !== `${owner}/${a.account_id}/${a.id}.enc` ||
     a.size_bytes > 1_000_000
   )
