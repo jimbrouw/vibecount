@@ -4,7 +4,8 @@ import { redactBankDetailsForPrompt } from "@/lib/ai/redaction";
 
 export const runtime = "nodejs";
 
-const SUGGESTION_MODEL = process.env.VIBECOUNT_EXTRACTION_MODEL || "claude-sonnet-4-20250514";
+const SUGGESTION_MODEL =
+  process.env.VIBECOUNT_EXTRACTION_MODEL || "claude-sonnet-4-20250514";
 const MAX_RECORDS = 50;
 
 type CategoryRow = { id: string; name: string; record_type: string };
@@ -27,17 +28,26 @@ export type BatchSuggestion = {
 
 export async function GET() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user)
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "AI suggestions are not configured." }, { status: 503 });
+  if (!apiKey)
+    return NextResponse.json(
+      { error: "AI suggestions are not configured." },
+      { status: 503 },
+    );
 
   const [{ data: records }, { data: categories }] = await Promise.all([
     supabase
       .from("financial_records")
       .select("id, record_type, description, amount")
       .eq("user_id", user.id)
+      .is("bank_transaction_id", null)
+      .eq("effect_sign", 1)
       .is("category_id", null)
       .in("status", ["review", "approved"])
       .order("record_date", { ascending: false })
@@ -55,14 +65,25 @@ export async function GET() {
     return NextResponse.json({ suggestions: [] });
   }
 
-  const incomeCategories = typedCategories.filter((c) => c.record_type === "income");
-  const expenseCategories = typedCategories.filter((c) => c.record_type === "expense");
+  const incomeCategories = typedCategories.filter(
+    (c) => c.record_type === "income",
+  );
+  const expenseCategories = typedCategories.filter(
+    (c) => c.record_type === "expense",
+  );
 
-  const incomeCatList = incomeCategories.map((c) => `  - id: "${c.id}", name: "${c.name}"`).join("\n");
-  const expenseCatList = expenseCategories.map((c) => `  - id: "${c.id}", name: "${c.name}"`).join("\n");
+  const incomeCatList = incomeCategories
+    .map((c) => `  - id: "${c.id}", name: "${c.name}"`)
+    .join("\n");
+  const expenseCatList = expenseCategories
+    .map((c) => `  - id: "${c.id}", name: "${c.name}"`)
+    .join("\n");
 
   const recordList = typedRecords
-    .map((r, i) => `${i + 1}. id: "${r.id}" | type: ${r.record_type} | description: "${redactBankDetailsForPrompt(r.description)}" | £${Number(r.amount).toFixed(2)}`)
+    .map(
+      (r, i) =>
+        `${i + 1}. id: "${r.id}" | type: ${r.record_type} | description: "${redactBankDetailsForPrompt(r.description)}" | £${Number(r.amount).toFixed(2)}`,
+    )
     .join("\n");
 
   const prompt = `You are categorising financial records for a UK freelancer.
@@ -95,19 +116,32 @@ Reply with ONLY a raw valid JSON array, no markdown, no code fences. One object 
 
   if (!response.ok) {
     console.error("Anthropic batch-suggest error:", response.status);
-    return NextResponse.json({ error: "AI suggestion failed. Try again shortly." }, { status: 502 });
+    return NextResponse.json(
+      { error: "AI suggestion failed. Try again shortly." },
+      { status: 502 },
+    );
   }
 
-  const data = await response.json() as { content: { type: string; text: string }[] };
+  const data = (await response.json()) as {
+    content: { type: string; text: string }[];
+  };
   const raw = data.content?.find((b) => b.type === "text")?.text?.trim() ?? "";
 
-  let parsed: { recordId: string; categoryId: string; categoryName: string; reason: string }[];
+  let parsed: {
+    recordId: string;
+    categoryId: string;
+    categoryName: string;
+    reason: string;
+  }[];
   try {
     parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) throw new Error("not an array");
   } catch {
     console.error("Bad batch-suggest response:", raw.slice(0, 300));
-    return NextResponse.json({ error: "Could not parse AI suggestions." }, { status: 502 });
+    return NextResponse.json(
+      { error: "Could not parse AI suggestions." },
+      { status: 502 },
+    );
   }
 
   const recordMap = new Map(typedRecords.map((r) => [r.id, r]));

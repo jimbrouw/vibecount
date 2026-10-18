@@ -56,7 +56,7 @@ export default function BatchCategorisePanel({ uncategorisedCount }: { uncategor
         <div>
           <h2 className="text-base font-semibold text-[#14532d]">Batch categorise</h2>
           <p className="mt-1 text-sm leading-6 text-[#4b8068]">
-            {uncategorisedCount} record{uncategorisedCount === 1 ? "" : "s"} without a category.
+            {uncategorisedCount} record{uncategorisedCount === 1 ? "" : "s"} across all tax years without a category.
             Let the AI suggest categories for all of them at once — you choose which to accept.
           </p>
         </div>

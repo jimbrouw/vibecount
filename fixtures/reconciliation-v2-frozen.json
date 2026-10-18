@@ -1,0 +1,81 @@
+{
+  "description": "Synthetic V2 output captured before table extraction and V3 changes. No real financial information.",
+  "args": [
+    [
+      {
+        "id": "allocation",
+        "invoice_id": "invoice",
+        "transaction_id": "tx",
+        "amount_pence": 150000,
+        "event_kind": "allocation",
+        "reverses_id": null,
+        "request_id": "request",
+        "author": "owner",
+        "rationale": "=SUM(1,2)\r\nReviewed \"source\"",
+        "created_at": "2026-10-17",
+        "invoice_snapshot": {
+          "number": "=INV,1500",
+          "gross_pence": 150000,
+          "currency": "GBP"
+        },
+        "transaction": {
+          "id": "tx",
+          "transaction_date": "2026-02-01",
+          "source_row_id": "row",
+          "source_rows": {
+            "row_number": 2,
+            "row_hash": "row-hash"
+          },
+          "record_imports": {
+            "file_hash": "file-hash",
+            "parser_version": "mapped-csv/1"
+          }
+        }
+      },
+      {
+        "id": "reverse",
+        "invoice_id": "invoice",
+        "transaction_id": "tx",
+        "amount_pence": 150000,
+        "event_kind": "reversal",
+        "reverses_id": "allocation",
+        "request_id": "request",
+        "author": "owner",
+        "rationale": "=SUM(1,2)\r\nReviewed \"source\"",
+        "created_at": "2026-10-17",
+        "invoice_snapshot": {
+          "number": "=INV,1500",
+          "gross_pence": 150000,
+          "currency": "GBP"
+        },
+        "transaction": {
+          "id": "tx",
+          "transaction_date": "2026-02-01",
+          "source_row_id": "row",
+          "source_rows": {
+            "row_number": 2,
+            "row_hash": "row-hash"
+          },
+          "record_imports": {
+            "file_hash": "file-hash",
+            "parser_version": "mapped-csv/1"
+          }
+        }
+      }
+    ],
+    [],
+    [
+      {
+        "id": "invoice",
+        "number": "=INV,1500",
+        "invoice_pence": 150000,
+        "allocated_pence": 0,
+        "outstanding_pence": 150000,
+        "delivery_status": "not_sent"
+      }
+    ]
+  ],
+  "csv": "document_status,row_kind,invoice_id,invoice_number,transaction_id,decision_event_id,event_kind,reverses_id,amount_pence,allocated_pence,unallocated_or_outstanding_pence,source_row_id,source_row_number,source_row_sha256,file_sha256,date,classification_or_status,author,rationale,request_id,transfer_pair_id,counterpart_transaction_id,counterpart_source_row_id,counterpart_source_row_number,counterpart_source_row_sha256,counterpart_file_sha256,relationship_kind,outgoing_account_label,incoming_account_label,refund_link_id,accounting_record_type,recognized_effect_pence,business_use_basis_points,original_transaction_id,original_source_row_id,original_source_row_number,original_source_row_sha256,original_file_sha256,original_date,refund_date,original_account,refund_account,category_id,credit_id,credit_number,credit_net_pence,credit_vat_pence,credit_tax_status,credit_pdf_sha256,original_revision_id,original_pdf_sha256,credited_pence,entitlement_pence,cash_to_reconcile_pence,retained_cash_pence,commercial_credit_effect_pence,credit_accounting_effect_pence,credit_date,invoice_refund_assignment_id,assignment_allocation_id,assignment_credit_id,assignment_refund_link_id,assignment_original_transaction_id,assignment_original_source_row_id,assignment_original_row_sha256,assignment_original_file_sha256,assignment_credit_pdf_sha256,retained_cash_effect_pence,assignment_accounting_effect_pence,invoice_returned_pence,assignment_refund_date,reconciliation_schema_version,refund_observed_signed_cash_pence,refund_observed_signed_cash_once_pence,refund_cash_portion_pence,refund_active_cash_portion_pence\r\nDraft — not submitted to HMRC,settlement_event,invoice,\"'=INV,1500\",tx,allocation,allocation,,150000,,,row,2,row-hash,file-hash,2026-10-17,allocation,owner,\"'=SUM(1,2)\r\nReviewed \"\"source\"\"\",request,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,vibecount.reconciliation/2,,,,\r\nDraft — not submitted to HMRC,settlement_event,invoice,\"'=INV,1500\",tx,reverse,reversal,allocation,150000,,,row,2,row-hash,file-hash,2026-10-17,reversal,owner,\"'=SUM(1,2)\r\nReviewed \"\"source\"\"\",request,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,vibecount.reconciliation/2,,,,\r\nDraft — not submitted to HMRC,invoice_balance,invoice,\"'=INV,1500\",,,,,150000,0,150000,,,,,,Evidence-backed allocation balance; legacy marker: not_sent,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,150000,0,0,,,,,,,,,,,,,,,0,,vibecount.reconciliation/2,,,,",
+  "count": 3,
+  "sha256": "e1262fe97654beb8a8d94d46ec3e9a6225b30fd26db4dce09a092450a4528480"
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { formatPounds, amountToWords } from "@/lib/invoices/money";
+import { formatPounds } from "@/lib/invoices/money";
 
 type Props = {
   invoiceId: string;
@@ -26,7 +26,6 @@ export default function ChaseInvoiceButton({
   clientEmail,
   amountPence,
   dueDate,
-  paymentTerms,
   senderName,
   paymentLinkUrl,
   hasPdf,

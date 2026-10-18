@@ -1,3 +1,4 @@
+import { requirePence } from "../money";
 export type TaxQuarter = 1 | 2 | 3 | 4;
 
 export type QuarterSummary = {
@@ -54,7 +55,7 @@ export function getQuarterLabel(taxYearStart: number, quarter: TaxQuarter) {
 }
 
 export function moneyToPence(value: number | string | null | undefined) {
-  return Math.round(Number(value ?? 0) * 100);
+  return requirePence(value ?? 0);
 }
 
 export function buildQuarterSummaries(
@@ -66,7 +67,7 @@ export function buildQuarterSummaries(
     net_total: number | string | null;
     income_count: number | null;
     expense_count: number | null;
-  }[]
+  }[],
 ): QuarterSummary[] {
   return ([1, 2, 3, 4] as const).map((taxQuarter) => {
     const row = rows.find((summary) => summary.tax_quarter === taxQuarter);
@@ -87,15 +88,15 @@ export function buildQuarterSummaries(
 
 export function getThresholdStatus(totalIncomePence: number) {
   const nextThreshold = MTD_THRESHOLDS_PENCE.find(
-    (threshold) => totalIncomePence < threshold
+    (threshold) => totalIncomePence < threshold,
   );
 
   return {
     totalIncomePence,
     nextThresholdPence: nextThreshold ?? MTD_THRESHOLDS_PENCE[0],
     highestReachedPence:
-      [...MTD_THRESHOLDS_PENCE].reverse().find(
-        (threshold) => totalIncomePence >= threshold
-      ) ?? null,
+      [...MTD_THRESHOLDS_PENCE]
+        .reverse()
+        .find((threshold) => totalIncomePence >= threshold) ?? null,
   };
 }

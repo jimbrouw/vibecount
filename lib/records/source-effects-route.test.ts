@@ -1,0 +1,45 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { build } from 'esbuild';
+import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
+import { readSourceCsv } from './source-csv';
+import { nativeExportCoverageFixture } from './bank-export-route-fixture';
+async function fixture(){
+    const root=fileURLToPath(new URL('../../',import.meta.url));
+    const b=await build({absWorkingDir:root,bundle:true,write:false,platform:'node',format:'esm',stdin:{resolveDir:root,contents:"export {GET} from './app/api/imports/[importId]/export/route.ts';export {fixture} from 'test:db';"},plugins:[{name:'inert-evidence-export',setup(b){
+        b.onResolve({filter:/^server-only$/},()=>({path:'empty',namespace:'empty'}));b.onLoad({filter:/.*/,namespace:'empty'},()=>({contents:'',loader:'js'}));
+        b.onResolve({filter:/^(@\/lib\/supabase\/server|test:db|next\/server)$/},a=>({path:a.path==='next/server'?a.path:'db',namespace:'fixture'}));
+        b.onLoad({filter:/.*/,namespace:'fixture'},a=>({loader:'js',contents:a.path==='next/server'?'export class NextResponse extends Response{static json(v,i){return new Response(JSON.stringify(v),i)}}':`
+const coverageFixture=${nativeExportCoverageFixture.toString()};
+const records=[{id:'child-a',bank_transaction_id:'00000000-0000-4000-8000-000000000004',amount:'90.00',status:'approved',record_type:'expense',effect_sign:-1,refund_link_id:'a',category_id:'cat-a',project_id:'project-a'},{id:'child-b',bank_transaction_id:'00000000-0000-4000-8000-000000000004',amount:'90.00',status:'approved',record_type:'expense',effect_sign:-1,refund_link_id:'b',category_id:'cat-b',project_id:'project-b'},{id:'old',bank_transaction_id:'00000000-0000-4000-8000-000000000004',amount:'500.00',status:'excluded',record_type:'income',effect_sign:1,refund_link_id:null}];
+const portion=(id,amount,recognized,category,bps)=>({id,original_transaction_id:'original-'+id,refund_transaction_id:'00000000-0000-4000-8000-000000000004',amount_pence:amount,recognized_pence:recognized,record_type:'expense',business_use_bps:bps,category_id:category,request_id:'request',original:{id:'original-'+id,import_id:'original-import-'+id,source_row_id:'original-row-'+id,transaction_date:'2026-04-05'},reversals:[]});
+export const fixture={signedIn:true,sourceDrift:false,coverageReads:0,evidenceDrift:false,evidenceReads:0,omitBank:false,missing:false,failAudit:false,drift:false,stampCalls:0,failChildren:false,calls:[],audit:[],records,portions:[portion('a',30000,9000,'cat-a',3000),portion('b',20000,9000,'cat-b',4500)],rows:[{id:'00000000-0000-4000-8000-000000000004',transaction_date:'2026-04-10',signed_amount_pence:50000,currency:'GBP',description:'Synthetic refund',reference:'',classification:'Refund',business_use_bps:0,dedupe_status:'clear',decision_version:2,active_refund_id:'a',source_row_id:'00000000-0000-4000-8000-000000000005',tax_year_start:2026,source_rows:{row_number:2,row_hash:'b'.repeat(64)}}]};
+const source={id:'00000000-0000-4000-8000-000000000003',account_id:'00000000-0000-4000-8000-000000000002',file_hash:'a'.repeat(64),parser_version:'mapped-csv/1',status:'review'};
+fixture.rows=fixture.rows.map(r=>({...r,user_id:'00000000-0000-4000-8000-000000000001',account_id:source.account_id,import_id:source.id,original_signed_minor:null,source_units_ruleset:null,record_imports:{...source,user_id:'00000000-0000-4000-8000-000000000001',source_file_id:'00000000-0000-4000-8000-000000000030'}}));
+export async function createClient(){return {auth:{getUser:async()=>({data:{user:fixture.signedIn?{id:'00000000-0000-4000-8000-000000000001'}:null},error:null})},rpc:async(name)=>{if(name==='read_bank_source_coverage')return{data:{...coverageFixture('00000000-0000-4000-8000-000000000001',source,fixture.rows,fixture.records),stamp:(fixture.sourceDrift&&fixture.coverageReads++?'b':'a').repeat(64)},error:null};if(name==='read_fx_evidence_catalog')return{data:{schema_version:'fx-evidence-catalog/1',owner_id:'00000000-0000-4000-8000-000000000001',ruleset_id:'vibecount-currencies/1',stamp:(fixture.evidenceDrift&&fixture.evidenceReads++?'b':'a').repeat(32),counts:{documents:0,receipts:0,facts:0},documents:[],receipts:[],facts:[],financial_action:'evidence_preparation_only'},error:null};fixture.stampCalls++;return {data:(fixture.drift&&fixture.stampCalls%2===0?'b':'a').repeat(32),error:null}},from(table){let filters=[],cursor=null,columns='';const q={select(s){columns=s;return q},eq(k,v){filters.push([k,v]);return q},not(){return q},in(k,v){filters.push([k,v]);return q},order(){return q},limit(){return q},gt(k,v){cursor=v;return q},maybeSingle(){fixture.calls.push({table,columns,filters,cursor});return Promise.resolve({data:fixture.missing?null:{id:'00000000-0000-4000-8000-000000000003',file_hash:'a'.repeat(64),parser_version:'mapped-csv/1',account_id:'00000000-0000-4000-8000-000000000002',status:'review',created_at:'2026-10-17',coverage_start:null,coverage_end:null},error:null})},single(){fixture.calls.push({table,columns,filters,cursor});return Promise.resolve({data:{label:'Synthetic bank',masked_identifier:'1234'},error:null})},insert(row){fixture.audit.push(row);return Promise.resolve({error:fixture.failAudit?{}:null})},then(resolve){fixture.calls.push({table,columns,filters,cursor});const all=table==='financial_accounts'?[{id:source.account_id,user_id:'00000000-0000-4000-8000-000000000001',currency:'GBP',account_type:'bank'}]:table==='bank_transactions'?(fixture.omitBank?[]:fixture.rows):table==='financial_records'?fixture.records:table==='refund_links'?fixture.portions:[];return Promise.resolve({data:all.filter(r=>!cursor||r.id>cursor).slice(0,1),error:fixture.failChildren&&table==='financial_records'&&cursor?{}:null}).then(resolve)}};return q}}}` }));
+    }}]});
+    return await import('data:text/javascript;base64,'+Buffer.from(b.outputFiles[0].text).toString('base64')+'#'+randomUUID());
+}
+const request=(format='manifest')=>new Request('http://localhost/api/imports/import/export?format='+format);
+const params={params:Promise.resolve({importId:'00000000-0000-4000-8000-000000000003'})};
+test('source export authenticates, pages every effect/portion and audits one cash observation before releasing V5 manifest and V4 ledger',async()=>{
+    const m=await fixture(),f=m.fixture;f.signedIn=false;assert.equal((await m.GET(request(),params)).status,401);assert.equal(f.calls.length,0);f.signedIn=true;
+    const response=await m.GET(request(),params);assert.equal(response.status,200);assert.match(response.headers.get('cache-control')!,/no-store/);const manifest=await response.json();
+    assert.equal(manifest.schema_version,'vibecount.evidence-manifest/5');assert.equal(manifest.snapshot.bank_context.observation_count,1);assert.equal(manifest.snapshot.bank_context.recognized_expense_pence,-18000);assert.equal(manifest.snapshot.bank_context.observations[0].financial_records.length,3);assert.equal(manifest.snapshot.bank_context.observations[0].refund_portions.length,2);
+    assert.equal(f.audit[0].user_id,'00000000-0000-4000-8000-000000000001');assert.equal(f.audit[0].record_count,1);assert.ok(f.calls.every((c:{filters:unknown[]})=>JSON.stringify(c.filters).includes('00000000-0000-4000-8000-000000000001')));
+    assert.equal(f.calls.filter((c:{table:string})=>c.table==='financial_records').length,4);assert.equal(f.calls.filter((c:{table:string})=>c.table==='refund_links').length,3);
+    assert.ok(f.calls.find((c:{table:string})=>c.table==='bank_transactions').columns.includes('source_rows'));assert.ok(!f.calls.find((c:{table:string})=>c.table==='bank_transactions').columns.includes('record:financial_records'));
+    const csv=readSourceCsv(await (await m.GET(request('ledger'),params)).text());assert.equal(csv.length,2);assert.equal(csv[1][csv[0].indexOf('recognized_expense_pence')],'-18000');
+});
+test('late child-page failure, incomplete portions, financial drift and audit failure withhold the whole source export',async()=>{
+    const m=await fixture(),f=m.fixture;f.failChildren=true;assert.equal((await m.GET(request(),params)).status,500);assert.equal(f.audit.length,0);f.failChildren=false;
+    const all=f.portions;f.portions=all.slice(0,1);assert.equal((await m.GET(request(),params)).status,500);assert.equal(f.audit.length,0);f.portions=all;
+    f.drift=true;f.stampCalls=0;assert.equal((await m.GET(request(),params)).status,500);assert.equal(f.audit.length,0);f.drift=false;
+    f.failAudit=true;assert.equal((await m.GET(request(),params)).status,500);assert.equal(f.audit.length,1);
+    f.missing=true;const before=f.calls.length;assert.equal((await m.GET(request(),params)).status,404);assert.equal(f.calls.length,before+1);
+});
+
+test('source or evidence metadata drift and omitted raw rows withhold download before audit',async()=>{
+ for(const flag of ['sourceDrift','evidenceDrift','omitBank']){const m=await fixture();m.fixture[flag]=true;assert.equal((await m.GET(request(),params)).status,500,flag);assert.equal(m.fixture.audit.length,0)}
+});

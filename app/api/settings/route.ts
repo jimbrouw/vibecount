@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { EMPTY_SETTINGS, sanitizeUserSettings } from "@/lib/settings";
+import { EMPTY_SETTINGS } from "@/lib/settings";
+import { publicSettings, settingsWrite } from "@/lib/settings-public";
 
 export const runtime = "nodejs";
 
@@ -17,7 +18,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("user_settings")
-    .select("*")
+    .select(Object.keys(EMPTY_SETTINGS).join(","))
     .eq("id", user.id)
     .maybeSingle();
 
@@ -26,7 +27,7 @@ export async function GET() {
     return NextResponse.json({ error: settingsErrorMessage(error) }, { status: 500 });
   }
 
-  const settings = data ?? { id: user.id, ...EMPTY_SETTINGS };
+  const settings = publicSettings(data);
   let pdf_logo_url = "";
 
   if (settings.pdf_logo_path) {
@@ -51,18 +52,22 @@ export async function PUT(request: Request) {
   }
 
   const body = await request.json().catch(() => null);
-  const settings = sanitizeUserSettings(body);
+  const settings = settingsWrite(body);
   if (!settings) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
   const safeSettings = { ...settings };
   safeSettings.pdf_logo_path = "";
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("user_settings")
-    .select("pdf_logo_path")
+    .select("pdf_logo_path, companies_house_api_key")
     .eq("id", user.id)
     .maybeSingle();
+
+  if (existingError) {
+    return NextResponse.json({ error: "Could not load existing settings." }, { status: 500 });
+  }
 
   const { error } = await supabase
     .from("user_settings")
@@ -76,7 +81,11 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: settingsErrorMessage(error) }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, settings });
+  return NextResponse.json({ ok: true, settings: publicSettings({
+    ...safeSettings,
+    pdf_logo_path: existing?.pdf_logo_path ?? "",
+    companies_house_api_key: safeSettings.companies_house_api_key ?? existing?.companies_house_api_key ?? "",
+  }) });
 }
 
 function settingsErrorMessage(error: { code?: string; message?: string }) {

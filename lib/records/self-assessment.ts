@@ -1,8 +1,13 @@
+import { recordEffectPence,type AccountingAmount } from "./accounting-effect";
+import { sumPence } from "../money";
 import { formatPounds } from "@/lib/invoices/money";
 
 export type SelfAssessmentRecord = {
   record_type: "income" | "expense";
   amount: string | number;
+  effect_sign?: number;
+  cash_effect_pence?: AccountingAmount["cash_effect_pence"];
+  cash_treatment?: AccountingAmount["cash_treatment"];
   record_categories: { name: string; sa103_box: string | null } | null;
 };
 
@@ -24,13 +29,15 @@ const EXPENSE_LINES = [
     id: "cost-of-goods",
     officialLabel: "Cost of goods bought for resale or goods used",
     categoryMatchers: ["cost of goods"],
-    plainEnglish: "Things you bought to sell on, or materials used to do the work.",
+    plainEnglish:
+      "Things you bought to sell on, or materials used to do the work.",
   },
   {
     id: "office-costs",
     officialLabel: "Office costs",
     categoryMatchers: ["office costs"],
-    plainEnglish: "Running costs like stationery, postage, and small office items.",
+    plainEnglish:
+      "Running costs like stationery, postage, and small office items.",
   },
   {
     id: "travel-costs",
@@ -54,13 +61,15 @@ const EXPENSE_LINES = [
     id: "advertising",
     officialLabel: "Advertising and marketing",
     categoryMatchers: ["advertising and marketing"],
-    plainEnglish: "Costs for finding customers, such as ads, design, or promotion.",
+    plainEnglish:
+      "Costs for finding customers, such as ads, design, or promotion.",
   },
   {
     id: "professional-fees",
     officialLabel: "Professional fees",
     categoryMatchers: ["professional fees"],
-    plainEnglish: "Accountant, legal, or other professional help for the business.",
+    plainEnglish:
+      "Accountant, legal, or other professional help for the business.",
   },
   {
     id: "other-expenses",
@@ -70,22 +79,31 @@ const EXPENSE_LINES = [
   },
 ] as const;
 
-export function buildSelfAssessmentChecklist(records: SelfAssessmentRecord[]) {
+export function buildSelfAssessmentChecklist(allRecords: SelfAssessmentRecord[]) {
+  allRecords.forEach(record=>recordEffectPence(record));
+  const records=allRecords.filter(r=>r.cash_treatment===undefined||r.cash_treatment==='recognized');
+  const cashExcludedCount=allRecords.length-records.length;
   const incomeTotal = sumRecords(records, "income");
   const expenseTotal = sumRecords(records, "expense");
-  const incomeCount = records.filter((record) => record.record_type === "income").length;
-  const expenseCount = records.filter((record) => record.record_type === "expense").length;
+  const incomeCount = records.filter(
+    (record) => record.record_type === "income",
+  ).length;
+  const expenseCount = records.filter(
+    (record) => record.record_type === "expense",
+  ).length;
 
   const items: SelfAssessmentChecklistItem[] = [
     {
       id: "turnover",
       form: "SA103S / SA103F",
       officialLabel: "Turnover",
-      plainEnglish: "The total money your business made before taking off costs.",
+      plainEnglish:
+        "The total money your business made before taking off costs.",
       whyItMatters: "This is the top-line business income figure.",
       dataSource: "Approved income records",
       fillMode: incomeCount > 0 ? "suggested" : "needs_user",
-      suggestedValue: incomeCount > 0 ? formatPounds(incomeTotal) : "Needs records",
+      suggestedValue:
+        incomeCount > 0 ? formatPounds(incomeTotal) : "Needs records",
       evidence: `${incomeCount} approved income records`,
       reviewNote:
         "Check cash payments, marketplace income, refunds, and whether you report on cash or invoice basis.",
@@ -95,10 +113,12 @@ export function buildSelfAssessmentChecklist(records: SelfAssessmentRecord[]) {
       form: "SA103S / SA103F",
       officialLabel: "Total allowable business expenses",
       plainEnglish: "Business costs you may be able to take off your income.",
-      whyItMatters: "Expenses reduce the profit figure used for Self Assessment.",
+      whyItMatters:
+        "Expenses reduce the profit figure used for Self Assessment.",
       dataSource: "Approved expense records",
       fillMode: expenseCount > 0 ? "suggested" : "needs_user",
-      suggestedValue: expenseCount > 0 ? formatPounds(expenseTotal) : "Needs records",
+      suggestedValue:
+        expenseCount > 0 ? formatPounds(expenseTotal) : "Needs records",
       evidence: `${expenseCount} approved expense records`,
       reviewNote:
         "Check private-use adjustments and any costs that may not be allowable.",
@@ -112,10 +132,12 @@ export function buildSelfAssessmentChecklist(records: SelfAssessmentRecord[]) {
         form: "SA103S / SA103F" as const,
         officialLabel: line.officialLabel,
         plainEnglish: line.plainEnglish,
-        whyItMatters: "This helps group expenses into familiar Self Assessment areas.",
+        whyItMatters:
+          "This helps group expenses into familiar Self Assessment areas.",
         dataSource: "Approved expense records by category",
         fillMode: count > 0 ? ("suggested" as const) : ("needs_user" as const),
-        suggestedValue: count > 0 ? formatPounds(total) : "No matching records yet",
+        suggestedValue:
+          count > 0 ? formatPounds(total) : "No matching records yet",
         evidence: `${count} matching approved records`,
         reviewNote:
           "Category mapping is a preparation aid. Check the final treatment before filing.",
@@ -125,7 +147,8 @@ export function buildSelfAssessmentChecklist(records: SelfAssessmentRecord[]) {
       id: "profit",
       form: "SA103S / SA103F",
       officialLabel: "Net profit or loss",
-      plainEnglish: "What is left after taking business costs away from business income.",
+      plainEnglish:
+        "What is left after taking business costs away from business income.",
       whyItMatters: "This helps prepare the self-employment profit figure.",
       dataSource: "Approved income minus approved expenses",
       fillMode: incomeCount + expenseCount > 0 ? "suggested" : "needs_user",
@@ -142,7 +165,8 @@ export function buildSelfAssessmentChecklist(records: SelfAssessmentRecord[]) {
       form: "SA103S / SA103F",
       officialLabel: "Capital allowances",
       plainEnglish: "Tax relief for some longer-lasting business equipment.",
-      whyItMatters: "Some equipment is handled differently from normal expenses.",
+      whyItMatters:
+        "Some equipment is handled differently from normal expenses.",
       dataSource: "User/accountant judgement",
       fillMode: "accountant_review",
       suggestedValue: "Needs review",
@@ -155,7 +179,8 @@ export function buildSelfAssessmentChecklist(records: SelfAssessmentRecord[]) {
       form: "SA103S / SA103F",
       officialLabel: "Losses, adjustments, and other information",
       plainEnglish: "Special cases that can change what goes on the return.",
-      whyItMatters: "These can affect tax, but often need context outside VibeCount.",
+      whyItMatters:
+        "These can affect tax, but often need context outside VibeCount.",
       dataSource: "User/accountant input",
       fillMode: "accountant_review",
       suggestedValue: "Needs user input",
@@ -167,39 +192,55 @@ export function buildSelfAssessmentChecklist(records: SelfAssessmentRecord[]) {
 
   return {
     incomeTotal,
+    cashExcludedCount,
     expenseTotal,
     profitTotal: incomeTotal - expenseTotal,
     incomeCount,
     expenseCount,
-    items,
+    items:items.map(item=>cashExcludedCount?{...item,reviewNote:`${item.reviewNote} ${cashExcludedCount} records are excluded from GBP cash totals (unpaid, unsupported currency or not approved); original evidence remains available.`}:item),
   };
 }
 
-function sumRecords(records: SelfAssessmentRecord[], type: "income" | "expense") {
-  return records
-    .filter((record) => record.record_type === type)
-    .reduce((total, record) => total + Math.round(Number(record.amount) * 100), 0);
+function sumRecords(
+  records: SelfAssessmentRecord[],
+  type: "income" | "expense",
+) {
+  return sumPence(
+    records
+      .filter((record) => record.record_type === type)
+      .map((record) => recordEffectPence(record)),
+  );
 }
 
-function sumByCategory(records: SelfAssessmentRecord[], matchers: readonly string[]) {
-  return records
-    .filter((record) => isMatchingExpense(record, matchers))
-    .reduce((total, record) => total + Math.round(Number(record.amount) * 100), 0);
+function sumByCategory(
+  records: SelfAssessmentRecord[],
+  matchers: readonly string[],
+) {
+  return sumPence(
+    records
+      .filter((record) => isMatchingExpense(record, matchers))
+      .map((record) => recordEffectPence(record)),
+  );
 }
 
-function countByCategory(records: SelfAssessmentRecord[], matchers: readonly string[]) {
+function countByCategory(
+  records: SelfAssessmentRecord[],
+  matchers: readonly string[],
+) {
   return records.filter((record) => isMatchingExpense(record, matchers)).length;
 }
 
 function isMatchingExpense(
   record: SelfAssessmentRecord,
-  matchers: readonly string[]
+  matchers: readonly string[],
 ) {
   const category = record.record_categories?.name.toLowerCase() ?? "";
   const sa103Box = record.record_categories?.sa103_box?.toLowerCase() ?? "";
 
   return (
     record.record_type === "expense" &&
-    matchers.some((matcher) => category.includes(matcher) || sa103Box.includes(matcher))
+    matchers.some(
+      (matcher) => category.includes(matcher) || sa103Box.includes(matcher),
+    )
   );
 }

@@ -1,0 +1,43 @@
+{
+  "source": {
+    "id": "import",
+    "file_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "parser_version": "mapped-csv/1",
+    "account_id": "account",
+    "status": "review",
+    "created_at": "2026-10-17T00:00:00Z",
+    "coverage_start": null,
+    "coverage_end": null
+  },
+  "account": {
+    "label": "Synthetic",
+    "masked_identifier": "1234"
+  },
+  "rows": [
+    {
+      "id": "tx",
+      "transaction_date": "2026-04-06",
+      "signed_amount_pence": -63029,
+      "currency": "GBP",
+      "description": "Synthetic",
+      "reference": "",
+      "classification": "Mixed",
+      "business_use_bps": 3000,
+      "dedupe_status": "clear",
+      "decision_version": 1,
+      "source_row_id": "row",
+      "tax_year_start": 2026,
+      "source_rows": {
+        "row_number": 2,
+        "row_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "record": {
+        "id": "record",
+        "amount": "189.09",
+        "status": "approved"
+      }
+    }
+  ],
+  "body": "{\"schema_version\":\"vibecount.evidence-manifest/2\",\"document_status\":\"Draft — not submitted to HMRC\",\"scope\":\"Current import evidence and decisions; not a locked filing pack. Business treatment remains provisional for tax eligibility.\",\"hash_definitions\":{\"file_sha256\":\"SHA-256 of exact original uploaded bytes before encryption.\",\"source_row_sha256\":\"SHA-256 of UTF-8 JSON.stringify(original cell array), preserving parsed cell order and contents.\",\"snapshot_sha256\":\"SHA-256 of UTF-8 JSON.stringify(snapshot) as emitted, with transaction IDs sorted ascending. This checks integrity; it is not an authenticity signature.\"},\"snapshot_sha256\":\"d04c2ba1bb58d2e1462e55b445dd1daacd9dbd5133155a1f5c429be446e4fab7\",\"snapshot\":{\"import_id\":\"import\",\"import_status\":\"review\",\"imported_at\":\"2026-10-17T00:00:00Z\",\"parser_version\":\"mapped-csv/1\",\"file_sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"coverage\":{\"start\":null,\"end\":null},\"account\":{\"id\":\"account\",\"label\":\"Synthetic\",\"ending\":\"1234\"},\"transaction_count\":1,\"recognized_income_pence\":\"0\",\"recognized_expense_pence\":\"18909\",\"transactions\":[{\"transaction_id\":\"tx\",\"source_row_id\":\"row\",\"source_row_number\":2,\"source_row_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"transaction_date\":\"2026-04-06\",\"tax_year_start\":2026,\"signed_amount_pence\":\"-63029\",\"currency\":\"GBP\",\"classification\":\"Mixed\",\"business_use_basis_points\":3000,\"decision_version\":1,\"active_transfer_pair_id\":null,\"active_refund_id\":null,\"dedupe_status\":\"clear\",\"active_duplicate_decision_id\":null,\"retained_duplicate_transaction_id\":null,\"recognized_income_pence\":\"0\",\"recognized_expense_pence\":\"18909\",\"recognized_profit_pence\":\"-18909\",\"financial_records\":[{\"id\":\"record\",\"amount_gbp\":\"189.09\",\"status\":\"approved\",\"record_type\":\"expense\",\"effect_sign\":1,\"recognized_effect_pence\":\"18909\",\"refund_link_id\":null,\"record_date\":null,\"category_id\":null,\"project_id\":null}],\"refund_portions\":[]}]}}",
+  "sha256": "bfe8f5a56386460edef9e103dac7f22ad4d0c698ab5fa1288cf1773e110a426a"
+}

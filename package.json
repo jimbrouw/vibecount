@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "tsx --test 'lib/**/*.test.ts'",
+    "test": "tsx --test --test-concurrency=2 'lib/**/*.test.ts'",
+    "test:ui": "node scripts/test-import-ui.mjs && node scripts/test-invoice-ui.mjs && node scripts/test-tax-calculation-ui.mjs && node scripts/test-filing-pack-ui.mjs && node scripts/test-finance-ui.mjs && node scripts/test-rollover-ui.mjs && node scripts/test-deadline-ui.mjs && node scripts/test-refund-closure-ui.mjs && node scripts/test-refund-split-ui.mjs && node scripts/test-import-reversal-ui.mjs && node scripts/test-fx-evidence-ui.mjs && node scripts/test-financial-review-ui.mjs && node scripts/test-external-invoice-ui.mjs && node scripts/test-fx-settlement-ui.mjs && node scripts/test-fx-request-ui.mjs && node scripts/test-bank-source-ui.mjs && node scripts/test-native-choice-ui.mjs && node scripts/test-connected-source-ui.mjs && node scripts/test-bank-valuation-ui.mjs && node scripts/test-foreign-classification-ui.mjs && node scripts/test-foreign-import-reversal-ui.mjs",
     "lint": "eslint",
     "scan:secrets": "bash scripts/scan-secrets.sh"
   },
@@ -14,23 +15,34 @@
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.2",
     "@vercel/config": "^0.5.1",
-    "next": "16.2.6",
+    "next": "16.4.2",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
     "posthog-js": "^1.376.1",
     "posthog-node": "^5.35.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "resend": "^6.12.4"
+    "resend": "^6.12.4",
+    "yauzl": "3.4.0"
+  },
+  "overrides": {
+    "@vercel/routing-utils": {
+      "path-to-regexp": "6.3.0"
+    }
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.10",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/yauzl": "3.4.0",
     "babel-plugin-react-compiler": "1.0.0",
+    "embedded-postgres": "18.4.0-beta.17",
+    "esbuild": "^0.28.2",
     "eslint": "^9",
-    "eslint-config-next": "16.2.6",
+    "eslint-config-next": "16.4.2",
     "playwright": "^1.60.0",
     "tailwindcss": "^4",
     "tsx": "^4.22.3",

@@ -1,87 +1,64 @@
+import { isNativeGbpInvoice } from "@/lib/invoices/native";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createInvoicePdf } from "@/lib/invoices/pdf";
-import { loadPdfBranding } from "@/lib/pdf/settings-branding";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Sign in to download invoices." }, { status: 401 });
+  const {
+    data: { user }, error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user)
+    return NextResponse.json(
+      { error: "Sign in to download invoices." },
+      { status: 401 },
+    );
 
   const { searchParams } = new URL(request.url);
   const invoiceId = searchParams.get("id");
-  if (!invoiceId) return NextResponse.json({ error: "Missing invoice ID." }, { status: 400 });
+  if (!invoiceId)
+    return NextResponse.json({ error: "Missing invoice ID." }, { status: 400 });
 
-  const { data: invoice } = await supabase
+  const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")
-    .select("id, number, pdf_path, invoice_date, description, amount, payment_terms, clients(name, address, vat_number)")
+    .select("id, number, pdf_path, origin, currency, amount")
     .eq("id", invoiceId)
     .eq("user_id", user.id)
     .maybeSingle();
 
+  if (invoiceError) return NextResponse.json({error:"Invoice metadata is unavailable."},{status:503});
   if (!invoice) {
     return NextResponse.json({ error: "Invoice not found." }, { status: 404 });
   }
 
+  if (!isNativeGbpInvoice(invoice)) return NextResponse.json({error:"Use the preserved invoice evidence workflow. This endpoint serves native GBP invoice PDFs only."},{status:409});
   let pdfPath = invoice.pdf_path as string | null;
-
-  if (!pdfPath) {
-    const { data: settings } = await supabase
-      .from("user_settings")
-      .select(
-        "legal_name, address, contact_details, bank_details, payment_link_provider, payment_link_url, vat_registered, vat_number, vat_rate, late_payment_wording, pdf_logo_path, pdf_primary_color, pdf_accent_color"
-      )
-      .eq("id", user.id)
+  const revisionId = searchParams.get("revision");
+  if (revisionId) {
+    const { data: revision, error: revisionError } = await supabase
+      .from("invoice_revisions")
+      .select("pdf_path,origin")
+      .eq("id", revisionId)
+      .eq("invoice_id", invoice.id)
+      .eq("user_id", user.id)
       .maybeSingle();
-
-    const client = invoice.clients as { name?: string; address?: string; vat_number?: string } | null;
-    const pdfBytes = await createInvoicePdf({
-      number: invoice.number as string,
-      invoiceDate: invoice.invoice_date as string,
-      clientName: client?.name ?? "",
-      clientAddress: client?.address ?? "",
-      clientVatNumber: settings?.vat_registered ? (client?.vat_number ?? "") : "",
-      description: invoice.description as string,
-      amountPence: Math.round(Number(invoice.amount) * 100),
-      vatPence: 0,
-      paymentTerms: (invoice.payment_terms as string) ?? "",
-      freelancerEmail: user.email ?? "",
-      freelancerName: settings?.legal_name ?? "",
-      freelancerAddress: settings?.address ?? "",
-      freelancerContact: settings?.contact_details ?? "",
-      bankDetails: settings?.bank_details ?? "",
-      paymentLinkProvider: settings?.payment_link_provider ?? "",
-      paymentLinkUrl: settings?.payment_link_url ?? "",
-      vatNumber: settings?.vat_number ?? "",
-      vatRate: settings?.vat_rate ?? null,
-      latePaymentWording: settings?.late_payment_wording ?? "",
-      branding: await loadPdfBranding(supabase, settings),
-    });
-
-    const filename = `${invoice.number}.pdf`;
-    const storagePath = `${user.id}/${filename}`;
-    const { error: uploadError } = await supabase.storage
-      .from("invoices")
-      .upload(storagePath, Buffer.from(pdfBytes), {
-        contentType: "application/pdf",
-        upsert: true,
-      });
-
-    if (uploadError) {
-      console.error("On-demand invoice PDF upload failed:", uploadError.message);
-      return NextResponse.json({ error: "Could not generate the invoice PDF." }, { status: 500 });
-    }
-
-    await supabase
-      .from("invoices")
-      .update({ pdf_path: storagePath })
-      .eq("id", invoice.id)
-      .eq("user_id", user.id);
-
-    pdfPath = storagePath;
+    if (revisionError || !revision || revision.origin !== "native_gbp")
+      return NextResponse.json(
+        { error: "Invoice revision not found." },
+        { status: 404 },
+      );
+    pdfPath = revision.pdf_path;
   }
+
+  if (!pdfPath)
+    return NextResponse.json(
+      {
+        error:
+          "The original PDF is unavailable. Review the invoice and its VAT breakdown before creating a preserved revision.",
+      },
+      { status: 409 },
+    );
 
   const { data, error } = await supabase.storage
     .from("invoices")
@@ -90,7 +67,10 @@ export async function GET(request: Request) {
     });
 
   if (error || !data?.signedUrl) {
-    return NextResponse.json({ error: "Could not create download link." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Could not create download link." },
+      { status: 500 },
+    );
   }
 
   return NextResponse.redirect(data.signedUrl);

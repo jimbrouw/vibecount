@@ -3,7 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import InvoiceBuilder from "./InvoiceBuilder";
 import { formatTodayAsUkDate } from "@/lib/invoices/validation";
-import { EMPTY_SETTINGS } from "@/lib/settings";
+import { invoiceDefaults } from "@/lib/settings-public";
 import LogoutButton from "../../LogoutButton";
 
 export const metadata = {
@@ -36,7 +36,7 @@ export default async function NewInvoicePage({
   const { data: settingsRow } = await supabase
     .from("user_settings")
     .select(
-      "legal_name, address, contact_details, default_payment_terms, bank_details, payment_link_provider, payment_link_url, vat_registered, vat_number, vat_rate, invoice_number_prefix, late_payment_wording, utr, companies_house_api_key"
+      "legal_name, address, contact_details, default_payment_terms, bank_details, payment_link_provider, payment_link_url, vat_registered, vat_number, vat_rate, invoice_number_prefix, late_payment_wording, utr, companies_house_api_key",
     )
     .eq("id", user.id)
     .maybeSingle();
@@ -58,17 +58,12 @@ export default async function NewInvoicePage({
     source: getSingleSearchParam(resolvedSearchParams.source),
     transcript: getSingleSearchParam(resolvedSearchParams.transcript),
     clientAddress: getSingleSearchParam(resolvedSearchParams.clientAddress),
-    clientCompanyNumber: getSingleSearchParam(resolvedSearchParams.clientCompanyNumber),
+    clientCompanyNumber: getSingleSearchParam(
+      resolvedSearchParams.clientCompanyNumber,
+    ),
   };
 
-  const userDefaults = {
-    ...EMPTY_SETTINGS,
-    ...(settingsRow ?? {}),
-    hasSettings: Boolean(
-      settingsRow?.legal_name || settingsRow?.bank_details || settingsRow?.contact_details
-    ),
-    companiesHouseConfigured: Boolean(settingsRow?.companies_house_api_key?.trim()),
-  };
+  const userDefaults = invoiceDefaults(settingsRow);
 
   return (
     <main className="min-h-screen bg-[#f5f0e8]">
@@ -114,12 +109,15 @@ export default async function NewInvoicePage({
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <span className="hidden text-sm text-[#4a6a5a] sm:block">{user.email}</span>
+          <span className="hidden text-sm text-[#4a6a5a] sm:block">
+            {user.email}
+          </span>
           <LogoutButton />
         </div>
       </header>
 
       <InvoiceBuilder
+        key={JSON.stringify({ initialDraft, userDefaults })}
         existingClients={existingClients}
         initialDate={initialDate}
         userDefaults={userDefaults}

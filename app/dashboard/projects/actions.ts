@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isNativeReportingInvoice, INVOICE_REPORTING_COLUMNS } from "@/lib/invoices/reporting";
 import { parseAmountToPence } from "@/lib/invoices/money";
 
 export async function createProject(formData: FormData) {
@@ -82,13 +83,22 @@ export async function tagInvoiceToProject(formData: FormData) {
   if (!invoiceId) redirect(`/dashboard/projects?error=${encodeURIComponent("Missing invoice.")}`);
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: invoice, error: readError } = await supabase.from("invoices")
+    .select(`${INVOICE_REPORTING_COLUMNS},user_id,updated_at`).eq("id", invoiceId).eq("user_id", userId).maybeSingle();
+  if (readError || !invoice || invoice.user_id !== userId || invoice.id.toLowerCase() !== invoiceId.toLowerCase() || !isNativeReportingInvoice(invoice))
+    redirect(`/dashboard/projects?error=${encodeURIComponent("Review preserved invoice evidence before changing its project.")}`);
+  const { data: updatedInvoice, error } = await supabase
     .from("invoices")
     .update({ project_id: projectId })
     .eq("id", invoiceId)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .eq("origin", "native_gbp")
+    .eq("currency", "GBP")
+    .eq("updated_at", invoice.updated_at)
+    .select("id")
+    .maybeSingle();
 
-  if (error) redirect(`/dashboard/projects?error=${encodeURIComponent("Could not tag invoice.")}`);
+  if (error || !updatedInvoice) redirect(`/dashboard/projects?error=${encodeURIComponent("Invoice changed or could not be tagged. Reload and review.")}`);
   revalidatePath("/dashboard/projects");
   redirect("/dashboard/projects?tagged=1");
 }
@@ -114,7 +124,7 @@ export async function tagRecordToProject(formData: FormData) {
 
 async function requireUserId() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) redirect("/login");
   return user.id;
 }

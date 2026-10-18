@@ -2,18 +2,23 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatPounds } from "@/lib/invoices/money";
-import { getCurrentTaxYearStart, getTaxYearLabel } from "@/lib/records/tax-periods";
-import { estimateSelfAssessmentTax } from "@/lib/records/tax-estimate";
 import {
-  buildSelfAssessmentChecklist,
-  type SelfAssessmentRecord,
-} from "@/lib/records/self-assessment";
+  getCurrentTaxYearStart,
+  getTaxYearLabel,
+} from "@/lib/records/tax-periods";
+import { buildSelfAssessmentChecklist } from "@/lib/records/self-assessment";
+import {
+  readTaxPrepData,
+  type TaxPrepRecord,
+  type TaxPrepYear,
+} from "@/lib/records/tax-prep-data";
 import LogoutButton from "../LogoutButton";
 import PlainLanguageNote from "../PlainLanguageNote";
 
 export const metadata = {
   title: "Self Assessment Prep — VibeCount",
-  description: "Plain-English Self Assessment preparation from approved records.",
+  description:
+    "Plain-English Self Assessment preparation from approved records.",
 };
 
 type TaxYearRow = {
@@ -36,30 +41,82 @@ export default async function TaxPrepPage({
 
   const currentTaxYearStart = getCurrentTaxYearStart();
   const params = await searchParams;
-  const selectedTaxYearStart = getSelectedTaxYearStart(params, currentTaxYearStart);
-
-  const [recordsResult, taxYearsResult] = await Promise.all([
-    supabase
-      .from("financial_records")
-      .select("record_type, amount, record_categories(name, sa103_box)")
-      .eq("user_id", user.id)
-      .eq("status", "approved")
-      .eq("tax_year_start", selectedTaxYearStart),
-    supabase
-      .from("financial_records")
-      .select("tax_year_start")
-      .eq("user_id", user.id)
-      .eq("status", "approved"),
-  ]);
-
-  const checklist = buildSelfAssessmentChecklist(
-    (recordsResult.data ?? []) as unknown as SelfAssessmentRecord[]
-  );
-  const taxEstimate = estimateSelfAssessmentTax(checklist.profitTotal);
-  const taxYearOptions = buildTaxYearOptions(
+  const selectedTaxYearStart = getSelectedTaxYearStart(
+    params,
     currentTaxYearStart,
-    (taxYearsResult.data ?? []) as TaxYearRow[]
   );
+
+  const data = await readTaxPrepData(
+    async (afterId) => {
+      let query = supabase
+        .from("financial_records")
+        .select(
+          "id, record_type, amount, effect_sign, cash_effect_pence, cash_treatment, record_categories(name, sa103_box)",
+        )
+        .eq("user_id", user.id)
+        .eq("status", "approved")
+        .eq("tax_year_start", selectedTaxYearStart)
+        .order("id", { ascending: true })
+        .limit(1000);
+      if (afterId) query = query.gt("id", afterId);
+      const result = await query;
+      return {
+        data: result.data as unknown as TaxPrepRecord[] | null,
+        error: result.error,
+      };
+    },
+    async (afterId) => {
+      let query = supabase
+        .from("financial_records")
+        .select("id, tax_year_start")
+        .eq("user_id", user.id)
+        .eq("status", "approved")
+        .order("id", { ascending: true })
+        .limit(1000);
+      if (afterId) query = query.gt("id", afterId);
+      const result = await query;
+      return { data: result.data as TaxPrepYear[] | null, error: result.error };
+    },
+  );
+
+  if (data.status === "unavailable") {
+    return (
+      <main className="mx-auto max-w-3xl px-5 py-8">
+        <h1 className="text-2xl font-semibold">Self Assessment prep</h1>
+        <div
+          role="alert"
+          data-testid="tax-prep-load-error"
+          className="my-6 rounded-lg border border-amber-400 bg-amber-50 p-4"
+        >
+          <p>
+            We could not load your complete records. Your figures and tax
+            estimate are unavailable.
+          </p>
+          <p className="mt-2">
+            Try loading this page again before reviewing or exporting your
+            figures.
+          </p>
+        </div>
+        <Link
+          href={`/dashboard/tax-prep?taxYearStart=${selectedTaxYearStart}`}
+          data-testid="tax-prep-retry"
+        >
+          Try again
+        </Link>
+        <p className="mt-4">
+          <Link
+            href="/dashboard/records"
+            data-testid="tax-prep-back-to-records"
+          >
+            Back to records
+          </Link>
+        </p>
+      </main>
+    );
+  }
+
+  const checklist = buildSelfAssessmentChecklist(data.records);
+  const taxYearOptions = buildTaxYearOptions(currentTaxYearStart, data.years);
 
   return (
     <main className="min-h-screen bg-[#f0fdf4]">
@@ -108,7 +165,9 @@ export default async function TaxPrepPage({
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <span className="hidden text-sm text-white/80 sm:block">{user.email}</span>
+          <span className="hidden text-sm text-white/80 sm:block">
+            {user.email}
+          </span>
           <LogoutButton />
         </div>
       </header>
@@ -125,12 +184,16 @@ export default async function TaxPrepPage({
             </p>
             <div className="mt-3 max-w-2xl">
               <PlainLanguageNote>
-                This page helps prepare and review your self-employment figures. It
-                does not file a tax return and is not tax advice.
+                This page helps prepare and review your self-employment figures.
+                It does not file a tax return and is not tax advice.
               </PlainLanguageNote>
             </div>
           </div>
-          <form className="flex items-center gap-2" action="/dashboard/tax-prep" data-testid="tax-prep-year-form">
+          <form
+            className="flex items-center gap-2"
+            action="/dashboard/tax-prep"
+            data-testid="tax-prep-year-form"
+          >
             <label
               htmlFor="taxYearStart"
               className="text-xs font-semibold uppercase tracking-widest text-[#166534]"
@@ -160,42 +223,57 @@ export default async function TaxPrepPage({
           </form>
         </div>
 
+        {checklist.cashExcludedCount>0&&<p data-testid="tax-prep-cash-exclusions" className="mb-4 text-sm">{checklist.cashExcludedCount} records excluded from GBP cash totals: unpaid, unsupported currency or not approved. Original evidence remains in Records.</p>}
         <section className="mb-6 grid gap-4 sm:grid-cols-3">
-          <SummaryTile label="Income" value={formatPounds(checklist.incomeTotal)} />
-          <SummaryTile label="Expenses" value={formatPounds(checklist.expenseTotal)} />
-          <SummaryTile label="Net profit before review" value={formatPounds(checklist.profitTotal)} />
+          <SummaryTile
+            label="Income"
+            value={formatPounds(checklist.incomeTotal)}
+          />
+          <SummaryTile
+            label="Expenses"
+            value={formatPounds(checklist.expenseTotal)}
+          />
+          <SummaryTile
+            label="Net profit before review"
+            value={formatPounds(checklist.profitTotal)}
+          />
         </section>
 
         <section className="mb-6 rounded-xl border border-[#bbf7d0] bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <h2 className="text-base font-semibold text-[#14532d]">
-                Running tax estimate and quarter habits
-              </h2>
-              <p className="mt-1 text-sm leading-6 text-[#4b8068]">
-                A rough planning estimate from approved self-employment records,
-                using net profit: income minus expenses. Use it as a prompt to
-                review, not as a final bill.
-              </p>
-              <p className="mt-2 rounded-lg border border-[#facc15] bg-[#fefce8] px-3 py-2 text-xs leading-5 text-[#713f12]">
-                Estimate only. This is not tax advice, not a filing calculation,
-                and not a tax return submission.
-              </p>
-              <ul className="mt-3 space-y-1 text-xs text-[#4b8068]">
-                <li>Quarter habit: review records after each tax quarter closes.</li>
-                <li>Payment prompts: Self Assessment payments are usually due 31 January and 31 July.</li>
-                {taxEstimate.notes.map((note) => (
-                  <li key={note}>{note}</li>
-                ))}
-              </ul>
-            </div>
-            <div className="grid min-w-64 gap-3 sm:grid-cols-2 lg:grid-cols-1">
-              <EstimateTile label="Income Tax estimate" value={formatPounds(taxEstimate.incomeTaxPence)} />
-              <EstimateTile label="Class 4 NI estimate" value={formatPounds(taxEstimate.class4NiPence)} />
-              <EstimateTile label="Total rough estimate" value={formatPounds(taxEstimate.totalEstimatePence)} />
-              <EstimateTile label="Payment on account estimate prompt" value={formatPounds(taxEstimate.paymentOnAccountPence)} />
-            </div>
-          </div>
+          <h2 className="text-base font-semibold text-[#14532d]">
+            Tax estimate needs reviewed facts
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-[#4b8068]">
+            Trading net profit alone cannot establish your Income Tax, National
+            Insurance or payments on account. Review jurisdiction, accounting
+            basis, PAYE, pensions, other income and actual tax credits. Missing
+            inputs stay unresolved.
+          </p>
+          <p className="mt-2 text-sm">
+            Draft — not submitted to HMRC. This checklist is a preparation aid,
+            not tax advice or a complete liability calculation.
+          </p>
+          <Link
+            href={`/dashboard/tax-prep/facts?year=${selectedTaxYearStart}`}
+            data-testid="tax-prep-reviewed-facts-link"
+            className="mt-3 inline-block rounded border p-2"
+          >
+            Review tax-year profile and evidence-linked facts
+          </Link>
+          <Link
+            href={`/dashboard/tax-prep/calculation?year=${selectedTaxYearStart}`}
+            data-testid="tax-prep-calculation-link"
+            className="ml-3 mt-3 inline-block rounded border p-2"
+          >
+            Review draft tax calculation
+          </Link>
+          <Link
+            href={`/dashboard/tax-prep/filing-pack?year=${selectedTaxYearStart}`}
+            data-testid="tax-prep-filing-pack-link"
+            className="ml-3 mt-3 inline-block rounded border p-2"
+          >
+            Guided draft filing pack
+          </Link>
           <div className="mt-5 flex flex-wrap gap-3">
             <a
               href={`/api/tax-prep/export?taxYearStart=${selectedTaxYearStart}`}
@@ -225,7 +303,10 @@ export default async function TaxPrepPage({
           </div>
           <div className="divide-y divide-[#f0fdf4]">
             {checklist.items.map((item) => (
-              <div key={item.id} className="grid gap-4 px-5 py-5 lg:grid-cols-[1.2fr_0.8fr]">
+              <div
+                key={item.id}
+                className="grid gap-4 px-5 py-5 lg:grid-cols-[1.2fr_0.8fr]"
+              >
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-semibold text-[#14532d]">
@@ -277,17 +358,6 @@ function SummaryTile({ label, value }: { label: string; value: string }) {
   );
 }
 
-function EstimateTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-[#dcfce7] bg-[#f7fef9] p-4">
-      <p className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
-        {label}
-      </p>
-      <p className="mt-2 text-lg font-semibold text-[#14532d]">{value}</p>
-    </div>
-  );
-}
-
 function FillModeBadge({
   mode,
 }: {
@@ -307,7 +377,9 @@ function FillModeBadge({
         : "bg-[#fef3c7] text-[#92400e]";
 
   return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${className}`}>
+    <span
+      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${className}`}
+    >
       {label}
     </span>
   );
@@ -315,7 +387,7 @@ function FillModeBadge({
 
 function getSelectedTaxYearStart(
   params: { [key: string]: string | string[] | undefined },
-  fallback: number
+  fallback: number,
 ) {
   const value = params.taxYearStart;
   const requested = Number(Array.isArray(value) ? value[0] : value);

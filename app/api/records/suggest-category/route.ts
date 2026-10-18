@@ -4,7 +4,8 @@ import { redactBankDetailsForPrompt } from "@/lib/ai/redaction";
 
 export const runtime = "nodejs";
 
-const SUGGESTION_MODEL = process.env.VIBECOUNT_EXTRACTION_MODEL || "claude-sonnet-4-20250514";
+const SUGGESTION_MODEL =
+  process.env.VIBECOUNT_EXTRACTION_MODEL || "claude-sonnet-4-20250514";
 
 type CategoryRow = { id: string; name: string; record_type: string };
 type RecordRow = {
@@ -17,15 +18,23 @@ type RecordRow = {
 
 export async function GET(request: Request) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user)
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
   const recordId = searchParams.get("recordId");
-  if (!recordId) return NextResponse.json({ error: "Missing recordId." }, { status: 400 });
+  if (!recordId)
+    return NextResponse.json({ error: "Missing recordId." }, { status: 400 });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "AI suggestions are not configured." }, { status: 503 });
+  if (!apiKey)
+    return NextResponse.json(
+      { error: "AI suggestions are not configured." },
+      { status: 503 },
+    );
 
   const [{ data: record }, { data: categories }] = await Promise.all([
     supabase
@@ -33,6 +42,8 @@ export async function GET(request: Request) {
       .select("id, record_type, description, amount, category_id")
       .eq("id", recordId)
       .eq("user_id", user.id)
+      .is("bank_transaction_id", null)
+      .eq("effect_sign", 1)
       .maybeSingle(),
     supabase
       .from("record_categories")
@@ -40,17 +51,21 @@ export async function GET(request: Request) {
       .or(`user_id.eq.${user.id},is_default.eq.true`),
   ]);
 
-  if (!record) return NextResponse.json({ error: "Record not found." }, { status: 404 });
+  if (!record)
+    return NextResponse.json({ error: "Record not found." }, { status: 404 });
 
   const typedRecord = record as RecordRow;
   const typedCategories = (categories ?? []) as CategoryRow[];
 
   const matchingCategories = typedCategories.filter(
-    (c) => c.record_type === typedRecord.record_type
+    (c) => c.record_type === typedRecord.record_type,
   );
 
   if (matchingCategories.length === 0) {
-    return NextResponse.json({ error: "No categories found for this record type." }, { status: 422 });
+    return NextResponse.json(
+      { error: "No categories found for this record type." },
+      { status: 422 },
+    );
   }
 
   const categoryList = matchingCategories
@@ -86,10 +101,15 @@ Choose the best matching category from the list above. Reply with ONLY raw valid
 
   if (!response.ok) {
     console.error("Anthropic suggest-category error:", response.status);
-    return NextResponse.json({ error: "AI suggestion failed. Try again shortly." }, { status: 502 });
+    return NextResponse.json(
+      { error: "AI suggestion failed. Try again shortly." },
+      { status: 502 },
+    );
   }
 
-  const data = await response.json() as { content: { type: string; text: string }[] };
+  const data = (await response.json()) as {
+    content: { type: string; text: string }[];
+  };
   const raw = data.content?.find((b) => b.type === "text")?.text?.trim() ?? "";
 
   let parsed: { categoryId: string; categoryName: string; reason: string };
@@ -97,12 +117,18 @@ Choose the best matching category from the list above. Reply with ONLY raw valid
     parsed = JSON.parse(raw);
   } catch {
     console.error("Bad AI suggest-category response:", raw.slice(0, 200));
-    return NextResponse.json({ error: "Could not parse AI suggestion." }, { status: 502 });
+    return NextResponse.json(
+      { error: "Could not parse AI suggestion." },
+      { status: 502 },
+    );
   }
 
   const matched = matchingCategories.find((c) => c.id === parsed.categoryId);
   if (!matched) {
-    return NextResponse.json({ error: "AI suggested an unknown category." }, { status: 502 });
+    return NextResponse.json(
+      { error: "AI suggested an unknown category." },
+      { status: 502 },
+    );
   }
 
   return NextResponse.json({

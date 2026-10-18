@@ -1,0 +1,29 @@
+name: Verify
+on:
+  pull_request:
+  push:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run scan:secrets
+      - run: npm run lint
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:ui
+      - run: npm audit --audit-level=critical
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://build-only.example.invalid
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: build-only-no-access

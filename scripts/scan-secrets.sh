@@ -12,7 +12,8 @@ patterns=(
 found=0
 
 for pattern in "${patterns[@]}"; do
-  if git grep --untracked -n -E "$pattern" -- \
+  # Report filenames only: never copy a matched credential into CI or chat logs.
+  if git grep --untracked -l -E "$pattern" -- \
     ':(exclude)package-lock.json' \
     ':(exclude)pnpm-lock.yaml' \
     ':(exclude)yarn.lock'
@@ -22,8 +23,8 @@ for pattern in "${patterns[@]}"; do
 done
 
 if [[ "$found" -ne 0 ]]; then
-  echo "Secret-looking values found in tracked files. Remove the literal values before committing." >&2
+  echo "Secret-looking values found in tracked or non-ignored untracked files. Remove the literal values before committing." >&2
   exit 1
 fi
 
-echo "No blocked secret patterns found in tracked files."
+echo "No blocked secret patterns found in tracked or non-ignored untracked files."

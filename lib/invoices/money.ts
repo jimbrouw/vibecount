@@ -1,3 +1,5 @@
+import { decimalToPence } from "../money";
+
 const SMALL_NUMBERS = [
   "zero",
   "one",
@@ -39,13 +41,14 @@ export function normaliseClientName(name: string) {
 }
 
 export function parseAmountToPence(value: string | number) {
-  const raw = String(value).trim().replace(/[£,\s]/g, "");
+  const raw = String(value)
+    .trim()
+    .replace(/[£,\s]/g, "");
   if (!/^\d+(\.\d{1,2})?$/.test(raw)) {
     return null;
   }
 
-  const [pounds, pence = ""] = raw.split(".");
-  return Number(pounds) * 100 + Number(pence.padEnd(2, "0"));
+  return decimalToPence(raw);
 }
 
 export function formatPounds(pence: number) {
@@ -72,7 +75,7 @@ export function amountToWords(pence: number) {
 
   const pennyLabel = pennies === 1 ? "penny" : "pence";
   return `${numberToWords(pounds)} ${poundLabel} and ${numberToWords(
-    pennies
+    pennies,
   )} ${pennyLabel}`;
 }
 
@@ -108,4 +111,10 @@ function numberToWords(value: number): string {
   return remainder
     ? `${numberToWords(millions)} million ${numberToWords(remainder)}`
     : `${numberToWords(millions)} million`;
+}
+
+/** Signed accounting totals retain their meaning in spoken confirmation. */
+export function signedAmountToWords(pence: number) {
+  if (!Number.isSafeInteger(pence)) return "";
+  return (pence < 0 ? "minus " : "") + amountToWords(Math.abs(pence));
 }

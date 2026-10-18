@@ -31,6 +31,8 @@ export default function SettingsForm() {
   const [status, setStatus] = useState<Status>("loading");
   const [logoStatus, setLogoStatus] = useState<LogoStatus>("idle");
   const [logoUrl, setLogoUrl] = useState("");
+  const [companiesHouseConfigured, setCompaniesHouseConfigured] = useState(false);
+  const [removeCompaniesHouseKey, setRemoveCompaniesHouseKey] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [logoError, setLogoError] = useState("");
   const savedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -42,6 +44,7 @@ export default function SettingsForm() {
         if (data && !data.error) {
           setSettings((prev) => ({ ...prev, ...data }));
           setLogoUrl(data.pdf_logo_url ?? "");
+          setCompaniesHouseConfigured(Boolean(data.companies_house_configured));
         }
         setStatus("idle");
       })
@@ -80,7 +83,7 @@ export default function SettingsForm() {
     const res = await fetch("/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(settings),
+      body: JSON.stringify({ ...settings, remove_companies_house_key: removeCompaniesHouseKey }),
     });
 
     if (!res.ok) {
@@ -90,6 +93,10 @@ export default function SettingsForm() {
       return;
     }
 
+    const body = await res.json();
+    setSettings((prev) => ({ ...prev, ...body.settings, companies_house_api_key: "" }));
+    setCompaniesHouseConfigured(Boolean(body.settings?.companies_house_configured));
+    setRemoveCompaniesHouseKey(false);
     setStatus("saved");
     if (savedRef.current) clearTimeout(savedRef.current);
     savedRef.current = setTimeout(() => setStatus("idle"), 3000);
@@ -695,7 +702,7 @@ export default function SettingsForm() {
       <fieldset className="space-y-5 rounded-xl border border-[#e5e0d8] p-5">
         <legend className="px-1 text-sm font-semibold text-[#1a3a2a]">Client intelligence</legend>
         <Field
-          hint="Optional. Typing a client name will search Companies House and auto-fill their registered address. Get a free key at developer.companieshouse.gov.uk"
+          hint="Optional. Leave blank to keep your saved key, or enter a replacement. Saved keys are never displayed."
           label="Companies House API key"
           id="companies_house_api_key"
         >
@@ -706,27 +713,39 @@ export default function SettingsForm() {
             name="companies_house_api_key"
             value={settings.companies_house_api_key}
             onChange={(e) => update("companies_house_api_key", e.target.value)}
-            placeholder="Your Companies House API key"
+            placeholder={companiesHouseConfigured ? "Key saved — enter a replacement" : "Your Companies House API key"}
             className={inputCls}
             autoComplete="off"
           />
         </Field>
+        <p className="text-sm" data-testid="settings-companies-house-key-status">
+          {companiesHouseConfigured ? "Companies House key saved." : "No Companies House key saved."}
+        </p>
+        {companiesHouseConfigured && (
+          <label className="flex items-center gap-2 text-sm" htmlFor="remove-companies-house-key">
+            <input id="remove-companies-house-key" type="checkbox"
+              data-testid="settings-remove-companies-house-key"
+              checked={removeCompaniesHouseKey}
+              onChange={(event) => setRemoveCompaniesHouseKey(event.target.checked)} />
+            Remove saved Companies House key when saving
+          </label>
+        )}
       </fieldset>
 
       {/* Data Export */}
       <fieldset className="rounded-xl border border-[#e5e0d8] bg-white p-6 shadow-sm">
         <legend className="mb-1 -ml-1 px-1 text-xs font-semibold uppercase tracking-widest text-[#4a6a5a]">
-          Data Export & Backup
+          Account data export
         </legend>
         <p className="mb-4 text-xs text-[#7a9a87]">
-          Download a complete backup of all your account data (invoices, clients, settings, records, and reminders) in JSON format.
+          Download selected account details, invoice currency and revision metadata, records and reminder status as JSON. Bank details, your Self Assessment tax reference, credentials, reminder messages, source evidence and attached files are excluded. This is a partial export, not a restorable backup.
         </p>
         <a
           href="/api/backup/export"
           data-testid="settings-export-backup-link"
           className="inline-flex h-10 items-center rounded-lg border border-[#d5d0c8] bg-[#f7fef9] px-4 text-sm font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
         >
-          Download Full JSON Backup
+          Download account JSON export
         </a>
       </fieldset>
 

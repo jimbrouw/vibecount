@@ -2,6 +2,18 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { amountToWords, formatPounds } from "@/lib/invoices/money";
+import { readAllExportRows } from "@/lib/records/export-pages";
+import {
+  readFinancialStamp,
+  readConsistentReconciliation,
+} from "@/lib/records/consistent-reconciliation";
+import {
+  type InvoiceBalanceRow,
+} from "@/lib/invoices/balances";
+import { invoiceOriginalAmount, isNativeReportingInvoice, invoiceReportingSummary, INVOICE_REPORTING_COLUMNS, type InvoiceReportingRow } from "@/lib/invoices/reporting";
+import { fxAmountReadback, fxAggregateReadback } from "@/lib/fx/readback";
+import { minorPence } from "@/lib/records/allocations";
+import { requirePence } from "@/lib/money";
 import { calculateLateInterest } from "@/lib/invoices/interest";
 import {
   disableInvoiceReminders,
@@ -19,15 +31,15 @@ import DeleteInvoiceButton from "./DeleteInvoiceButton";
 
 export const metadata = {
   title: "Dashboard — VibeCount",
-  description: "Create invoices, browse your glossary, and manage your freelancer settings.",
+  description:
+    "Create invoices, browse your glossary, and manage your freelancer settings.",
 };
 
-type DashboardInvoice = {
+type DashboardInvoice = InvoiceReportingRow & {
   id: string;
   number: string;
   invoice_date: string;
   due_date: string | null;
-  amount: number | string;
   payment_terms: string;
   status: string;
   delivery_status: string;
@@ -36,6 +48,7 @@ type DashboardInvoice = {
   reminder_enabled: boolean;
   next_reminder_at: string | null;
   pdf_path: string | null;
+  balance?: InvoiceBalanceRow;
   clients:
     | {
         name: string;
@@ -49,6 +62,8 @@ type DashboardInvoice = {
 };
 
 type ReminderDraft = {
+  updated_at: string;
+  from_email: string | null;
   id: string;
   invoice_id: string;
   recipient_email: string;
@@ -65,17 +80,19 @@ export default async function DashboardPage({
 }) {
   const supabase = await createClient();
   const {
-    data: { user },
+    data: { user }, error: authError,
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (authError || !user) {
     redirect("/login");
   }
 
   // Check if settings exist to decide onboarding state
   const { data: settingsRow } = await supabase
     .from("user_settings")
-    .select("legal_name, payment_link_url, tax_pot_percentage, statutory_interest_rate")
+    .select(
+      "legal_name, payment_link_url, tax_pot_percentage, statutory_interest_rate",
+    )
     .eq("id", user.id)
     .maybeSingle();
 
@@ -85,26 +102,27 @@ export default async function DashboardPage({
   const flash = flashMessage(resolvedSearchParams);
 
   const [
-    { data: recentInvoices },
+    { data: recentInvoices, error: recentError },
     { data: reminderDrafts },
     { data: readinessCheck },
-    { data: allInvoices },
+    reporting,
   ] = await Promise.all([
     supabase
       .from("invoices")
       .select(
-        "id, number, invoice_date, due_date, amount, payment_terms, status, delivery_status, sent_at, paid_at, reminder_enabled, next_reminder_at, pdf_path, clients(name, email)"
+        `${INVOICE_REPORTING_COLUMNS},number,invoice_date,due_date,payment_terms,delivery_status,sent_at,paid_at,reminder_enabled,next_reminder_at,pdf_path,clients(name,email)`,
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(10),
     supabase
       .from("invoice_reminders")
-      .select("id, invoice_id, recipient_email, subject, message, status, created_at")
+      .select(
+        "id, invoice_id, recipient_email, subject, message, status, created_at, updated_at, from_email",
+      )
       .eq("user_id", user.id)
-      .eq("status", "pending")
-      .order("created_at", { ascending: false })
-      .limit(10),
+      .in("status", ["pending", "sending", "unknown", "failed"])
+      .order("created_at", { ascending: true }),
     supabase
       .from("quarterly_readiness_checks")
       .select("status, notes, tax_quarter")
@@ -113,30 +131,36 @@ export default async function DashboardPage({
       .order("checked_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
-    supabase
-      .from("invoices")
-      .select("amount, paid_at, status, delivery_status")
-      .eq("user_id", user.id),
+    readConsistentReconciliation(
+      () =>
+        readFinancialStamp(() => supabase.rpc("reconciliation_export_stamp")),
+      async () => {
+        const rows = await readAllExportRows<InvoiceReportingRow>(async (after) => {
+          let query = supabase.from("invoices").select(INVOICE_REPORTING_COLUMNS).eq("user_id", user.id).order("id").limit(500);
+          if (after) query = query.gt("id", after);
+          const result = await query;
+          return { data: result.data, error: result.error };
+        });
+        const balanceRows = await readAllExportRows<InvoiceBalanceRow>(async (after) => {
+          let query = supabase
+            .from("invoice_payment_balances")
+            .select(
+              "id,status,currency,updated_at,invoice_pence,allocated_pence,credited_pence,outstanding_pence,refund_due_pence,returned_pence,settlement_state,has_reconciliation_history,has_credit_history,paid_at,delivery_status",
+            )
+            .eq("user_id", user.id)
+            .order("id")
+            .limit(500);
+          if (after) query = query.gt("id", after);
+          const result = await query;
+          return { data: result.data, error: result.error };
+        });
+        return { ...invoiceReportingSummary(rows, balanceRows), balanceRows };
+      },
+    ).catch(() => null),
   ]);
 
-  let totalInvoiced = 0;
-  let totalPaid = 0;
-  let totalOutstanding = 0;
-
-  (allInvoices || []).forEach((inv) => {
-    if (inv.status !== "draft") {
-      const amount = Math.round(Number(inv.amount) * 100);
-      totalInvoiced += amount;
-      if (inv.paid_at || inv.delivery_status === "paid") {
-        totalPaid += amount;
-      } else {
-        totalOutstanding += amount;
-      }
-    }
-  });
-
-  const taxPotPercentage = settingsRow?.tax_pot_percentage ?? 27.00;
-  const taxPotEstimate = Math.round(totalPaid * (taxPotPercentage / 100));
+  const totals = reporting?.native ?? null;
+  const balances = new Map((reporting?.balanceRows ?? []).map((b) => [b.id, b]));
   const statutoryInterestRate = settingsRow?.statutory_interest_rate ?? 13.25;
 
   const rawInvoices = (recentInvoices ?? []) as unknown as DashboardInvoice[];
@@ -144,7 +168,7 @@ export default async function DashboardPage({
   const invoices = await Promise.all(
     rawInvoices.map(async (inv) => {
       let pdfShareUrl = "";
-      if (inv.pdf_path) {
+      if (isNativeReportingInvoice(inv) && inv.pdf_path) {
         const { data } = await supabase.storage
           .from("invoices")
           .createSignedUrl(inv.pdf_path, THIRTY_DAYS_SECONDS);
@@ -152,9 +176,10 @@ export default async function DashboardPage({
       }
       return {
         ...inv,
+        balance: balances.get(inv.id),
         pdfShareUrl,
       };
-    })
+    }),
   );
   const reminders = (reminderDrafts ?? []) as ReminderDraft[];
   const showReminderHelp =
@@ -237,7 +262,9 @@ export default async function DashboardPage({
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <span className="hidden text-sm text-white/80 sm:block">{user.email}</span>
+          <span className="hidden text-sm text-white/80 sm:block">
+            {user.email}
+          </span>
           <LogoutButton />
         </div>
       </header>
@@ -248,7 +275,13 @@ export default async function DashboardPage({
           <div className="mb-6 flex items-start gap-4 rounded-xl border border-[#86efac] bg-[#dcfce7] p-5">
             <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#15803d]/10">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <circle cx="8" cy="8" r="7" stroke="#15803d" strokeWidth="1.5" />
+                <circle
+                  cx="8"
+                  cy="8"
+                  r="7"
+                  stroke="#15803d"
+                  strokeWidth="1.5"
+                />
                 <line
                   x1="8"
                   y1="5"
@@ -305,12 +338,17 @@ export default async function DashboardPage({
         )}
 
         {readinessCheck && (
-          <div className="mb-6 flex items-start gap-4 rounded-xl border border-[#fef08a] bg-[#fefce8] p-5" data-testid="readiness-alert-banner">
+          <div
+            className="mb-6 flex items-start gap-4 rounded-xl border border-[#fef08a] bg-[#fefce8] p-5"
+            data-testid="readiness-alert-banner"
+          >
             <div className="flex-1">
               <p className="text-sm font-medium text-[#713f12]">
                 Quarter {readinessCheck.tax_quarter} records need attention
               </p>
-              <p className="mt-0.5 text-xs text-[#854d0e]">{readinessCheck.notes}</p>
+              <p className="mt-0.5 text-xs text-[#854d0e]">
+                {readinessCheck.notes}
+              </p>
               <Link
                 href="/dashboard/review"
                 className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#713f12] underline underline-offset-2"
@@ -321,44 +359,62 @@ export default async function DashboardPage({
           </div>
         )}
 
-        {/* Home totals */}
-        <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-[#bbf7d0] bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
-              Total Invoiced
+        {/* Complete evidence-backed totals; unavailable data never becomes zero. */}
+        {totals ? (
+          <section
+            aria-label="Invoice totals"
+            className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5"
+          >
+            <h2 className="col-span-full">Native GBP invoice balances</h2>
+            {[
+              ["Original invoiced", totals.invoiced],
+              ["Allocated cash receipts", totals.receipts],
+              ["Matched customer refunds", totals.returned],
+              ["Retained invoice cash", totals.retained],
+              ["Invoice credits", totals.credited],
+              ["Outstanding", totals.outstanding],
+              ["Cash to reconcile after credits", totals.cashToReconcile],
+            ].map(([label, amount]) => (
+              <div
+                key={String(label)}
+                className="rounded-xl border border-[#bbf7d0] bg-white p-5"
+              >
+                <p className="text-sm font-semibold">{label}</p>
+                <p className="mt-2 text-xl">{formatPounds(Number(amount))}</p>
+                <p className="text-xs">{amountToWords(Number(amount))}</p>
+              </div>
+            ))}
+            <p className="col-span-full text-sm">
+              Native GBP totals from reviewed allocations and matched returned cash.
+              Unassigned refunds still need review. These are not your current
+              bank balance or actual tax reserve. {totals.manualPaidAssertions}{" "}
+              manual paid assertion(s) are excluded from received cash totals.
             </p>
-            <p className="mt-2 text-xl font-semibold text-[#14532d]">
-              {formatPounds(totalInvoiced)}
-            </p>
-          </div>
-          <div className="rounded-xl border border-[#bbf7d0] bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
-              Total Paid
-            </p>
-            <p className="mt-2 text-xl font-semibold text-[#14532d]">
-              {formatPounds(totalPaid)}
-            </p>
-          </div>
-          <div className="rounded-xl border border-[#bbf7d0] bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
-              Outstanding
-            </p>
-            <p className="mt-2 text-xl font-semibold text-[#14532d]">
-              {formatPounds(totalOutstanding)}
-            </p>
-          </div>
-          <div className="rounded-xl border border-[#dcfce7] bg-[#f7fef9] p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
-              Tax Pot Nudge
-            </p>
-            <p className="mt-2 text-xl font-semibold text-[#14532d]">
-              {formatPounds(taxPotEstimate)}
-            </p>
-            <p className="mt-1 text-xs text-[#4b8068]">
-              {taxPotPercentage}% of paid invoices
-            </p>
-          </div>
-        </section>
+          </section>
+        ) : (
+          <p
+            role="alert"
+            data-testid="dashboard-balances-unavailable"
+            className="mb-8"
+          >
+            Complete invoice balances are unavailable. Reload before relying on
+            totals.
+          </p>
+        )}
+        {reporting && <section aria-label="Original invoice amounts by currency" data-testid="dashboard-currency-totals" className="mb-6">
+          <h2>Original invoice amounts by currency</h2>
+          <ul>{reporting.groups.map(group => <li key={group.currency} data-testid={`dashboard-currency-total-${group.currency}`}>
+            Finalised: {fxAggregateReadback(group.finalised_minor, group.currency)}; drafts: {fxAggregateReadback(group.draft_minor, group.currency)}.
+          </li>)}</ul>
+          <p>Original invoice amounts are separate from received cash. {reporting.external_count} preserved external invoice(s) have settlement balances unavailable here. No exchange rate is inferred.</p>
+        </section>}
+        <Link
+          href="/dashboard/reconciliation"
+          data-testid="dashboard-reconciliation-link"
+          className="mb-5 inline-block underline"
+        >
+          Reconcile receipts, credits and refunds
+        </Link>
 
         {/* Hero action */}
         <div className="mb-8 flex items-center justify-between">
@@ -371,8 +427,9 @@ export default async function DashboardPage({
             </p>
             <div className="mt-3 max-w-xl">
               <PlainLanguageNote>
-                This page shows your recent invoices. Each amount is shown in numbers
-                and words so it is easier to check before you send anything.
+                This page shows your recent invoices. Each amount is shown in
+                numbers and words so it is easier to check before you send
+                anything.
               </PlainLanguageNote>
             </div>
           </div>
@@ -436,39 +493,77 @@ export default async function DashboardPage({
               Payment reminders
             </h2>
             <p className="mt-1 text-sm leading-6 text-[#854d0e]">
-              Scheduling reminders does not email the client now. VibeCount creates a
-              draft when a reminder becomes due, then you review and press Send reminder.
+              Scheduling reminders does not email the client now. VibeCount
+              creates a draft when a reminder becomes due, then you review and
+              press Send reminder.
             </p>
+            <Link href="/dashboard/reminders" data-testid="reminder-delivery-history-link" className="mt-3 inline-block underline">View reminder delivery history</Link>
             {reminders.length > 0 ? (
               <div className="mt-4 space-y-3">
                 {reminders.map((reminder) => (
-                  <div key={reminder.id} className="rounded-lg border border-[#fef08a] bg-[#fefce8] p-4" data-testid={`pending-reminder-${reminder.id}`}>
+                  <div
+                    key={reminder.id}
+                    className="rounded-lg border border-[#fef08a] bg-[#fefce8] p-4"
+                    data-testid={`pending-reminder-${reminder.id}`}
+                  >
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <p className="text-sm font-semibold text-[#713f12]">{reminder.subject}</p>
+                        <p className="text-sm font-semibold text-[#713f12]">
+                          {reminder.subject}
+                        </p>
                         <p className="mt-1 text-xs text-[#854d0e]">
-                          To: {reminder.recipient_email} · Drafted {formatDateTime(reminder.created_at)}
+                          From: {reminder.from_email ?? "Refresh required"} · To: {reminder.recipient_email} · Drafted{" "}
+                          {formatDateTime(reminder.created_at)}
                         </p>
                       </div>
                     </div>
                     <p className="mt-3 whitespace-pre-wrap text-xs leading-5 text-[#713f12]">
                       {reminder.message}
                     </p>
-                    <div className="mt-4 flex gap-2">
-                      <form action={sendApprovedReminder} data-testid={`send-reminder-form-${reminder.id}`}>
-                        <input type="hidden" name="reminderId" value={reminder.id} />
-                        <input type="hidden" name="redirectTo" value="/dashboard?reminders=1" />
+                    {reminder.status === "pending" && !reminder.from_email ? <p className="mt-2 text-sm">This older draft needs a fresh sender review. Discard it, then schedule a new reminder.</p> : null}
+                    {reminder.status === "pending" ? <div className="mt-4 flex gap-2">
+                      <form
+                        action={sendApprovedReminder}
+                        data-testid={`send-reminder-form-${reminder.id}`}
+                      >
+                        <input
+                          type="hidden"
+                          name="reminderId"
+                          value={reminder.id}
+                        />
+                        <input
+                          type="hidden"
+                          name="redirectTo"
+                          value="/dashboard?reminders=1"
+                        />
+                        <input type="hidden" name="reviewedAt" value={reminder.updated_at} />
+                        <label className="block text-xs">
+                          <input type="checkbox" name="humanConfirmed" value="yes" required data-testid={`confirm-reminder-${reminder.id}`} />
+                          I confirm this recipient and message, and want to send this reminder.
+                        </label>
                         <button
                           type="submit"
+                          disabled={!reminder.from_email}
                           data-testid={`send-reminder-button-${reminder.id}`}
                           className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#15803d] px-4 text-xs font-semibold text-white transition hover:bg-[#14532d]"
                         >
                           Send reminder
                         </button>
                       </form>
-                      <form action={discardReminderDraft} data-testid={`discard-reminder-form-${reminder.id}`}>
-                        <input type="hidden" name="reminderId" value={reminder.id} />
-                        <input type="hidden" name="redirectTo" value="/dashboard?reminders=1" />
+                      <form
+                        action={discardReminderDraft}
+                        data-testid={`discard-reminder-form-${reminder.id}`}
+                      >
+                        <input
+                          type="hidden"
+                          name="reminderId"
+                          value={reminder.id}
+                        />
+                        <input
+                          type="hidden"
+                          name="redirectTo"
+                          value="/dashboard?reminders=1"
+                        />
                         <button
                           type="submit"
                           data-testid={`discard-reminder-button-${reminder.id}`}
@@ -477,22 +572,29 @@ export default async function DashboardPage({
                           Discard
                         </button>
                       </form>
-                    </div>
+                    </div> : <p role="status" data-testid={`reminder-delivery-status-${reminder.id}`} className="mt-4 text-sm">
+                      {reminder.status === "sending" ? "Send attempt started; delivery is not yet confirmed." : "Delivery outcome needs checking."}
+                      {" "}Do not resend. The provider may have accepted this message. Open delivery history to check verified provider evidence before further action.
+                    </p>}
                   </div>
                 ))}
               </div>
             ) : (
               <p className="mt-4 rounded-lg border border-[#fef08a] bg-[#fefce8] px-4 py-3 text-sm leading-6 text-[#713f12]">
-                No reminder drafts need approval yet. Scheduled invoices show a “Next reminder
-                draft” date below; when that date arrives, a draft will appear here for you to send
-                or discard.
+                No reminder drafts need approval yet. Scheduled invoices show a
+                “Next reminder draft” date below; when that date arrives, a
+                draft will appear here for you to send or discard.
               </p>
             )}
           </section>
         ) : null}
 
         {/* Recent invoices */}
-        {recentInvoices && recentInvoices.length > 0 ? (
+        {recentError ? (
+          <p role="alert">
+            Recent invoices are unavailable. Reload to review them.
+          </p>
+        ) : recentInvoices && recentInvoices.length > 0 ? (
           <div className="rounded-xl border border-[#bbf7d0] bg-white shadow-sm">
             <div className="border-b border-[#f0fdf4] px-5 py-3">
               <p className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
@@ -501,154 +603,305 @@ export default async function DashboardPage({
             </div>
             <ul>
               {invoices.map((inv, idx) => {
+                if (!isNativeReportingInvoice(inv)) {
+                  let original = "Original amount unavailable. Review currency and source evidence.";
+                  try { const amount = invoiceOriginalAmount(inv); original = fxAmountReadback(amount.minor, amount.currency); } catch { /* Explicit unavailable state. */ }
+                  return <li key={inv.id} className="px-5 py-4" data-testid={`dashboard-external-invoice-${inv.id}`}>
+                    <p>{inv.number} · {inv.origin === 'preserved_external' ? 'Preserved external invoice' : 'Invoice metadata requires review'}</p>
+                    <p>{original}</p><p>Settlement balance unavailable. Review original evidence before any financial action.</p>
+                    <Link href="/dashboard/reconciliation/fx/evidence" data-testid={`dashboard-external-evidence-${inv.id}`}>Review invoice evidence</Link>
+                  </li>;
+                }
                 const client = dashboardClient(inv.clients);
-                const amountPence = Math.round(Number(inv.amount) * 100);
-                const lateInterest = (!inv.paid_at && inv.due_date) ? calculateLateInterest(amountPence, inv.due_date, statutoryInterestRate) : null;
+                const amountPence = requirePence(inv.amount);
+                const balance = inv.balance;
+                const outstanding = balance
+                  ? minorPence(balance.outstanding_pence)
+                  : null;
+                const hasHistory = balance?.has_reconciliation_history ?? true;
+                const lateInterest =
+                  !hasHistory && !inv.paid_at && outstanding && inv.due_date
+                    ? calculateLateInterest(
+                        outstanding,
+                        inv.due_date,
+                        statutoryInterestRate,
+                      )
+                    : null;
                 return (
-                <li
-                  key={inv.id}
-                  className={`px-5 py-4 ${
-                    idx < recentInvoices.length - 1
-                      ? "border-b border-[#f0fdf4]"
-                      : ""
-                  }`}
-                >
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-[#14532d]">{inv.number}</p>
-                      <p className="mt-0.5 text-xs text-[#4b8068]">
-                        {client?.name ?? "Client"} · Invoice {formatDate(inv.invoice_date)}
-                        {inv.due_date ? ` · Due ${formatDate(inv.due_date)}` : ""}
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <StatusPill invoice={inv} />
-                        {inv.reminder_enabled ? (
-                          <span className="rounded-full bg-[#fef9c3] px-2 py-0.5 text-xs font-medium text-[#854d0e]">
-                            Next reminder draft {inv.next_reminder_at ? formatDateTime(inv.next_reminder_at) : "on"}
-                          </span>
-                        ) : null}
+                  <li
+                    key={inv.id}
+                    className={`px-5 py-4 ${
+                      idx < recentInvoices.length - 1
+                        ? "border-b border-[#f0fdf4]"
+                        : ""
+                    }`}
+                  >
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-[#14532d]">
+                          {inv.number}
+                        </p>
+                        <p className="mt-0.5 text-xs text-[#4b8068]">
+                          {client?.name ?? "Client"} · Invoice{" "}
+                          {formatDate(inv.invoice_date)}
+                          {inv.due_date
+                            ? ` · Due ${formatDate(inv.due_date)}`
+                            : ""}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <StatusPill invoice={inv} />
+                          {inv.reminder_enabled ? (
+                            <span className="rounded-full bg-[#fef9c3] px-2 py-0.5 text-xs font-medium text-[#854d0e]">
+                              Next reminder draft{" "}
+                              {inv.next_reminder_at
+                                ? formatDateTime(inv.next_reminder_at)
+                                : "on"}
+                            </span>
+                          ) : null}
+                          {lateInterest ? (
+                            <span className="rounded-full bg-[#fee2e2] px-2 py-0.5 text-xs font-medium text-[#991b1b]">
+                              {lateInterest.daysOverdue} days overdue ·{" "}
+                              {formatPounds(lateInterest.totalLateFeePence)} fee
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="lg:text-right">
+                        <p className="text-sm font-semibold text-[#14532d]">
+                          {formatPounds(amountPence)}
+                        </p>
+                        <p className="mt-0.5 text-xs text-[#4b8068]">
+                          {amountToWords(amountPence)}
+                        </p>
+                        {balance ? (
+                          <p
+                            className="mt-2 text-xs"
+                            data-testid={`dashboard-invoice-balance-${inv.id}`}
+                          >
+                            Outstanding {formatPounds(outstanding!)} (
+                            {amountToWords(outstanding!)}); credited{" "}
+                            {formatPounds(minorPence(balance.credited_pence))} (
+                            {amountToWords(minorPence(balance.credited_pence))}
+                            ); allocated receipts{" "}
+                            {formatPounds(
+                              minorPence(balance.allocated_pence),
+                            )}{" "}
+                            (
+                            {amountToWords(minorPence(balance.allocated_pence))}
+                            ); matched returned cash{" "}
+                            {formatPounds(
+                              minorPence(balance.returned_pence ?? 0),
+                            )}{" "}
+                            (
+                            {amountToWords(
+                              minorPence(balance.returned_pence ?? 0),
+                            )}
+                            ); cash to reconcile{" "}
+                            {formatPounds(minorPence(balance.refund_due_pence))}{" "}
+                            (
+                            {amountToWords(
+                              minorPence(balance.refund_due_pence),
+                            )}
+                            ).
+                          </p>
+                        ) : (
+                          <p role="alert">Current balance unavailable.</p>
+                        )}
+                        {hasHistory && (
+                          <Link
+                            className="block text-xs underline"
+                            href={`/dashboard/reconciliation/credits?invoice=${inv.id}`}
+                          >
+                            Review reconciliation and credits before sending a
+                            new payment request
+                          </Link>
+                        )}
                         {lateInterest ? (
-                          <span className="rounded-full bg-[#fee2e2] px-2 py-0.5 text-xs font-medium text-[#991b1b]">
-                            {lateInterest.daysOverdue} days overdue · {formatPounds(lateInterest.totalLateFeePence)} fee
-                          </span>
+                          <p className="mt-1 text-xs text-[#991b1b] font-medium">
+                            + {formatPounds(lateInterest.totalLateFeePence)}{" "}
+                            statutory interest & fee
+                          </p>
                         ) : null}
                       </div>
                     </div>
-                    <div className="lg:text-right">
-                      <p className="text-sm font-semibold text-[#14532d]">
-                        {formatPounds(amountPence)}
-                      </p>
-                      <p className="mt-0.5 text-xs text-[#4b8068]">
-                        {amountToWords(amountPence)}
-                      </p>
-                      {lateInterest ? (
-                        <p className="mt-1 text-xs text-[#991b1b] font-medium">
-                          + {formatPounds(lateInterest.totalLateFeePence)} statutory interest & fee
-                        </p>
-                      ) : null}
+
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <a
+                        href={`/api/invoices/download?id=${inv.id}`}
+                        data-testid={`dashboard-invoice-download-${inv.id}`}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#bbf7d0] bg-white px-3 text-xs font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
+                      >
+                        Download PDF
+                      </a>
+                      {!hasHistory && (
+                        <EmailInvoiceButton
+                          invoiceId={inv.id}
+                          invoiceNumber={inv.number}
+                          clientName={dashboardClient(inv.clients)?.name ?? ""}
+                          clientEmail={
+                            dashboardClient(inv.clients)?.email ?? ""
+                          }
+                          amountPence={amountPence}
+                          dueDate={inv.due_date}
+                          paymentTerms={inv.payment_terms}
+                          senderName={settingsRow?.legal_name ?? ""}
+                          paymentLinkUrl={settingsRow?.payment_link_url ?? ""}
+                          hasPdf
+                          pdfShareUrl={inv.pdfShareUrl}
+                        />
+                      )}
+                      {lateInterest && lateInterest.daysOverdue > 0 && (
+                        <ChaseInvoiceButton
+                          invoiceId={inv.id}
+                          invoiceNumber={inv.number}
+                          clientName={dashboardClient(inv.clients)?.name ?? ""}
+                          clientEmail={
+                            dashboardClient(inv.clients)?.email ?? ""
+                          }
+                          amountPence={amountPence}
+                          dueDate={inv.due_date}
+                          paymentTerms={inv.payment_terms}
+                          senderName={settingsRow?.legal_name ?? ""}
+                          paymentLinkUrl={settingsRow?.payment_link_url ?? ""}
+                          hasPdf
+                          pdfShareUrl={inv.pdfShareUrl}
+                          daysOverdue={lateInterest.daysOverdue}
+                          lateFeePence={lateInterest.totalLateFeePence}
+                        />
+                      )}
+                      <Link
+                        href={`/dashboard/invoices/edit?id=${inv.id}`}
+                        data-testid={`dashboard-invoice-edit-${inv.id}`}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#bbf7d0] bg-white px-3 text-xs font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
+                      >
+                        Edit
+                      </Link>
+                      <DeleteInvoiceButton invoiceId={inv.id} />
                     </div>
-                  </div>
 
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <a
-                      href={`/api/invoices/download?id=${inv.id}`}
-                      data-testid={`dashboard-invoice-download-${inv.id}`}
-                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#bbf7d0] bg-white px-3 text-xs font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
-                    >
-                      Download PDF
-                    </a>
-                    <EmailInvoiceButton
-                      invoiceId={inv.id}
-                      invoiceNumber={inv.number}
-                      clientName={dashboardClient(inv.clients)?.name ?? ""}
-                      clientEmail={dashboardClient(inv.clients)?.email ?? ""}
-                      amountPence={Math.round(Number(inv.amount) * 100)}
-                      dueDate={inv.due_date}
-                      paymentTerms={inv.payment_terms}
-                      senderName={settingsRow?.legal_name ?? ""}
-                      paymentLinkUrl={settingsRow?.payment_link_url ?? ""}
-                      hasPdf
-                      pdfShareUrl={(inv as any).pdfShareUrl}
-                    />
-                    {lateInterest && lateInterest.daysOverdue > 0 && (
-                      <ChaseInvoiceButton
-                        invoiceId={inv.id}
-                        invoiceNumber={inv.number}
-                        clientName={dashboardClient(inv.clients)?.name ?? ""}
-                        clientEmail={dashboardClient(inv.clients)?.email ?? ""}
-                        amountPence={Math.round(Number(inv.amount) * 100)}
-                        dueDate={inv.due_date}
-                        paymentTerms={inv.payment_terms}
-                        senderName={settingsRow?.legal_name ?? ""}
-                        paymentLinkUrl={settingsRow?.payment_link_url ?? ""}
-                        hasPdf
-                        pdfShareUrl={(inv as any).pdfShareUrl}
-                        daysOverdue={lateInterest.daysOverdue}
-                        lateFeePence={lateInterest.totalLateFeePence}
-                      />
-                    )}
-                    <Link
-                      href={`/dashboard/invoices/edit?id=${inv.id}`}
-                      data-testid={`dashboard-invoice-edit-${inv.id}`}
-                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#bbf7d0] bg-white px-3 text-xs font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
-                    >
-                      Edit
-                    </Link>
-                    <DeleteInvoiceButton invoiceId={inv.id} />
-                  </div>
+                    {inv.status === "finalised" ? (
+                      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                        {!inv.sent_at && !inv.paid_at ? (
+                          <form
+                            action={markInvoiceSent}
+                            className="flex gap-2"
+                            data-testid={`dashboard-invoice-mark-sent-form-${inv.id}`}
+                          >
+                            <input
+                              type="hidden"
+                              name="invoiceId"
+                              value={inv.id}
+                            />
+                            <input
+                              type="hidden"
+                              name="redirectTo"
+                              value="/dashboard?reminders=1"
+                            />
+                            <input
+                              name="clientEmail"
+                              data-testid={`dashboard-invoice-client-email-input-${inv.id}`}
+                              type="email"
+                              defaultValue={client?.email ?? ""}
+                              placeholder="client@example.com"
+                              className="min-w-0 flex-1 rounded-lg border border-[#bbf7d0] px-3 text-xs text-[#14532d] outline-none focus:border-[#15803d]"
+                            />
+                            <button
+                              data-testid={`dashboard-invoice-mark-sent-button-${inv.id}`}
+                              className={smallButtonCls}
+                            >
+                              Sent
+                            </button>
+                          </form>
+                        ) : null}
 
-                  {inv.status === "finalised" ? (
-                    <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                      {!inv.sent_at && !inv.paid_at ? (
-                        <form action={markInvoiceSent} className="flex gap-2" data-testid={`dashboard-invoice-mark-sent-form-${inv.id}`}>
-                          <input type="hidden" name="invoiceId" value={inv.id} />
-                          <input type="hidden" name="redirectTo" value="/dashboard?reminders=1" />
-                          <input
-                            name="clientEmail"
-                            data-testid={`dashboard-invoice-client-email-input-${inv.id}`}
-                            type="email"
-                            defaultValue={client?.email ?? ""}
-                            placeholder="client@example.com"
-                            className="min-w-0 flex-1 rounded-lg border border-[#bbf7d0] px-3 text-xs text-[#14532d] outline-none focus:border-[#15803d]"
-                          />
-                          <button data-testid={`dashboard-invoice-mark-sent-button-${inv.id}`} className={smallButtonCls}>Sent</button>
-                        </form>
-                      ) : null}
+                        {!hasHistory && !inv.paid_at ? (
+                          <form
+                            action={markInvoicePaid}
+                            data-testid={`dashboard-invoice-mark-paid-form-${inv.id}`}
+                          >
+                            <input
+                              type="hidden"
+                              name="invoiceId"
+                              value={inv.id}
+                            />
+                            <input
+                              type="hidden"
+                              name="redirectTo"
+                              value="/dashboard"
+                            />
+                            <button
+                              data-testid={`dashboard-invoice-mark-paid-button-${inv.id}`}
+                              className={smallButtonCls}
+                            >
+                              Mark paid
+                            </button>
+                          </form>
+                        ) : null}
 
-                      {!inv.paid_at ? (
-                        <form action={markInvoicePaid} data-testid={`dashboard-invoice-mark-paid-form-${inv.id}`}>
-                          <input type="hidden" name="invoiceId" value={inv.id} />
-                          <input type="hidden" name="redirectTo" value="/dashboard" />
-                          <button data-testid={`dashboard-invoice-mark-paid-button-${inv.id}`} className={smallButtonCls}>Mark paid</button>
-                        </form>
-                      ) : null}
+                        {balance &&
+                        !balance.has_credit_history &&
+                        outstanding !== null &&
+                        outstanding > 0 &&
+                        !inv.paid_at &&
+                        !inv.reminder_enabled ? (
+                          <form
+                            action={enableInvoiceReminders}
+                            className="flex gap-2"
+                            data-testid={`dashboard-invoice-enable-reminders-form-${inv.id}`}
+                          >
+                            <input
+                              type="hidden"
+                              name="invoiceId"
+                              value={inv.id}
+                            />
+                            <input
+                              type="hidden"
+                              name="redirectTo"
+                              value="/dashboard"
+                            />
+                            <input
+                              name="clientEmail"
+                              data-testid={`dashboard-invoice-reminder-email-input-${inv.id}`}
+                              type="email"
+                              defaultValue={client?.email ?? ""}
+                              placeholder="client@example.com"
+                              className="min-w-0 flex-1 rounded-lg border border-[#bbf7d0] px-3 text-xs text-[#14532d] outline-none focus:border-[#15803d]"
+                            />
+                            <button
+                              data-testid={`dashboard-invoice-enable-reminders-button-${inv.id}`}
+                              className={smallOutlineButtonCls}
+                            >
+                              Schedule reminders
+                            </button>
+                          </form>
+                        ) : null}
 
-                      {!inv.paid_at && !inv.reminder_enabled ? (
-                        <form action={enableInvoiceReminders} className="flex gap-2" data-testid={`dashboard-invoice-enable-reminders-form-${inv.id}`}>
-                          <input type="hidden" name="invoiceId" value={inv.id} />
-                          <input type="hidden" name="redirectTo" value="/dashboard" />
-                          <input
-                            name="clientEmail"
-                            data-testid={`dashboard-invoice-reminder-email-input-${inv.id}`}
-                            type="email"
-                            defaultValue={client?.email ?? ""}
-                            placeholder="client@example.com"
-                            className="min-w-0 flex-1 rounded-lg border border-[#bbf7d0] px-3 text-xs text-[#14532d] outline-none focus:border-[#15803d]"
-                          />
-                          <button data-testid={`dashboard-invoice-enable-reminders-button-${inv.id}`} className={smallOutlineButtonCls}>Schedule reminders</button>
-                        </form>
-                      ) : null}
-
-                      {inv.reminder_enabled ? (
-                        <form action={disableInvoiceReminders} data-testid={`dashboard-invoice-disable-reminders-form-${inv.id}`}>
-                          <input type="hidden" name="invoiceId" value={inv.id} />
-                          <input type="hidden" name="redirectTo" value="/dashboard" />
-                          <button data-testid={`dashboard-invoice-disable-reminders-button-${inv.id}`} className={smallOutlineButtonCls}>Stop reminders</button>
-                        </form>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </li>
+                        {inv.reminder_enabled || reminders.some((r) => r.invoice_id === inv.id && r.status === "sending") ? (
+                          <form
+                            action={disableInvoiceReminders}
+                            data-testid={`dashboard-invoice-disable-reminders-form-${inv.id}`}
+                          >
+                            <input
+                              type="hidden"
+                              name="invoiceId"
+                              value={inv.id}
+                            />
+                            <input
+                              type="hidden"
+                              name="redirectTo"
+                              value="/dashboard"
+                            />
+                            <button
+                              data-testid={`dashboard-invoice-disable-reminders-button-${inv.id}`}
+                              className={smallOutlineButtonCls}
+                            >
+                              Stop future reminders
+                            </button>
+                          </form>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </li>
                 );
               })}
             </ul>
@@ -684,7 +937,9 @@ export default async function DashboardPage({
                   <span className="block text-xs font-semibold uppercase tracking-widest text-[#166534]">
                     Step 3
                   </span>
-                  <span className="mt-1 block">Read it back before sending.</span>
+                  <span className="mt-1 block">
+                    Read it back before sending.
+                  </span>
                 </li>
               </ol>
               <div className="mt-5 flex flex-wrap gap-3">
@@ -870,19 +1125,45 @@ export default async function DashboardPage({
 }
 
 function dashboardClient(value: DashboardInvoice["clients"]) {
-  return Array.isArray(value) ? value[0] ?? null : value;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
 function StatusPill({ invoice }: { invoice: DashboardInvoice }) {
+  if (invoice.status === "draft") return <span>Draft</span>;
+  if (!invoice.balance) return <span>Balance unavailable</span>;
+  const labels: Record<string, string> = {
+    settled: "Settled by receipts",
+    fully_credited: "Fully credited",
+    refund_due: "Cash to reconcile",
+    part_paid: "Part paid",
+  };
+  if (labels[invoice.balance.settlement_state])
+    return (
+      <span className="rounded-full bg-[#dcfce7] px-2 py-0.5 text-xs font-medium text-[#15803d]">
+        {labels[invoice.balance.settlement_state]}
+      </span>
+    );
   if (invoice.paid_at || invoice.delivery_status === "paid") {
-    return <span className="rounded-full bg-[#dcfce7] px-2 py-0.5 text-xs font-medium text-[#15803d]">Paid</span>;
+    return (
+      <span className="rounded-full bg-[#dcfce7] px-2 py-0.5 text-xs font-medium text-[#15803d]">
+        Manual paid assertion — unreconciled
+      </span>
+    );
   }
 
   if (invoice.sent_at || invoice.delivery_status === "sent") {
-    return <span className="rounded-full bg-[#dbeafe] px-2 py-0.5 text-xs font-medium text-[#1d4ed8]">Sent</span>;
+    return (
+      <span className="rounded-full bg-[#dbeafe] px-2 py-0.5 text-xs font-medium text-[#1d4ed8]">
+        Sent
+      </span>
+    );
   }
 
-  return <span className="rounded-full bg-[#f0fdf4] px-2 py-0.5 text-xs font-medium text-[#4b8068]">Not sent</span>;
+  return (
+    <span className="rounded-full bg-[#f0fdf4] px-2 py-0.5 text-xs font-medium text-[#4b8068]">
+      Not sent
+    </span>
+  );
 }
 
 function formatDate(value: string | null) {
@@ -901,22 +1182,35 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
-function flashMessage(searchParams: { [key: string]: string | string[] | undefined }) {
+function flashMessage(searchParams: {
+  [key: string]: string | string[] | undefined;
+}) {
   const error = singleParam(searchParams.error);
   if (error) return { kind: "error", text: error };
-  if (searchParams.invoiceSent) return { kind: "success", text: "Invoice marked as sent." };
-  if (searchParams.invoicePaid) return { kind: "success", text: "Invoice marked as paid." };
-  if (searchParams.remindersEnabled) return { kind: "success", text: "Payment reminders scheduled. No email has been sent. A draft will appear here when it is due for your approval." };
-  if (searchParams.remindersDisabled) return { kind: "success", text: "Automatic reminders stopped." };
-  if (searchParams.reminderSent) return { kind: "success", text: "Reminder sent to client." };
-  if (searchParams.invoiceDeleted) return { kind: "success", text: "Invoice deleted successfully." };
-  if (searchParams.proposalConverted) return { kind: "success", text: "Invoice created from proposal." };
-  if (searchParams.reminderDiscarded) return { kind: "success", text: "Reminder draft discarded." };
+  if (searchParams.invoiceSent)
+    return { kind: "success", text: "Invoice marked as sent." };
+  if (searchParams.invoicePaid)
+    return { kind: "success", text: "Invoice marked as paid." };
+  if (searchParams.remindersEnabled)
+    return {
+      kind: "success",
+      text: "Payment reminders scheduled. No email has been sent. A draft will appear here when it is due for your approval.",
+    };
+  if (searchParams.remindersDisabled)
+    return { kind: "success", text: "Future reminders stopped. A send already in progress cannot be recalled." };
+  if (searchParams.reminderSent)
+    return { kind: "success", text: "Email provider accepted the reminder. Inbox delivery is not yet confirmed." };
+  if (searchParams.invoiceDeleted)
+    return { kind: "success", text: "Invoice deleted successfully." };
+  if (searchParams.proposalConverted)
+    return { kind: "success", text: "Invoice created from proposal." };
+  if (searchParams.reminderDiscarded)
+    return { kind: "success", text: "Reminder draft discarded." };
   return null;
 }
 
 function singleParam(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
 const smallButtonCls =

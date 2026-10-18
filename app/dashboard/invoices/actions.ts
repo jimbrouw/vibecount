@@ -1,24 +1,29 @@
 "use server";
 
+import { isNativeGbpInvoice } from "@/lib/invoices/native";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Resend } from "resend";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { deliverClaimedReminder, type ReminderClaim } from "@/lib/invoices/reminder-delivery";
 import { createClient } from "@/lib/supabase/server";
+import { minorPence } from "@/lib/records/allocations";
 import {
   DEFAULT_REMINDER_SCHEDULE,
   firstReminderAt,
   inferDueDate,
   isValidEmail,
-  nextReminderAtFrom,
 } from "@/lib/invoices/reminders";
 
 type InvoiceActionRow = {
+  origin: "native_gbp"; currency: "GBP"; amount: string|number;
   id: string;
   user_id: string;
   client_id: string;
   invoice_date: string;
   payment_terms: string;
   due_date: string | null;
+  updated_at: string;
   clients: {
     email: string;
   } | null;
@@ -28,17 +33,30 @@ export async function markInvoiceSent(formData: FormData) {
   const { supabase, userId } = await requireUser();
   const invoiceId = String(formData.get("invoiceId") ?? "");
   const clientEmail = String(formData.get("clientEmail") ?? "").trim();
-  const redirectTo = safeRedirect(String(formData.get("redirectTo") ?? "/dashboard"));
+  const redirectTo = safeRedirect(
+    String(formData.get("redirectTo") ?? "/dashboard"),
+  );
 
   const invoice = await readOwnedInvoice(supabase, userId, invoiceId);
-  if (!invoice) redirect(`${redirectTo}?error=${encodeURIComponent("Could not find invoice.")}`);
+  if (!invoice)
+    redirect(
+      `${redirectTo}?error=${encodeURIComponent("Could not find invoice.")}`,
+    );
 
   if (clientEmail) {
-    const emailResult = await updateClientEmail(supabase, userId, invoice.client_id, clientEmail);
-    if (!emailResult.ok) redirect(`${redirectTo}?error=${encodeURIComponent(emailResult.error)}`);
+    const emailResult = await updateClientEmail(
+      supabase,
+      userId,
+      invoice.client_id,
+      clientEmail,
+    );
+    if (!emailResult.ok)
+      redirect(`${redirectTo}?error=${encodeURIComponent(emailResult.error)}`);
   }
 
-  const dueDate = invoice.due_date ?? inferDueDate(invoice.invoice_date, invoice.payment_terms);
+  const dueDate =
+    invoice.due_date ??
+    inferDueDate(invoice.invoice_date, invoice.payment_terms);
   const { error } = await supabase
     .from("invoices")
     .update({
@@ -49,7 +67,10 @@ export async function markInvoiceSent(formData: FormData) {
     .eq("id", invoiceId)
     .eq("user_id", userId);
 
-  if (error) redirect(`${redirectTo}?error=${encodeURIComponent("Could not mark invoice sent.")}`);
+  if (error)
+    redirect(
+      `${redirectTo}?error=${encodeURIComponent("Could not mark invoice sent.")}`,
+    );
   revalidatePath("/dashboard");
   redirect(`${redirectTo}?invoiceSent=1`);
 }
@@ -57,7 +78,11 @@ export async function markInvoiceSent(formData: FormData) {
 export async function markInvoicePaid(formData: FormData) {
   const { supabase, userId } = await requireUser();
   const invoiceId = String(formData.get("invoiceId") ?? "");
-  const redirectTo = safeRedirect(String(formData.get("redirectTo") ?? "/dashboard"));
+  const redirectTo = safeRedirect(
+    String(formData.get("redirectTo") ?? "/dashboard"),
+  );
+
+  if (!await readOwnedInvoice(supabase,userId,invoiceId)) redirect(`${redirectTo}?error=${encodeURIComponent("Use the native GBP invoice workflow only for an owned native invoice.")}`);
 
   const { error } = await supabase
     .from("invoices")
@@ -70,7 +95,10 @@ export async function markInvoicePaid(formData: FormData) {
     .eq("id", invoiceId)
     .eq("user_id", userId);
 
-  if (error) redirect(`${redirectTo}?error=${encodeURIComponent("Could not mark invoice paid.")}`);
+  if (error)
+    redirect(
+      `${redirectTo}?error=${encodeURIComponent("Could not mark invoice paid.")}`,
+    );
   revalidatePath("/dashboard");
   redirect(`${redirectTo}?invoicePaid=1`);
 }
@@ -79,16 +107,48 @@ export async function enableInvoiceReminders(formData: FormData) {
   const { supabase, userId } = await requireUser();
   const invoiceId = String(formData.get("invoiceId") ?? "");
   const clientEmail = String(formData.get("clientEmail") ?? "").trim();
-  const redirectTo = safeRedirect(String(formData.get("redirectTo") ?? "/dashboard"));
+  const redirectTo = safeRedirect(
+    String(formData.get("redirectTo") ?? "/dashboard"),
+  );
 
   const invoice = await readOwnedInvoice(supabase, userId, invoiceId);
-  if (!invoice) redirect(`${redirectTo}?error=${encodeURIComponent("Could not find invoice.")}`);
+  if (!invoice)
+    redirect(
+      `${redirectTo}?error=${encodeURIComponent("Could not find invoice.")}`,
+    );
+
+  const { data: balance, error: balanceError } = await supabase
+    .from("invoice_payment_balances")
+    .select("updated_at,outstanding_pence,has_credit_history,currency,status")
+    .eq("id", invoiceId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (
+    balanceError ||
+    !balance ||
+    balance.updated_at !== invoice.updated_at ||
+    balance.currency !== "GBP" ||
+    balance.status !== "finalised" ||
+    minorPence(balance.outstanding_pence) <= 0 ||
+    balance.has_credit_history
+  )
+    redirect(
+      `${redirectTo}?error=${encodeURIComponent("Review the current invoice balance. Credit history requires a fresh communication review before scheduling.")}`,
+    );
 
   const email = clientEmail || invoice.clients?.email || "";
-  const emailResult = await updateClientEmail(supabase, userId, invoice.client_id, email);
-  if (!emailResult.ok) redirect(`${redirectTo}?error=${encodeURIComponent(emailResult.error)}`);
+  const emailResult = await updateClientEmail(
+    supabase,
+    userId,
+    invoice.client_id,
+    email,
+  );
+  if (!emailResult.ok)
+    redirect(`${redirectTo}?error=${encodeURIComponent(emailResult.error)}`);
 
-  const dueDate = invoice.due_date ?? inferDueDate(invoice.invoice_date, invoice.payment_terms);
+  const dueDate =
+    invoice.due_date ??
+    inferDueDate(invoice.invoice_date, invoice.payment_terms);
   const { error } = await supabase
     .from("invoices")
     .update({
@@ -99,9 +159,13 @@ export async function enableInvoiceReminders(formData: FormData) {
     })
     .eq("id", invoiceId)
     .eq("user_id", userId)
+    .eq("updated_at", balance.updated_at)
     .is("paid_at", null);
 
-  if (error) redirect(`${redirectTo}?error=${encodeURIComponent("Could not enable reminders.")}`);
+  if (error)
+    redirect(
+      `${redirectTo}?error=${encodeURIComponent("Could not enable reminders.")}`,
+    );
   revalidatePath("/dashboard");
   redirect(addRedirectParam(redirectTo, "remindersEnabled", "1"));
 }
@@ -109,7 +173,11 @@ export async function enableInvoiceReminders(formData: FormData) {
 export async function disableInvoiceReminders(formData: FormData) {
   const { supabase, userId } = await requireUser();
   const invoiceId = String(formData.get("invoiceId") ?? "");
-  const redirectTo = safeRedirect(String(formData.get("redirectTo") ?? "/dashboard"));
+  const redirectTo = safeRedirect(
+    String(formData.get("redirectTo") ?? "/dashboard"),
+  );
+
+  if (!await readOwnedInvoice(supabase,userId,invoiceId)) redirect(`${redirectTo}?error=${encodeURIComponent("Use the native GBP invoice workflow only for an owned native invoice.")}`);
 
   const { error } = await supabase
     .from("invoices")
@@ -120,7 +188,10 @@ export async function disableInvoiceReminders(formData: FormData) {
     .eq("id", invoiceId)
     .eq("user_id", userId);
 
-  if (error) redirect(`${redirectTo}?error=${encodeURIComponent("Could not disable reminders.")}`);
+  if (error)
+    redirect(
+      `${redirectTo}?error=${encodeURIComponent("Could not disable reminders.")}`,
+    );
   revalidatePath("/dashboard");
   redirect(`${redirectTo}?remindersDisabled=1`);
 }
@@ -128,38 +199,45 @@ export async function disableInvoiceReminders(formData: FormData) {
 async function requireUser() {
   const supabase = await createClient();
   const {
-    data: { user },
+    data: { user }, error,
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/login");
+  if (error || !user) redirect("/login");
   return { supabase, userId: user.id };
 }
 
 async function readOwnedInvoice(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
-  invoiceId: string
+  invoiceId: string,
 ) {
   if (!invoiceId) return null;
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("invoices")
-    .select("id, user_id, client_id, invoice_date, payment_terms, due_date, clients(email)")
+    .select(
+      "id, user_id, client_id, invoice_date, payment_terms, due_date, updated_at, origin, currency, amount, clients(email)",
+    )
     .eq("id", invoiceId)
     .eq("user_id", userId)
     .maybeSingle();
 
-  return data as InvoiceActionRow | null;
+  if (error || !isNativeGbpInvoice(data) || typeof data.id!=="string" || typeof data.user_id!=="string" || data.id.toLowerCase()!==invoiceId.toLowerCase() || data.user_id.toLowerCase()!==userId.toLowerCase()) return null;
+  const client=Array.isArray(data.clients)?data.clients[0]??null:data.clients;
+  return {...data,clients:client} satisfies InvoiceActionRow;
 }
 
 async function updateClientEmail(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
   clientId: string,
-  clientEmail: string
+  clientEmail: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!clientEmail) {
-    return { ok: false, error: "Add a client email before enabling reminders." };
+    return {
+      ok: false,
+      error: "Add a client email before enabling reminders.",
+    };
   }
 
   if (!isValidEmail(clientEmail)) {
@@ -180,100 +258,57 @@ async function updateClientEmail(
 }
 
 export async function sendApprovedReminder(formData: FormData) {
-  const { supabase, userId } = await requireUser();
+  const { userId } = await requireUser();
   const reminderId = String(formData.get("reminderId") ?? "");
   const redirectTo = safeRedirect(String(formData.get("redirectTo") ?? "/dashboard"));
-
-  if (!reminderId) redirect(`${redirectTo}?error=${encodeURIComponent("Missing reminder ID.")}`);
-
-  const { data: reminder } = await supabase
-    .from("invoice_reminders")
-    .select("id, invoice_id, recipient_email, subject, message, status")
-    .eq("id", reminderId)
-    .eq("user_id", userId)
-    .eq("status", "pending")
-    .maybeSingle();
-
-  if (!reminder) redirect(`${redirectTo}?error=${encodeURIComponent("Reminder draft not found or already processed.")}`);
-
-  const resendKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL;
-
-  if (!resendKey || !fromEmail) {
-    redirect(`${redirectTo}?error=${encodeURIComponent("Email sending is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL to your environment.")}`);
-  }
-
-  const resend = new Resend(resendKey);
-  const { data: sent, error: sendError } = await resend.emails.send({
-    from: fromEmail,
-    to: reminder.recipient_email,
-    subject: reminder.subject,
-    text: reminder.message,
+  const fail = (message:string):never => redirect(`${redirectTo}${redirectTo.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`);
+  if (formData.get("humanConfirmed") !== "yes") fail("Confirm the displayed recipient and message before sending.");
+  const admin = createAdminClient();
+  const key = process.env.RESEND_API_KEY;
+  if (!admin || !key) return fail("Email sending is not configured.");
+  const {data,error} = await admin.rpc("claim_reminder_send", {
+    p_owner:userId,p_reminder:reminderId,
+    p_updated_at:String(formData.get("reviewedAt") ?? ""),p_confirmed:true,
   });
-
-  if (sendError || !sent?.id) {
-    await supabase
-      .from("invoice_reminders")
-      .update({ status: "failed", error: sendError?.message ?? "Unknown send error" })
-      .eq("id", reminderId)
-      .eq("user_id", userId);
-    redirect(`${redirectTo}?error=${encodeURIComponent("Could not send the reminder. Check your email settings.")}`);
-  }
-
-  const now = new Date();
-  await supabase
-    .from("invoice_reminders")
-    .update({ status: "sent", sent_at: now.toISOString(), provider_message_id: sent.id })
-    .eq("id", reminderId)
-    .eq("user_id", userId);
-
-  const { data: inv } = await supabase
-    .from("invoices")
-    .select("reminder_schedule")
-    .eq("id", reminder.invoice_id)
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  const schedule = inv?.reminder_schedule as { repeatEveryDays?: number } | null;
-  const repeatEveryDays = Number(schedule?.repeatEveryDays ?? DEFAULT_REMINDER_SCHEDULE.repeatEveryDays);
-
-  await supabase
-    .from("invoices")
-    .update({
-      reminder_enabled: true,
-      next_reminder_at: nextReminderAtFrom(now, repeatEveryDays),
-    })
-    .eq("id", reminder.invoice_id)
-    .eq("user_id", userId);
-
+  if(error || !data) fail("Reminder changed or is unavailable. Review a fresh draft before sending.");
+  const resend = new Resend(key);
+  const outcome = await deliverClaimedReminder(data as ReminderClaim, {
+    async send(payload,providerKey,attemptId) {
+      const {data,error}=await resend.emails.send({...payload,tags:[{name:"vibecount_attempt",value:attemptId}]},{idempotencyKey:providerKey});
+      return {id:error ? null : data?.id};
+    },
+    async record(attempt,outcome,providerId) {
+      const {error}=await admin.rpc("record_reminder_outcome",{p_owner:userId,p_attempt:attempt,p_outcome:outcome,p_provider_id:providerId});
+      if(error)throw new Error("Outcome storage unavailable.");
+    },
+  });
   revalidatePath("/dashboard");
-  redirect(`${redirectTo}?reminderSent=1`);
+  if(outcome==='unknown')fail("Delivery outcome needs checking. Do not resend; the provider may have accepted this message.");
+  if(outcome==='already_processed')fail("This reminder already has a send attempt. Check its delivery status.");
+  redirect(`${redirectTo}${redirectTo.includes("?") ? "&" : "?"}reminderSent=1`);
 }
 
 export async function discardReminderDraft(formData: FormData) {
-  const { supabase, userId } = await requireUser();
-  const reminderId = String(formData.get("reminderId") ?? "");
+  const { supabase } = await requireUser();
   const redirectTo = safeRedirect(String(formData.get("redirectTo") ?? "/dashboard"));
-
-  if (!reminderId) redirect(`${redirectTo}?error=${encodeURIComponent("Missing reminder ID.")}`);
-
-  await supabase
-    .from("invoice_reminders")
-    .delete()
-    .eq("id", reminderId)
-    .eq("user_id", userId)
-    .eq("status", "pending");
-
+  const {error}=await supabase.rpc("discard_reminder",{p_reminder:String(formData.get("reminderId") ?? "")});
   revalidatePath("/dashboard");
-  redirect(`${redirectTo}?reminderDiscarded=1`);
+  redirect(`${redirectTo}${redirectTo.includes("?") ? "&" : "?"}${error ? "error=Pending%20reminder%20unavailable." : "reminderDiscarded=1"}`);
 }
 
 export async function deleteInvoice(formData: FormData) {
   const { supabase, userId } = await requireUser();
   const invoiceId = String(formData.get("invoiceId") ?? "");
-  const redirectTo = safeRedirect(String(formData.get("redirectTo") ?? "/dashboard"));
+  const redirectTo = safeRedirect(
+    String(formData.get("redirectTo") ?? "/dashboard"),
+  );
 
-  if (!invoiceId) redirect(`${redirectTo}?error=${encodeURIComponent("Missing invoice ID.")}`);
+  if (!invoiceId)
+    redirect(
+      `${redirectTo}?error=${encodeURIComponent("Missing invoice ID.")}`,
+    );
+
+  if (!await readOwnedInvoice(supabase,userId,invoiceId)) redirect(`${redirectTo}?error=${encodeURIComponent("Use the native GBP invoice workflow only for an owned native invoice.")}`);
 
   const { error } = await supabase
     .from("invoices")
@@ -281,7 +316,10 @@ export async function deleteInvoice(formData: FormData) {
     .eq("id", invoiceId)
     .eq("user_id", userId);
 
-  if (error) redirect(`${redirectTo}?error=${encodeURIComponent("Could not delete invoice.")}`);
+  if (error)
+    redirect(
+      `${redirectTo}?error=${encodeURIComponent("Could not delete invoice.")}`,
+    );
 
   revalidatePath("/dashboard");
   redirect(`${redirectTo}?invoiceDeleted=1`);

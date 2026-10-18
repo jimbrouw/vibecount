@@ -1,6 +1,16 @@
+import {
+  readConsistentReconciliation,
+  readFinancialStamp,
+} from "@/lib/records/consistent-reconciliation";
+import { readAllExportRows } from "@/lib/records/export-pages";
+import { formatPounds } from "@/lib/invoices/money";
+import { escapeCsv } from "@/lib/records/export-csv";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentTaxYearStart, getTaxYearLabel } from "@/lib/records/tax-periods";
+import {
+  getCurrentTaxYearStart,
+  getTaxYearLabel,
+} from "@/lib/records/tax-periods";
 import {
   buildSelfAssessmentChecklist,
   type SelfAssessmentRecord,
@@ -16,42 +26,68 @@ export async function GET(request: Request) {
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
-    return NextResponse.json({ error: "Sign in to export tax prep." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Sign in to export tax prep." },
+      { status: 401 },
+    );
   }
 
   const url = new URL(request.url);
-  const taxYearStart = Number(url.searchParams.get("taxYearStart")) || getCurrentTaxYearStart();
+  const taxYearStart =
+    Number(url.searchParams.get("taxYearStart")) || getCurrentTaxYearStart();
 
   const format = url.searchParams.get("format") === "txt" ? "txt" : "csv";
 
-  const { data, error } = await supabase
-    .from("financial_records")
-    .select("record_type, amount, record_categories(name, sa103_box)")
-    .eq("user_id", user.id)
-    .eq("status", "approved")
-    .eq("tax_year_start", taxYearStart);
-
-  if (error) {
-    return NextResponse.json({ error: "Could not export tax prep." }, { status: 500 });
+  let records: (SelfAssessmentRecord & { id: string })[];
+  try {
+    records = await readConsistentReconciliation(
+      () =>
+        readFinancialStamp(() => supabase.rpc("reconciliation_export_stamp")),
+      () =>
+        readAllExportRows<SelfAssessmentRecord & { id: string }>(
+          async (afterId) => {
+            let query = supabase
+              .from("financial_records")
+              .select(
+                "id, record_type, amount, effect_sign, cash_effect_pence, cash_treatment, record_categories(name, sa103_box)",
+              )
+              .eq("user_id", user.id)
+              .eq("status", "approved")
+              .eq("tax_year_start", taxYearStart)
+              .order("id", { ascending: true })
+              .limit(500);
+            if (afterId) query = query.gt("id", afterId);
+            const result = await query;
+            return {
+              data: result.data as unknown as
+                (SelfAssessmentRecord & { id: string })[] | null,
+              error: result.error,
+            };
+          },
+        ),
+    );
+  } catch {
+    return NextResponse.json(
+      { error: "Could not read a complete tax prep export." },
+      { status: 500 },
+    );
   }
 
-  const checklist = buildSelfAssessmentChecklist(
-    (data ?? []) as unknown as SelfAssessmentRecord[]
-  );
+  const checklist = buildSelfAssessmentChecklist(records);
 
   let outputContent = "";
   let contentType = "text/csv; charset=utf-8";
 
   if (format === "txt") {
     contentType = "text/plain; charset=utf-8";
-    outputContent = `Tax Prep Summary for ${getTaxYearLabel(taxYearStart)}\n`;
+    outputContent = `Draft — not submitted to HMRC\nTax Prep Summary for ${getTaxYearLabel(taxYearStart)}\n`;
     outputContent += `=================================================\n\n`;
     outputContent += `Estimate and review pack only. This is not tax advice, not a filing calculation, and not a tax return submission.\n`;
     outputContent += `Review with the user or accountant before using any figure.\n\n`;
 
-    outputContent += `Total Income: ${checklist.incomeTotal}\n`;
-    outputContent += `Total Expenses: ${checklist.expenseTotal}\n`;
-    outputContent += `Net Profit: ${checklist.profitTotal}\n\n`;
+    outputContent += `Total Income: ${formatPounds(checklist.incomeTotal)}\n`;
+    outputContent += `Total Expenses: ${formatPounds(checklist.expenseTotal)}\n`;
+    outputContent += `Net Profit: ${formatPounds(checklist.profitTotal)}\n\n`;
 
     outputContent += `Self Assessment Checklist:\n`;
     outputContent += `-------------------------------------------------\n`;
@@ -75,7 +111,7 @@ export async function GET(request: Request) {
       ],
       [
         "caveat",
-        "Tax prep export caveat",
+        "Draft — not submitted to HMRC",
         "Estimate and review pack only. This is not tax advice, not a filing calculation, and not a tax return submission.",
         "",
         "accountant_review",
@@ -100,30 +136,29 @@ export async function GET(request: Request) {
     outputContent = csv;
   }
 
-  await supabase.from("record_exports").insert({
+  const { error: exportError } = await supabase.from("record_exports").insert({
     user_id: user.id,
-    export_type: format === "txt" ? "accountant_pack_txt" : "accountant_pack",
+    export_type: "accountant_pack",
     tax_year_start: taxYearStart,
     completed_at: new Date().toISOString(),
     record_count: checklist.incomeCount + checklist.expenseCount,
     attachment_count: 0,
   });
 
+  if (exportError) {
+    return NextResponse.json(
+      { error: "Could not record export. Please try again." },
+      { status: 500 },
+    );
+  }
+
   return new NextResponse(outputContent, {
     status: 200,
     headers: {
       "Content-Type": contentType,
       "Content-Disposition": `attachment; filename="vibecount-tax-prep-${getTaxYearLabel(
-        taxYearStart
+        taxYearStart,
       )}.${format}"`,
     },
   });
-}
-
-function escapeCsv(value: string) {
-  if (/[",\n\r]/.test(value)) {
-    return `"${value.replaceAll('"', '""')}"`;
-  }
-
-  return value;
 }

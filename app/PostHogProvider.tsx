@@ -19,7 +19,9 @@ export default function PostHogProvider({ children }: Props) {
     posthog.init(posthogKey, {
       api_host: posthogHost,
       capture_pageview: false,
-      capture_pageleave: true,
+      capture_pageleave: false,
+      autocapture: false,
+      disable_session_recording: true,
     });
   }, []);
 

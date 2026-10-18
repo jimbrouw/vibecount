@@ -1,0 +1,25 @@
+// Actual disposable SQL and encrypted synthetic evidence; no financial writer enabled.
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { PGlite } from '@electric-sql/pglite';
+import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
+import { TEST_SCHEMA_BOOTSTRAP } from '../lib/database/test-schema';
+import { fxConversionLotFixture } from '../lib/database/fx-lot-fixture';
+import { parseFxSettlementCatalog } from '../lib/fx/settlement-catalog';
+import { validateFxSettlementIntent } from '../lib/fx/settlement';
+import { checkSettlementSources, parseSettlementSourceCheck } from '../lib/fx/settlement-source';
+import { rateFromDecimal } from '../lib/fx/currency';
+async function main(){const db=new PGlite({extensions:{pgcrypto}});try{
+ await db.exec(TEST_SCHEMA_BOOTSTRAP);const dir=new URL('../supabase/migrations/',import.meta.url);for(const name of(await readdir(dir)).filter(n=>n.endsWith('.sql')).sort())await db.exec(await readFile(new URL(name,dir),'utf8'));
+ const x=await fxConversionLotFixture(db),{f}=x,catalog=async()=>{await f.auth();return parseFxSettlementCatalog(f.owner,(await db.query<{r:unknown}>('select read_fx_settlement_catalog() r')).rows[0].r)},c=await catalog(),invoice=c.evidence.facts.find(r=>r.id===x.intent.source_fact_revision_id)!,conversion=c.evidence.facts.find(r=>r.id===x.conversion)!;
+ const intent=validateFxSettlementIntent({schema_version:'fx-settlement-intent/1',ruleset_id:c.ruleset_id,receipt_id:x.tx,receipt_version:1,expected_stamp:c.financial_stamp,rationale:'Synthetic exact allocation source-check request',request_id:randomUUID(),fee_mode:'none',receipt_valuation_id:null,receipt_valuation_evidence_revision_id:null,allocations:[{invoice_id:x.intent.invoice_id,invoice_revision_id:(x.saved as {revision_id:string}).revision_id,invoice_minor:1,cash_minor:0,conversion_date:'2026-04-06',rate:rateFromDecimal('KWD','GBP','2.5'),invoice_evidence_id:invoice.family_id,invoice_evidence_revision_id:invoice.id,conversion_evidence_id:conversion.family_id,conversion_evidence_revision_id:conversion.id,conversion_lot_id:x.lot,conversion_lot_version:0}]});
+ let downloads=0;const dependencies={recover:async(request:string)=>{await f.auth();return(await db.query<{r:unknown}>('select to_jsonb(c) r from fx_settlement_source_checks c where request_id=$1',[request])).rows[0]?.r??null},catalog,metadata:async()=>f.metadata,key:()=>Buffer.from(f.key),download:async()=>{downloads++;return f.cipher},record:async(input:typeof intent,sources:unknown,outcome:string)=>{await f.service();await db.query("select set_config('request.jwt.claim.sub','',false)");return(await db.query<{r:unknown}>('select record_fx_settlement_source_check($1,$2,$3,$4) r',[f.owner,JSON.stringify(input),JSON.stringify(sources),outcome])).rows[0].r}};
+ const proof=await checkSettlementSources(f.owner,intent,dependencies);assert.equal(proof.outcome,'verified');assert.equal(proof.sources.length,2);assert.equal(downloads,1);
+ await db.exec('reset role');const records=(await db.query('select to_jsonb(r) r from financial_records r order by id')).rows;await db.query("delete from storage.objects where bucket_id='document-evidence' and name=$1",[f.path]);
+ const recovered=await checkSettlementSources(f.owner,intent,dependencies);assert.deepEqual(recovered,proof);assert.equal(downloads,1);
+ await f.service();const unavailable=parseSettlementSourceCheck(f.owner,await dependencies.record({...intent,request_id:randomUUID()},proof.sources,'unavailable'));assert.equal(unavailable.outcome,'unavailable');
+ await db.exec('reset role');assert.equal((await db.query('select id from invoice_settlements')).rows.length,0);assert.equal((await db.query('select request_id from settlement_requests')).rows.length,0);assert.deepEqual((await db.query('select to_jsonb(r) r from financial_records r order by id')).rows,records);
+ const output='/tmp/vibecount-fx-settlement-source-demo';await mkdir(output,{recursive:true});await writeFile(output+'/source-proof.json',JSON.stringify({synthetic_only:true,financial_action:'unavailable',proof,retained_recovery:recovered,unavailable_check:unavailable,document_downloads:downloads,financial_events_created:0,financial_requests_created:0,recognised_records_unchanged:true},null,2)+'\n');await writeFile(output+'/README.md','# Private FX settlement source proof\n\nActual disposable SQL retains both invoice and conversion fact bindings for the complete KWD 0.001 / GBP 0.00 allocation intent. The same synthetic encrypted original is downloaded once. Source loss preserves exact checked history; unavailable outcomes remain unavailable. No FX event, financial request or recognised posting is created. Financial saves/writers remain disabled. This proof is a prerequisite for reviewed action and durable request recovery, not financial authorization, semantic certification or the completed Finance OS.\n');console.log('Verified private source proof: '+output);
+ }finally{await db.close();}}
+main().catch(error=>{console.error(error);process.exitCode=1;});

@@ -1,0 +1,17 @@
+import { fxAuthoritativeReviewFixture } from './review-fixture';
+import { fxFixtureId as id } from './fixture';
+import { convertCurrencyTranche } from './currency';
+/** Deterministic synthetic metadata. Real SQL fixtures independently verify this contract. */
+export function fxHistoryFixture(){
+ const c=fxAuthoritativeReviewFixture(true),s=c.lots[0],invoice=c.evidence.facts.find(f=>f.id===s.invoice_fact_revision_id)!,conversion=c.evidence.facts.find(f=>f.id===s.conversion_fact_revision_id)!;
+ const fact=(f:typeof invoice)=>({...f,user_id:c.owner_id,created_at:'2026-10-18T00:00:00Z',author:c.owner_id,rationale:'Synthetic retained fact'});
+ const invoice_snapshot={schema_version:'preserved-external-invoice/1',invoice_id:s.invoice_id,client_id:id(200),external_revision:1,number:'SYNTHETIC-1',invoice_date:'2026-04-05',currency:s.invoice_currency,original_total_minor:10001,source_fact_revision_id:invoice.id,source_fact_family_id:invoice.family_id,confirmed_updated_at:'2026-10-18T00:00:00Z'};
+ const lot={id:s.id,user_id:c.owner_id,invoice_id:s.invoice_id,invoice_revision_id:s.invoice_revision_id,invoice_fact_revision_id:invoice.id,conversion_document_id:conversion.document_id,conversion_family_id:conversion.family_id,conversion_fact_revision_id:conversion.id,receipt_id:s.receipt_id,receipt_version:1,ruleset_id:c.ruleset_id,invoice_currency:s.invoice_currency,cash_currency:'GBP',invoice_limit_minor:s.invoice_limit_minor,cash_limit_minor:s.cash_limit_minor,rate:s.rate,conversion_date:s.conversion_date,evidence_date:s.evidence_date,invoice_snapshot,invoice_fact:fact(invoice),conversion_fact:fact(conversion)};
+ function allocation(portion:number,priorOriginal=0,priorCash=0,ordinal=1){const tranche=convertCurrencyTranche(s.rate,priorOriginal,priorCash,portion);return{
+  id:id(1000+ordinal),user_id:c.owner_id,invoice_id:s.invoice_id,transaction_id:s.receipt_id,settlement_kind:'fx_gbp_cash',event_kind:'allocation',reverses_id:null as string|null,request_id:id(2000+ordinal),author:c.owner_id,created_at:'2026-10-18T00:00:00Z',rationale:'Synthetic retained portion',amount_pence:tranche.portion_target_minor,invoice_minor:portion,invoice_currency:s.invoice_currency,invoice_revision_id:s.invoice_revision_id,conversion_lot_id:s.id,lot_event_ordinal:ordinal,invoice_snapshot,
+  fx_snapshot:{schema_version:'fx-allocation-snapshot/1',lot_id:s.id,invoice_revision_id:s.invoice_revision_id,invoice_fact_revision_id:invoice.id,conversion_fact_revision_id:conversion.id,receipt_version:1,receipt_record_id:id(23),source_row_id:id(22),import_id:id(21),cash_date:'2026-04-06',value_date:'2026-04-06',observed_cash_pence:2501,receipt_recognized_gbp_pence:2501,ruleset_id:c.ruleset_id,invoice_currency:s.invoice_currency,cash_currency:'GBP',rate:s.rate,conversion_date:s.conversion_date,evidence_date:s.evidence_date,documented_invoice_limit_minor:10001,documented_cash_limit_minor:2500,tranche},
+ };}
+ const reversal=(e:ReturnType<typeof allocation>,ordinal:number)=>({...structuredClone(e),id:id(1000+ordinal),event_kind:'reversal',reverses_id:e.id,request_id:id(2000+ordinal),lot_event_ordinal:ordinal});
+ function activeReview(portions=[allocation(5000)],version=1,stamp=c.financial_stamp){return{schema_version:'fx-lot-portions/1',owner_id:c.owner_id,financial_stamp:stamp,version,active_count:portions.length,lot,portions,financial_action:'preview_only'};}
+ return{owner:c.owner_id,catalog:c,lot,allocation,reversal,activeReview};
+}

@@ -45,6 +45,12 @@ function LoginForm() {
         </p>
 
         <div className="bg-white rounded-2xl shadow-sm p-8 space-y-5 border border-[#bbf7d0]">
+          {process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED === "false" ? (
+            <p data-testid="auth-email-only-note" className="text-sm text-[#4b8068]">
+              This private test uses email and password. Google sign-in is not enabled here.
+            </p>
+          ) : (
+            <>
           <GoogleAuthButton label="Sign in with Google" testId="login-google-button" />
 
           <div className="flex items-center gap-3">
@@ -54,6 +60,8 @@ function LoginForm() {
             </span>
             <div className="h-px flex-1 bg-[#bbf7d0]" />
           </div>
+            </>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-5" data-testid="login-form">
           {error && (

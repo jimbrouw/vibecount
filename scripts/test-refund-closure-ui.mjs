@@ -1,0 +1,28 @@
+// Synthetic connected-refund review. The action only captures submitted fields in memory.
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { existsSync } from 'node:fs';
+import { build } from 'esbuild';
+import { chromium } from 'playwright';
+const bundle=await build({absWorkingDir:process.cwd(),bundle:true,write:false,platform:'browser',format:'iife',jsx:'automatic',stdin:{resolveDir:process.cwd(),sourcefile:'refund-closure-fixture.jsx',loader:'jsx',contents:`
+import React from 'react';import {createRoot} from 'react-dom/client';import Review from './app/dashboard/reconciliation/refunds/reversal/RefundClosureReview.tsx';import {refundReversalClosure} from './lib/records/refund-closure.ts';import {refundClosureFixture,refundFixtureId as id} from './lib/records/refund-split-fixture.ts';
+function Fixture(){const [version,setVersion]=React.useState(0),[blocked,setBlocked]=React.useState(false),[empty,setEmpty]=React.useState(false);const g=refundClosureFixture(blocked);g.stamp=String(version).repeat(32);if(blocked){g.links[4].assignment_count=1;g.assignments.push({id:id(900),user_id:g.owner_id,refund_id:g.links[4].id,amount_pence:50})}const r=refundReversalClosure(g.owner_id,{kind:'import',id:id(10)},g);if(empty){r.link_ids=[];r.portions=[];r.refund_ids=[]}return <><button data-testid="closure-refresh" onClick={()=>setVersion(version+1)}>Changed reviewed sources</button><button data-testid="closure-block" onClick={()=>setBlocked(!blocked)}>Toggle sibling invoice assignment</button><button data-testid="closure-empty" onClick={()=>setEmpty(!empty)}>Toggle empty relationships</button><Review sourceStamp={'a'.repeat(64)} review={r} requestId={'request-'+version}/></>};createRoot(document.getElementById('root')).render(<Fixture/>);`},plugins:[{name:'inert-refund-closure-action',setup(b){b.onResolve({filter:/^\.\/actions$/},()=>({path:'actions',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},()=>({loader:'js',contents:'export async function reverseRefundClosure(form){window.savedReversal=Object.fromEntries(form.entries())}'}))}}]});
+const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html');res.end('<!doctype html><html><head><meta charset="utf-8"><title>Synthetic refund closure review</title></head><body><div id="root"></div><script>'+bundle.outputFiles[0].text.replaceAll('</script','<\\/script')+'</script></body></html>')});
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));let browser;
+try{
+ const chrome='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';browser=await chromium.launch({headless:true,executablePath:process.env.VIBECOUNT_TEST_BROWSER||(existsSync(chrome)?chrome:undefined)});
+ const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:'+server.address().port);
+ const confirm=page.getByTestId('refund-closure-confirm'),submit=page.getByTestId('refund-closure-submit'),reason=page.getByTestId('refund-closure-reason');
+ assert.equal(await submit.isDisabled(),true);const readback=await page.getByTestId('refund-closure-readback').innerText();
+ assert.match(readback,/5 refund portions involving 3 original payments and 3 refund cash observations/);assert.match(readback,/£11.00 \(eleven pounds\)/);assert.match(readback,/-£6.70 \(minus six pounds and seventy pence\)/);
+ assert.equal(await page.locator('[data-testid^="refund-closure-cash-"]').count(),3);assert.equal(await page.locator('[data-testid^="refund-closure-source-"]').count(),3);
+ assert.match(await page.getByTestId('refund-closure-import-scope').innerText(),/Discarding the import remains a separate review/);
+ await reason.fill('Synthetic complete source review');await confirm.check();assert.equal(await submit.isEnabled(),true);
+ await reason.fill('Changed reason');assert.equal(await confirm.isChecked(),false);await confirm.check();await page.getByTestId('closure-refresh').click();assert.equal(await confirm.isChecked(),false);assert.equal(await submit.isDisabled(),true);assert.equal(await reason.inputValue(),'');
+ await reason.fill('Synthetic source review');await confirm.check();await page.getByTestId('closure-block').click();assert.equal(await confirm.isChecked(),false);assert.equal(await confirm.isDisabled(),true);assert.equal(await submit.isDisabled(),true);
+ assert.match(await page.getByTestId('refund-closure-blocked').innerText(),/1 active invoice refund assignments block this entire reversal/);assert.equal(await page.getByTestId('refund-closure-assignments').getAttribute('href'),'/dashboard/reconciliation/refund-assignments');
+ await page.getByTestId('closure-block').click();assert.equal(await confirm.isChecked(),false);await reason.fill('Synthetic confirmed complete reversal');await confirm.check();await submit.click();await page.waitForFunction(()=>window.savedReversal);
+ const submitted=await page.evaluate(()=>window.savedReversal);assert.equal(submitted.kind,'import');assert.equal(submitted.stamp,'1'.repeat(32));assert.equal(submitted.humanConfirmed,'yes');assert.equal(submitted.reason,'Synthetic confirmed complete reversal');assert.ok(!Object.hasOwn(submitted,'link_ids'));
+ await page.getByTestId('closure-empty').click();assert.equal(await page.getByTestId('refund-closure-submit').count(),0);assert.match(await page.getByRole('status').innerText(),/no active refund relationships/);assert.deepEqual(errors,[]);
+ console.log('PASS: complete connected cash/portion read-back, sibling assignment block, import boundary, source/reason confirmation reset and explicit inert reversal.');
+}finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}

@@ -1,39 +1,17 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import {
-  buildQuarterSummaries,
-  getCurrentTaxYearStart,
-  getTaxYearLabel,
-  moneyToPence,
-} from "@/lib/records/tax-periods";
-import { formatPounds } from "@/lib/invoices/money";
-import { redactBankDetailsForPrompt } from "@/lib/ai/redaction";
+import { getCurrentTaxYearStart, getTaxYearLabel } from "@/lib/records/tax-periods";
+import { readFinancialReview, FINANCIAL_REVIEW_VERSION } from "@/lib/records/financial-review";
+import { fxAggregateReadback } from "@/lib/fx/readback";
 import LogoutButton from "@/app/dashboard/LogoutButton";
 import RecordsReviewAgent from "./RecordsReviewAgent";
 import BatchCategorisePanel from "./BatchCategorisePanel";
+import BankSourceCoverage from "@/app/dashboard/BankSourceCoverage";
 
 export const metadata = {
   title: "Records Review — VibeCount",
   description: "AI-assisted read-only review of your records and invoices.",
-};
-
-type ApprovedRecord = {
-  record_type: "income" | "expense";
-  record_date: string;
-  description: string;
-  amount: string | number;
-  status: string;
-  record_categories: { name: string } | null;
-};
-
-
-type InvoiceRow = {
-  number: string;
-  amount: string | number;
-  due_date: string | null;
-  delivery_status: string;
-  clients: { name: string } | { name: string }[] | null;
 };
 
 export default async function ReviewPage({
@@ -42,108 +20,39 @@ export default async function ReviewPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const {
+    data: { user }, error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) redirect("/login");
 
   const taxYearStart = getCurrentTaxYearStart();
   const taxYearLabel = getTaxYearLabel(taxYearStart);
   const resolvedParams = await searchParams;
-  const batchApplied = resolvedParams.batchApplied !== undefined
-    ? Number(resolvedParams.batchApplied)
-    : null;
+  const batchApplied =
+    resolvedParams.batchApplied !== undefined
+      ? Number(resolvedParams.batchApplied)
+      : null;
 
-  const [
-    { data: approvedRecords },
-    { count: reviewCount },
-    { data: quarterRows },
-    { data: sentInvoices },
-    { count: uncategorisedCount },
-    { data: latestCheck },
-  ] = await Promise.all([
-    supabase
-      .from("financial_records")
-      .select("record_type, record_date, description, amount, status, record_categories(name)")
-      .eq("user_id", user.id)
-      .eq("status", "approved")
-      .eq("tax_year_start", taxYearStart)
-      .order("record_date", { ascending: false })
-      .limit(20),
-    supabase
-      .from("financial_records")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("status", "review"),
-    supabase
-      .from("financial_record_quarter_summaries")
-      .select("tax_quarter, income_total, expense_total, net_total, income_count, expense_count")
-      .eq("user_id", user.id)
-      .eq("tax_year_start", taxYearStart),
-    supabase
-      .from("invoices")
-      .select("number, amount, due_date, delivery_status, clients(name)")
-      .eq("user_id", user.id)
-      .eq("status", "finalised")
-      .eq("delivery_status", "sent")
-      .is("paid_at", null)
-      .order("due_date", { ascending: true })
-      .limit(10),
-    supabase
-      .from("financial_records")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .in("status", ["review", "approved"])
-      .is("category_id", null),
-    supabase
-      .from("quarterly_readiness_checks")
-      .select("tax_year_start, tax_quarter, checked_at, status, notes, uncategorised_count, review_count, overdue_invoice_count, net_profit_pence")
-      .eq("user_id", user.id)
-      .order("checked_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
-
-  const quarters = buildQuarterSummaries(
-    taxYearStart,
-    (quarterRows ?? []) as Parameters<typeof buildQuarterSummaries>[1]
-  );
-
-  const records = (approvedRecords ?? []) as unknown as ApprovedRecord[];
-  const invoices = (sentInvoices ?? []) as unknown as InvoiceRow[];
-
-  const approvedCount = records.length;
-  const reviewStateCount = reviewCount ?? 0;
-
-  function invoiceClient(clients: InvoiceRow["clients"]) {
-    return Array.isArray(clients) ? clients[0]?.name ?? "Client" : clients?.name ?? "Client";
+  const asOf = new Date().toISOString().slice(0,10);
+  let summary;
+  let latestCheck;
+  let globalUncategorisedCount;
+  try {
+    summary = await readFinancialReview(supabase,user.id,taxYearStart,asOf);
+    const [latest,batch] = await Promise.all([supabase.from("quarterly_readiness_checks")
+      .select("tax_year_start,tax_quarter,checked_at,status,notes,coverage_version,source_stamp,checked_as_of")
+      .eq("user_id",user.id).eq("tax_year_start",taxYearStart).order("checked_at",{ascending:false}).limit(1).maybeSingle(),
+      supabase.from("financial_records").select("id",{count:"exact",head:true}).eq("user_id",user.id).in("status",["approved","review"]).is("category_id",null),
+    ]);
+    if(latest.error||batch.error||typeof batch.count!=="number"||!Number.isSafeInteger(batch.count)||batch.count<0)throw new Error();
+    globalUncategorisedCount=batch.count;
+    latestCheck=latest.data;
+  } catch {
+    return <main className="mx-auto max-w-3xl p-6"><h1>Records review</h1><p role="alert" data-testid="financial-review-unavailable">Complete owned review data is unavailable. Reload before relying on counts or running AI review.</p><Link href="/dashboard/records" data-testid="review-unavailable-records">Review records</Link></main>;
   }
-
-  const summary = {
-    currentTaxYear: taxYearLabel,
-    approvedCount,
-    reviewCount: reviewStateCount,
-    quarters: quarters.map((q) => ({
-      label: `${q.label} (${q.period})`,
-      incomeTotal: q.incomePence,
-      expenseTotal: q.expensePence,
-      netProfit: q.netPence,
-      recordCount: q.incomeCount + q.expenseCount,
-    })),
-    recentRecords: records.map((r) => ({
-      record_type: r.record_type,
-      record_date: r.record_date,
-      description: redactBankDetailsForPrompt(r.description),
-      amount: moneyToPence(r.amount),
-      category: r.record_categories?.name ?? null,
-      status: r.status,
-    })),
-    overdueInvoices: invoices.map((inv) => ({
-      number: redactBankDetailsForPrompt(inv.number),
-      amount: moneyToPence(inv.amount),
-      due_date: inv.due_date,
-      delivery_status: inv.delivery_status,
-      client: redactBankDetailsForPrompt(invoiceClient(inv.clients)),
-    })),
-  };
+  const quarters=summary.quarters;
+  const approvedCount=summary.approved_count,reviewStateCount=summary.review_count;
+  const currentCheck=latestCheck?.coverage_version===FINANCIAL_REVIEW_VERSION && latestCheck.source_stamp===summary.stamp && latestCheck.checked_as_of===asOf;
 
   return (
     <main className="min-h-screen bg-[#f0fdf4]">
@@ -151,14 +60,54 @@ export default async function ReviewPage({
         <div className="flex items-center gap-6">
           <span className="text-lg font-semibold text-white">VibeCount</span>
           <nav className="hidden items-center gap-1 sm:flex">
-            <Link href="/dashboard" className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white">Invoices</Link>
-            <Link href="/dashboard/records" className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white">Records</Link>
-            <Link href="/dashboard/quotes" className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white">Quotes</Link>
-            <Link href="/dashboard/invoices/repeating" className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white">Repeating</Link>
-            <Link href="/dashboard/tax-prep" className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white">Tax prep</Link>
-            <Link href="/dashboard/review" className="rounded-lg bg-white/20 px-3 py-1.5 text-sm font-medium text-white">Review</Link>
-            <Link href="/dashboard/glossary" className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white">Explain Simply</Link>
-            <Link href="/dashboard/settings" className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white">Settings</Link>
+            <Link
+              href="/dashboard"
+              className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white"
+            >
+              Invoices
+            </Link>
+            <Link
+              href="/dashboard/records"
+              className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white"
+            >
+              Records
+            </Link>
+            <Link
+              href="/dashboard/quotes"
+              className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white"
+            >
+              Quotes
+            </Link>
+            <Link
+              href="/dashboard/invoices/repeating"
+              className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white"
+            >
+              Repeating
+            </Link>
+            <Link
+              href="/dashboard/tax-prep"
+              className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white"
+            >
+              Tax prep
+            </Link>
+            <Link
+              href="/dashboard/review"
+              className="rounded-lg bg-white/20 px-3 py-1.5 text-sm font-medium text-white"
+            >
+              Review
+            </Link>
+            <Link
+              href="/dashboard/glossary"
+              className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white"
+            >
+              Explain Simply
+            </Link>
+            <Link
+              href="/dashboard/settings"
+              className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white"
+            >
+              Settings
+            </Link>
           </nav>
         </div>
         <div className="flex items-center gap-4">
@@ -168,9 +117,12 @@ export default async function ReviewPage({
 
       <div className="mx-auto max-w-3xl px-5 py-8 sm:px-8">
         <div className="mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight text-[#14532d]">Records review</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-[#14532d]">
+            Records review
+          </h1>
           <p className="mt-1 text-sm text-[#166534]">
-            Tax year {taxYearLabel} · {approvedCount} approved records · {reviewStateCount} awaiting review
+            Tax year {taxYearLabel} · {approvedCount} approved records ·{" "}
+            {reviewStateCount} awaiting review
           </p>
         </div>
 
@@ -186,12 +138,16 @@ export default async function ReviewPage({
           <div className="mb-6 flex items-start gap-4 rounded-xl border border-[#fef08a] bg-[#fefce8] p-5">
             <div>
               <p className="text-sm font-medium text-[#713f12]">
-                {reviewStateCount} record{reviewStateCount === 1 ? "" : "s"} awaiting your review
+                {reviewStateCount} record{reviewStateCount === 1 ? "" : "s"}{" "}
+                awaiting your review
               </p>
               <p className="mt-0.5 text-xs text-[#854d0e]">
                 Approve or exclude them in Records before running the AI review.
               </p>
-              <Link href="/dashboard/records" className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#713f12] underline underline-offset-2">
+              <Link
+                href="/dashboard/records"
+                className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#713f12] underline underline-offset-2"
+              >
                 Go to Records
               </Link>
             </div>
@@ -199,22 +155,40 @@ export default async function ReviewPage({
         )}
 
         <div className="mb-6 grid gap-4 sm:grid-cols-3">
-          {quarters.filter((q) => q.incomeCount + q.expenseCount > 0).map((q) => (
-            <div key={q.taxQuarter} className="rounded-xl border border-[#bbf7d0] bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-widest text-[#166534]">{q.label}</p>
-              <p className="mt-1 text-xs text-[#4b8068]">{q.period}</p>
-              <p className="mt-2 text-base font-semibold text-[#14532d]">{formatPounds(q.netPence)}</p>
-              <p className="text-xs text-[#4b8068]">net profit</p>
-              <div className="mt-2 flex gap-3 text-xs text-[#4b8068]">
-                <span>In: {formatPounds(q.incomePence)}</span>
-                <span>Out: {formatPounds(q.expensePence)}</span>
+          {quarters
+            .filter((q) => q.approved_count > 0 || q.source_count > 0 || q.review_count > 0)
+            .map((q) => (
+              <div
+                key={q.quarter}
+                data-testid={`review-quarter-${q.quarter}`}
+                className="rounded-xl border border-[#bbf7d0] bg-white p-4"
+              >
+                <p className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
+                  {q.label}
+                </p>
+                <p className="mt-1 text-xs text-[#4b8068]">{q.period}</p>
+                <p className="mt-2 text-base font-semibold text-[#14532d]">
+                  {fxAggregateReadback(q.net_pence,"GBP")}
+                </p>
+                <p className="text-xs text-[#4b8068]">recognised ledger net profit; source review may be incomplete</p>
+                <div className="mt-2 flex gap-3 text-xs text-[#4b8068]">
+                  <span>Income: {fxAggregateReadback(q.income_pence,"GBP")}</span>
+                  <span>Expenses: {fxAggregateReadback(q.expense_pence,"GBP")}</span>
+                </div>
+                <p>{q.source_count} active sources · {q.unresolved_source_count} unresolved · {q.unsupported_source_count} unsupported · {q.source_unavailable_count} with unavailable source metadata. Counts overlap.</p>
               </div>
-            </div>
-          ))}
-          {quarters.every((q) => q.incomeCount + q.expenseCount === 0) && (
+            ))}
+          {quarters.every((q) => q.approved_count === 0 && q.source_count === 0 && q.review_count === 0) && (
             <div className="col-span-3 rounded-xl border border-dashed border-[#bbf7d0] bg-white p-6 text-center">
-              <p className="text-sm text-[#4b8068]">No approved records for {taxYearLabel} yet.</p>
-              <Link href="/dashboard/records" className="mt-1 text-xs font-semibold text-[#15803d] underline">Add records</Link>
+              <p className="text-sm text-[#4b8068]">
+                No approved records for {taxYearLabel} yet.
+              </p>
+              <Link
+                href="/dashboard/records"
+                className="mt-1 text-xs font-semibold text-[#15803d] underline"
+              >
+                Add records
+              </Link>
             </div>
           )}
         </div>
@@ -222,7 +196,7 @@ export default async function ReviewPage({
         {latestCheck && (
           <div
             className={`mb-6 rounded-xl border p-5 ${
-              latestCheck.status === "needs_attention"
+              (!currentCheck || latestCheck.status === "needs_attention")
                 ? "border-[#fef08a] bg-[#fefce8]"
                 : "border-[#bbf7d0] bg-[#dcfce7]"
             }`}
@@ -230,10 +204,16 @@ export default async function ReviewPage({
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className={`text-sm font-semibold ${latestCheck.status === "needs_attention" ? "text-[#713f12]" : "text-[#14532d]"}`}>
-                  {latestCheck.status === "needs_attention" ? "Quarter check: needs attention" : "Quarter check: all clear"}
+                <p
+                  className={`text-sm font-semibold ${(!currentCheck || latestCheck.status === "needs_attention") ? "text-[#713f12]" : "text-[#14532d]"}`}
+                >
+                  {!currentCheck ? "Historical quarter check — current coverage unverified" : (!currentCheck || latestCheck.status === "needs_attention")
+                    ? "Quarter operational check: needs attention"
+                    : "Quarter operational check: no listed issues"}
                 </p>
-                <p className={`mt-0.5 text-xs ${latestCheck.status === "needs_attention" ? "text-[#854d0e]" : "text-[#166534]"}`}>
+                <p
+                  className={`mt-0.5 text-xs ${(!currentCheck || latestCheck.status === "needs_attention") ? "text-[#854d0e]" : "text-[#166534]"}`}
+                >
                   Quarter {latestCheck.tax_quarter} · {latestCheck.notes}
                 </p>
               </div>
@@ -244,14 +224,25 @@ export default async function ReviewPage({
           </div>
         )}
 
+        <section className="mb-6 space-y-2" aria-label="Review coverage" data-testid="financial-review-coverage">
+          <h2>Review coverage</h2>
+          <p>As of {summary.as_of} (UTC date).</p>
+          <p>GBP figures come from approved ledger records. This operational summary does not certify source completeness, expense eligibility or tax filing readiness.</p>
+          <p>{summary.unresolved_source_count} imported transaction(s) need review. {summary.external_invoice_count} preserved external invoice balance(s) are unsupported here.</p>
+          <p data-testid="review-bank-year-coverage">{summary.source_count} active bank observations in this tax year; {summary.unsupported_source_count} unsupported sources; {summary.source_unavailable_count} with unavailable source metadata. These counts overlap. Discarded and other-year observations remain context below.</p>
+          <p>{summary.native_overdue_count} native GBP invoice(s) are past due with a positive reconciled balance. Manual paid markers do not establish cash receipt.</p>
+          <ul>{summary.invoice_groups.map(g=><li key={g.currency} data-testid={`review-invoice-currency-${g.currency}`}>{g.invoice_count} finalised invoice(s): {fxAggregateReadback(g.original_total_minor,g.currency)} original document value, separate from cash.</li>)}</ul>
+          <Link href="/dashboard/reconciliation/fx/evidence" data-testid="review-external-evidence">Review external invoice evidence</Link>
+        </section>
+        <BankSourceCoverage coverage={summary.bank_source_coverage}/>
         <div className="rounded-xl border border-[#bbf7d0] bg-white p-5">
-          <RecordsReviewAgent summary={summary} />
+          <RecordsReviewAgent key={summary.stamp} summary={summary} />
         </div>
 
-        <BatchCategorisePanel uncategorisedCount={uncategorisedCount ?? 0} />
+        <BatchCategorisePanel uncategorisedCount={globalUncategorisedCount} />
 
         <p className="mt-6 text-center text-xs text-[#86a88e]">
-          The AI review reads your approved records only. Category suggestions write only after your explicit approval. Treat all findings as suggestions — verify before acting.
+          The AI review uses the displayed counts and generated sample labels after your consent. Category suggestions remain a separate review and write only after explicit approval.
         </p>
       </div>
     </main>

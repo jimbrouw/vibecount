@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {randomUUID} from 'node:crypto';
+import {readFile,readdir} from 'node:fs/promises';
+import {PGlite} from '@electric-sql/pglite';
+import {pgcrypto} from '@electric-sql/pglite/contrib/pgcrypto';
+import {TEST_SCHEMA_BOOTSTRAP} from './test-schema';
+import {taxCurrencyFixture} from './tax-currency-fixture';
+import {bankValuationFixture,openSyntheticForeignAdmission} from './bank-valuation-fixture';
+import {canonicalJson,prepareCalculation} from '../tax/snapshot';
+import {buildFilingPack,buildFilingReview,verifyFilingPack,type SavedFilingPack} from '../tax/filing-pack';
+import type {CalculationInput} from '../tax/calculation';
+import {bankAccountingTaxScope} from '../tax/bank-accounting-scope';
+
+test('accounting-aware captures retain predecessor retries and carry reviewed foreign effects into the seven filing artifacts',async t=>{
+ const db=new PGlite({extensions:{pgcrypto}});t.after(()=>db.close());await db.exec(TEST_SCHEMA_BOOTSTRAP);
+ const dir=new URL('../../supabase/migrations/',import.meta.url),target='20261020000000_tax_bank_accounting_coverage.sql';
+ for(const name of(await readdir(dir)).filter(n=>n.endsWith('.sql')&&n<target).sort())await db.exec(await readFile(new URL(name,dir),'utf8'));
+ const f=await taxCurrencyFixture(db),oldStep=buildFilingReview(f.oldPack.input,[]).steps[0],stepArgs=[f.owner,f.calculation,canonicalJson(f.oldPack.input),oldStep.id,oldStep.digest,JSON.stringify(oldStep.data),'Synthetic retained step',randomUUID()];
+ await f.service();const stepId=(await db.query<{r:string}>('select review_filing_pack_step($1,$2,$3,$4,$5,$6,$7,$8) r',stepArgs)).rows[0].r;
+ await db.exec('reset role');await db.exec(await readFile(new URL(target,dir),'utf8'));
+ assert.equal(verifyFilingPack(f.oldPack).schema_version,'draft-filing-pack/5');
+ await f.service();assert.equal((await db.query<{r:string}>('select capture_tax_calculation($1,$2,$3,$4,$5,$6,$7) r',f.calculationArgs)).rows[0].r,f.calculation);assert.equal((await db.query<{r:string}>('select capture_filing_pack($1,$2,$3,$4,$5,$6) r',f.packArgs)).rows[0].r,f.pack);assert.equal((await db.query<{r:string}>('select review_filing_pack_step($1,$2,$3,$4,$5,$6,$7,$8) r',stepArgs)).rows[0].r,stepId);
+ const native=prepareCalculation(await f.input());assert.equal(native.input.schema_version,'tax-calculation-input/4');assert.deepEqual(native.result,f.before.result);assert.equal((await f.packInput()).calculation_is_current,false);
+ await db.exec('reset role');await openSyntheticForeignAdmission(db);const foreign=await bankValuationFixture(db,'KWD','-10.001',f.owner),valuation=await foreign.record(await foreign.intent()) as {id:string};
+ const blocked=async(input:unknown)=>{await db.exec('reset role');return(await db.query<{r:boolean}>('select tax_bank_sources_blocked($1) r',[JSON.stringify(input)])).rows[0].r};
+ const unresolved=prepareCalculation(await f.input());assert.equal(await blocked(unresolved.input),true);assert.equal(unresolved.result.totals.trade_profit,null);
+ await f.auth();const review=(await db.query<{r:{stamp:string;categories:{id:string;record_type:string}[]}}>('select read_foreign_classification_review($1) r',[foreign.transaction])).rows[0].r;
+ await db.query('select confirm_foreign_classification($1)',[JSON.stringify({schema_version:'foreign-classification-intent/1',transaction_id:foreign.transaction,transaction_version:0,valuation_revision_id:valuation.id,classification:'Mixed',category_id:review.categories.find(c=>c.record_type==='expense')!.id,business_use_bps:3000,rounding_policy:'gbp_business_share_half_up/1',treatment_reviewed:true,expected_stamp:review.stamp,rationale:'Synthetic accounting capture',request_id:randomUUID(),human_confirmed:true})]);
+ const p=prepareCalculation(await f.input());assert.equal(p.result.totals.ledger_expenses,750);assert.equal(await blocked(p.input),false);assert.equal(p.input.schema_version==='tax-calculation-input/4'&&bankAccountingTaxScope(p.input,p.input.bank_source_coverage).blocks,false);
+ if(p.input.schema_version!=='tax-calculation-input/4')throw new Error('Accounting input required');
+ const crossYear={...p.input,tax_year_start:2026,records:[],observations:[],sources:[{transaction_id:foreign.transaction,snapshot:{}}] as unknown as CalculationInput['sources']};assert.deepEqual(bankAccountingTaxScope(crossYear,p.input.bank_source_coverage).source_ids,[foreign.transaction]);
+ const captureArgs=[f.owner,2025,p.inputJson,p.resultJson,p.rulesJson,'Synthetic reviewed accounting',randomUUID()];await f.service();const calculation=(await db.query<{r:string}>('select capture_tax_calculation($1,$2,$3,$4,$5,$6,$7) r',captureArgs)).rows[0].r;
+ const input=await f.packInput(calculation);assert.equal(input.schema_version,'filing-pack-input/5');assert.equal(input.calculation_is_current,true);const bundle=buildFilingPack(input,[],randomUUID(),false);assert.equal(bundle.schema_version,'draft-filing-pack/6');assert.match(bundle.artifacts.find(a=>a.name==='expense-decisions.csv')!.body,/foreign_classification_proof/);
+ const packArgs=[f.owner,calculation,canonicalJson(input),canonicalJson(bundle),'Synthetic captured foreign pack',bundle.request_id];await f.service();const pack=(await db.query<{r:string}>('select capture_filing_pack($1,$2,$3,$4,$5,$6) r',packArgs)).rows[0].r;
+ await f.auth();const saved=(await db.query<SavedFilingPack>('select * from filing_packs where id=$1',[pack])).rows[0];assert.equal(verifyFilingPack(saved).schema_version,'draft-filing-pack/6');
+ await db.exec('reset role');await db.query('delete from storage.objects where name=$1',[foreign.documentPath]);const stale=prepareCalculation(await f.input());assert.equal(await blocked(stale.input),true);assert.equal(stale.result.totals.trade_profit,null);assert.equal((await f.packInput(calculation)).calculation_is_current,false);
+ const optimistic=structuredClone(stale.result);optimistic.totals.trade_profit=0;await f.service();await assert.rejects(db.query('select capture_tax_calculation($1,2025,$2,$3,$4,$5,$6)',[f.owner,stale.inputJson,canonicalJson(optimistic),stale.rulesJson,'Synthetic optimistic claim',randomUUID()]),/Bank source coverage/);
+ assert.equal((await db.query<{r:string}>('select capture_tax_calculation($1,$2,$3,$4,$5,$6,$7) r',captureArgs)).rows[0].r,calculation);assert.equal((await db.query<{r:string}>('select capture_filing_pack($1,$2,$3,$4,$5,$6) r',packArgs)).rows[0].r,pack);
+ for(const role of ['anon','authenticated','service_role']){await db.exec('reset role;set role '+role);await assert.rejects(db.query('select tax_bank_sources_blocked_v1($1)',['{}']),/permission denied/);await assert.rejects(db.query('select tax_filing_pack_input_v4_for_owner($1,$2)',[f.owner,calculation]),/permission denied/);}
+ await f.auth(f.other);const other=await db.query<{r:{owner_id:string;bank_source_coverage:{foreign_rows:unknown[]}}}>('select read_tax_calculation_input(2025) r');assert.equal(other.rows[0].r.owner_id,f.other);assert.deepEqual(other.rows[0].r.bank_source_coverage.foreign_rows,[]);
+});

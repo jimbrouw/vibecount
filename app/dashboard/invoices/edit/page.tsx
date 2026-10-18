@@ -1,8 +1,10 @@
+import { isNativeGbpInvoice } from "@/lib/invoices/native";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import InvoiceBuilder from "../new/InvoiceBuilder";
-import { EMPTY_SETTINGS } from "@/lib/settings";
+import { invoiceDefaults } from "@/lib/settings-public";
+import { invoiceEditAmounts } from "@/lib/invoices/economics";
 import LogoutButton from "../../LogoutButton";
 
 export const metadata = {
@@ -17,10 +19,10 @@ export default async function EditInvoicePage({
 }) {
   const supabase = await createClient();
   const {
-    data: { user },
+    data: { user }, error: authError,
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (authError || !user) {
     redirect("/login");
   }
 
@@ -42,6 +44,8 @@ export default async function EditInvoicePage({
     redirect("/dashboard?error=Invoice+not+found");
   }
 
+  if (!isNativeGbpInvoice(invoice)) return <main className="space-y-4 p-6" data-testid="invoice-native-edit-unavailable"><h1>Review preserved invoice evidence</h1><p>This invoice cannot be changed through the native GBP invoice editor.</p><Link data-testid="invoice-native-edit-evidence" href="/dashboard/reconciliation/fx/evidence">Review document evidence</Link></main>;
+
   // Load existing clients for autocomplete
   const { data: clientRows } = await supabase
     .from("clients")
@@ -53,25 +57,35 @@ export default async function EditInvoicePage({
   const { data: settingsRow } = await supabase
     .from("user_settings")
     .select(
-      "legal_name, address, contact_details, default_payment_terms, bank_details, payment_link_provider, payment_link_url, vat_registered, vat_number, vat_rate, invoice_number_prefix, late_payment_wording, utr, companies_house_api_key"
+      "legal_name, address, contact_details, default_payment_terms, bank_details, payment_link_provider, payment_link_url, vat_registered, vat_number, vat_rate, invoice_number_prefix, late_payment_wording, utr, companies_house_api_key",
     )
     .eq("id", user.id)
     .maybeSingle();
 
-  const existingClients = (clientRows ?? []) as any[];
+  const existingClients = (clientRows ?? []) as {
+    id: string;
+    name: string;
+    email: string;
+    address: string;
+    company_number: string;
+    vat_number: string;
+  }[];
 
   // Format dates from YYYY-MM-DD to DD/MM/YYYY
   const parts = invoice.invoice_date.split("-");
-  const formattedDate = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : invoice.invoice_date;
+  const formattedDate =
+    parts.length === 3
+      ? `${parts[2]}/${parts[1]}/${parts[0]}`
+      : invoice.invoice_date;
 
-  // Since amount is stored as decimal (e.g. 450.00), we format it to string
-  const formattedAmount = Number(invoice.amount).toFixed(2);
+  const economics = invoiceEditAmounts(invoice);
 
   const initialDraft = {
     invoiceId: invoice.id,
     clientName: invoice.clients?.name ?? "",
     description: invoice.description,
-    amount: formattedAmount,
+    ...economics,
+    expectedUpdated: invoice.updated_at,
     source: "edit",
     transcript: "",
     clientAddress: invoice.clients?.address ?? "",
@@ -81,14 +95,7 @@ export default async function EditInvoicePage({
     paymentTerms: invoice.payment_terms ?? "",
   };
 
-  const userDefaults = {
-    ...EMPTY_SETTINGS,
-    ...(settingsRow ?? {}),
-    hasSettings: Boolean(
-      settingsRow?.legal_name || settingsRow?.bank_details || settingsRow?.contact_details
-    ),
-    companiesHouseConfigured: Boolean(settingsRow?.companies_house_api_key?.trim()),
-  };
+  const userDefaults = invoiceDefaults(settingsRow);
 
   return (
     <main className="min-h-screen bg-[#f5f0e8]">
@@ -134,12 +141,15 @@ export default async function EditInvoicePage({
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <span className="hidden text-sm text-[#4a6a5a] sm:block">{user.email}</span>
+          <span className="hidden text-sm text-[#4a6a5a] sm:block">
+            {user.email}
+          </span>
           <LogoutButton />
         </div>
       </header>
 
       <InvoiceBuilder
+        key={JSON.stringify({ initialDraft, userDefaults })}
         existingClients={existingClients}
         initialDate={formattedDate}
         userDefaults={userDefaults}

@@ -72,8 +72,8 @@ export async function logAgentAction(input: {
   error?: string;
 }) {
   const supabase = createAdminClient();
-  if (!supabase) return;
-  await supabase.from("agent_actions").insert({
+  if (!supabase) return false;
+  const { error } = await supabase.from("agent_actions").insert({
     user_id: input.userId,
     session_id: input.sessionId,
     tool: input.tool,
@@ -82,4 +82,5 @@ export async function logAgentAction(input: {
     result_status: input.resultStatus,
     error: input.error ?? null,
   });
+  return !error;
 }

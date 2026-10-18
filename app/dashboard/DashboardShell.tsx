@@ -16,12 +16,29 @@ const mainNav = [
   { label: "Invoices", href: "/dashboard", icon: InvoiceIcon },
   { label: "Quotes", href: "/dashboard/quotes", icon: QuoteIcon },
   { label: "Records", href: "/dashboard/records", icon: RecordsIcon },
+  { label: "Imports", href: "/dashboard/imports", icon: RecordsIcon },
+  {
+    label: "Reconciliation",
+    href: "/dashboard/reconciliation",
+    icon: RecordsIcon,
+  },
+  { label: "Expense review", href: "/dashboard/review/memory", icon: RecordsIcon },
   { label: "Tax prep", href: "/dashboard/tax-prep", icon: TaxIcon },
+  { label: "Cash planning", href: "/dashboard/finance", icon: TaxIcon },
+  { label: "Tax reminders", href: "/dashboard/finance/deadlines", icon: TaxIcon },
 ];
 
 const automationNav = [
-  { label: "Repeating invoices", href: "/dashboard/invoices/repeating", icon: RepeatIcon },
-  { label: "Payment reminders", href: "/dashboard?reminders=1", icon: BellIcon },
+  {
+    label: "Repeating invoices",
+    href: "/dashboard/invoices/repeating",
+    icon: RepeatIcon,
+  },
+  {
+    label: "Payment reminders",
+    href: "/dashboard?reminders=1",
+    icon: BellIcon,
+  },
 ];
 
 export default function DashboardShell({ children, userEmail }: Props) {
@@ -225,7 +242,10 @@ function ThemeToggle() {
 function HelpDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const glossary = useGlossary();
   const accessibility = useAccessibility();
-  const visibleTerms = useMemo(() => glossary.terms.slice(0, 8), [glossary.terms]);
+  const visibleTerms = useMemo(
+    () => glossary.terms.slice(0, 8),
+    [glossary.terms],
+  );
 
   if (!open) return null;
 
@@ -245,7 +265,9 @@ function HelpDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
         <div className="sticky top-0 flex items-center justify-between border-b border-[#edf0ec] bg-white px-5 py-4">
           <div>
             <p className="text-sm font-semibold text-[#17251d]">Help</p>
-            <p className="text-xs text-[#66756b]">Plain-English support when you need it.</p>
+            <p className="text-xs text-[#66756b]">
+              Plain-English support when you need it.
+            </p>
           </div>
           <button
             type="button"
@@ -287,8 +309,8 @@ function HelpDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
                 Current page
               </p>
               <p className="mt-2 text-sm leading-6 text-[#3f4d43]">
-                Use Help for finance terms, page tips, and reading preferences. Main
-                workflows stay focused until you ask for extra explanation.
+                Use Help for finance terms, page tips, and reading preferences.
+                Main workflows stay focused until you ask for extra explanation.
               </p>
             </section>
           )}
@@ -321,13 +343,17 @@ function HelpDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
                 label="Large text"
                 testId="accessibility-large-text-toggle"
                 checked={accessibility.textSize === "large"}
-                onChange={(checked) => accessibility.setTextSize(checked ? "large" : "default")}
+                onChange={(checked) =>
+                  accessibility.setTextSize(checked ? "large" : "default")
+                }
               />
               <ToggleRow
                 label="Relaxed spacing"
                 testId="accessibility-relaxed-spacing-toggle"
                 checked={accessibility.spacing === "relaxed"}
-                onChange={(checked) => accessibility.setSpacing(checked ? "relaxed" : "default")}
+                onChange={(checked) =>
+                  accessibility.setSpacing(checked ? "relaxed" : "default")
+                }
               />
               <ToggleRow
                 label="Plain language notes"
@@ -368,7 +394,13 @@ function ToggleRow({
   );
 }
 
-function NavGroup({ title, children }: { title?: string; children: ReactNode }) {
+function NavGroup({
+  title,
+  children,
+}: {
+  title?: string;
+  children: ReactNode;
+}) {
   return (
     <div className="mb-5 border-b border-[#edf0ec] pb-5 last:border-b-0">
       {title ? (
@@ -412,33 +444,234 @@ function NavLink({
 }
 
 function slugifyTestId(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 function isActive(pathname: string, href: string) {
-  if (href === "/dashboard") return pathname === "/dashboard";
+  if (href === "/dashboard" || href === "/dashboard/finance") return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 function IconSvg({ children }: { children: ReactNode }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true" className="shrink-0">
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 18 18"
+      fill="none"
+      aria-hidden="true"
+      className="shrink-0"
+    >
       {children}
     </svg>
   );
 }
 
-function InvoiceIcon() { return <IconSvg><path d="M5 2.5h8v13H5z" stroke="currentColor" strokeWidth="1.6"/><path d="M7 6h4M7 9h4M7 12h2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></IconSvg>; }
-function QuoteIcon() { return <IconSvg><path d="M4 4.5h10v7H8l-4 3v-10z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/><path d="M7 7h4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></IconSvg>; }
-function RecordsIcon() { return <IconSvg><path d="M3 4h12M3 9h12M3 14h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><path d="M5 2v14" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></IconSvg>; }
-function TaxIcon() { return <IconSvg><path d="M4 14h10M5 11l3-7 2.5 5 1.5-3 2 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></IconSvg>; }
-function RepeatIcon() { return <IconSvg><path d="M5 5h7l-2-2M13 13H6l2 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><path d="M13 5v3M5 13v-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></IconSvg>; }
-function BellIcon() { return <IconSvg><path d="M5 13h8M6 13V8a3 3 0 016 0v5M8 15a1.2 1.2 0 002 0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></IconSvg>; }
-function HelpIcon() { return <IconSvg><path d="M9 15A6 6 0 109 3a6 6 0 000 12z" stroke="currentColor" strokeWidth="1.6"/><path d="M7.5 7.2A1.7 1.7 0 019 6.2c1 0 1.8.7 1.8 1.6 0 1.3-1.4 1.5-1.4 2.6M9 12.5h.01" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></IconSvg>; }
-function BookIcon() { return <IconSvg><path d="M4 3.5h6a2 2 0 012 2v9H6a2 2 0 01-2-2v-9z" stroke="currentColor" strokeWidth="1.6"/><path d="M12 5h2v9h-2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></IconSvg>; }
-function SettingsIcon() { return <IconSvg><path d="M9 11.5A2.5 2.5 0 109 6.5a2.5 2.5 0 000 5z" stroke="currentColor" strokeWidth="1.6"/><path d="M9 2.5v2M9 13.5v2M3.4 5.8l1.7 1M12.9 11.2l1.7 1M3.4 12.2l1.7-1M12.9 6.8l1.7-1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></IconSvg>; }
-function MenuIcon() { return <IconSvg><path d="M3 5h12M3 9h12M3 13h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></IconSvg>; }
-function CloseIcon() { return <IconSvg><path d="M5 5l8 8M13 5l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></IconSvg>; }
-function SearchIcon() { return <IconSvg><path d="M8 13a5 5 0 100-10 5 5 0 000 10zM12 12l3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></IconSvg>; }
-function MoonIcon() { return <IconSvg><path d="M13.8 11.2A5.8 5.8 0 016.8 4.2 5.8 5.8 0 1013.8 11.2z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></IconSvg>; }
-function SunIcon() { return <IconSvg><path d="M9 12a3 3 0 100-6 3 3 0 000 6zM9 2.5v1.3M9 14.2v1.3M2.5 9h1.3M14.2 9h1.3M4.4 4.4l.9.9M12.7 12.7l.9.9M13.6 4.4l-.9.9M5.3 12.7l-.9.9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></IconSvg>; }
+function InvoiceIcon() {
+  return (
+    <IconSvg>
+      <path d="M5 2.5h8v13H5z" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M7 6h4M7 9h4M7 12h2"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </IconSvg>
+  );
+}
+function QuoteIcon() {
+  return (
+    <IconSvg>
+      <path
+        d="M4 4.5h10v7H8l-4 3v-10z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M7 7h4"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </IconSvg>
+  );
+}
+function RecordsIcon() {
+  return (
+    <IconSvg>
+      <path
+        d="M3 4h12M3 9h12M3 14h12"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <path
+        d="M5 2v14"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+    </IconSvg>
+  );
+}
+function TaxIcon() {
+  return (
+    <IconSvg>
+      <path
+        d="M4 14h10M5 11l3-7 2.5 5 1.5-3 2 5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </IconSvg>
+  );
+}
+function RepeatIcon() {
+  return (
+    <IconSvg>
+      <path
+        d="M5 5h7l-2-2M13 13H6l2 2"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M13 5v3M5 13v-3"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </IconSvg>
+  );
+}
+function BellIcon() {
+  return (
+    <IconSvg>
+      <path
+        d="M5 13h8M6 13V8a3 3 0 016 0v5M8 15a1.2 1.2 0 002 0"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </IconSvg>
+  );
+}
+function HelpIcon() {
+  return (
+    <IconSvg>
+      <path
+        d="M9 15A6 6 0 109 3a6 6 0 000 12z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <path
+        d="M7.5 7.2A1.7 1.7 0 019 6.2c1 0 1.8.7 1.8 1.6 0 1.3-1.4 1.5-1.4 2.6M9 12.5h.01"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </IconSvg>
+  );
+}
+function BookIcon() {
+  return (
+    <IconSvg>
+      <path
+        d="M4 3.5h6a2 2 0 012 2v9H6a2 2 0 01-2-2v-9z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <path
+        d="M12 5h2v9h-2"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </IconSvg>
+  );
+}
+function SettingsIcon() {
+  return (
+    <IconSvg>
+      <path
+        d="M9 11.5A2.5 2.5 0 109 6.5a2.5 2.5 0 000 5z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <path
+        d="M9 2.5v2M9 13.5v2M3.4 5.8l1.7 1M12.9 11.2l1.7 1M3.4 12.2l1.7-1M12.9 6.8l1.7-1"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </IconSvg>
+  );
+}
+function MenuIcon() {
+  return (
+    <IconSvg>
+      <path
+        d="M3 5h12M3 9h12M3 13h12"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </IconSvg>
+  );
+}
+function CloseIcon() {
+  return (
+    <IconSvg>
+      <path
+        d="M5 5l8 8M13 5l-8 8"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </IconSvg>
+  );
+}
+function SearchIcon() {
+  return (
+    <IconSvg>
+      <path
+        d="M8 13a5 5 0 100-10 5 5 0 000 10zM12 12l3 3"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </IconSvg>
+  );
+}
+function MoonIcon() {
+  return (
+    <IconSvg>
+      <path
+        d="M13.8 11.2A5.8 5.8 0 016.8 4.2 5.8 5.8 0 1013.8 11.2z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </IconSvg>
+  );
+}
+function SunIcon() {
+  return (
+    <IconSvg>
+      <path
+        d="M9 12a3 3 0 100-6 3 3 0 000 6zM9 2.5v1.3M9 14.2v1.3M2.5 9h1.3M14.2 9h1.3M4.4 4.4l.9.9M12.7 12.7l.9.9M13.6 4.4l-.9.9M5.3 12.7l-.9.9"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </IconSvg>
+  );
+}

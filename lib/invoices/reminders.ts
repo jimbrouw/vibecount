@@ -1,4 +1,37 @@
-import { formatPounds } from "./money";
+import { formatPounds, amountToWords } from "./money";
+import { minorPence } from "../records/allocations";
+
+export function reminderMatchesBalance(
+  draft: {
+    balance_updated_at: string | null;
+    amount_due_pence: number | string | null;
+  },
+  balance: {
+    updated_at: string;
+    outstanding_pence: number | string;
+    status: string;
+    currency: string;
+  } | null,
+) {
+  if (
+    !balance ||
+    balance.status !== "finalised" ||
+    balance.currency !== "GBP" ||
+    !draft.balance_updated_at ||
+    draft.amount_due_pence === null
+  )
+    return false;
+  try {
+    return (
+      draft.balance_updated_at === balance.updated_at &&
+      minorPence(draft.amount_due_pence) > 0 &&
+      minorPence(draft.amount_due_pence) ===
+        minorPence(balance.outstanding_pence)
+    );
+  } catch {
+    return false;
+  }
+}
 
 export const DEFAULT_REMINDER_SCHEDULE = {
   firstReminderDaysAfterDue: 3,
@@ -36,12 +69,19 @@ export function inferDueDate(invoiceDate: string, paymentTerms: string) {
 
 export function firstReminderAt(dueDate: string, now = new Date()) {
   const due = parseIsoDate(dueDate) ?? now;
-  due.setUTCDate(due.getUTCDate() + DEFAULT_REMINDER_SCHEDULE.firstReminderDaysAfterDue);
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  due.setUTCDate(
+    due.getUTCDate() + DEFAULT_REMINDER_SCHEDULE.firstReminderDaysAfterDue,
+  );
+  const today = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
   return new Date(Math.max(due.getTime(), today.getTime())).toISOString();
 }
 
-export function nextReminderAtFrom(now = new Date(), repeatEveryDays = DEFAULT_REMINDER_SCHEDULE.repeatEveryDays) {
+export function nextReminderAtFrom(
+  now = new Date(),
+  repeatEveryDays = DEFAULT_REMINDER_SCHEDULE.repeatEveryDays,
+) {
   const next = new Date(now);
   next.setUTCDate(next.getUTCDate() + repeatEveryDays);
   return next.toISOString();
@@ -99,7 +139,7 @@ export function buildReminderEmail(input: {
 
 This is a payment reminder for invoice ${input.invoice.number}.
 
-Amount due: ${formatPounds(input.invoice.amountPence)}
+Amount due: ${formatPounds(input.invoice.amountPence)} (${amountToWords(input.invoice.amountPence)})
 Due date: ${formatDisplayDate(input.invoice.dueDate)}
 Payment terms: ${input.invoice.paymentTerms}${paymentLine}
 
@@ -122,9 +162,11 @@ export function parseReminderSchedule(value: unknown): ReminderSchedule {
       safePositiveInteger(input.firstReminderDaysAfterDue) ??
       DEFAULT_REMINDER_SCHEDULE.firstReminderDaysAfterDue,
     repeatEveryDays:
-      safePositiveInteger(input.repeatEveryDays) ?? DEFAULT_REMINDER_SCHEDULE.repeatEveryDays,
+      safePositiveInteger(input.repeatEveryDays) ??
+      DEFAULT_REMINDER_SCHEDULE.repeatEveryDays,
     maxReminders:
-      safePositiveInteger(input.maxReminders) ?? DEFAULT_REMINDER_SCHEDULE.maxReminders,
+      safePositiveInteger(input.maxReminders) ??
+      DEFAULT_REMINDER_SCHEDULE.maxReminders,
   };
 }
 
@@ -143,7 +185,9 @@ function parseIsoDate(value: string) {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
   const [, yearText, monthText, dayText] = match;
-  const date = new Date(Date.UTC(Number(yearText), Number(monthText) - 1, Number(dayText)));
+  const date = new Date(
+    Date.UTC(Number(yearText), Number(monthText) - 1, Number(dayText)),
+  );
   return Number.isNaN(date.getTime()) ? null : date;
 }
 

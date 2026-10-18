@@ -1,0 +1,110 @@
+# Foreign-account observations and reviewed GBP valuation
+
+18 October 2026. Next stage C of `fx-reconciliation-design.md`, following reviewed foreign-invoice/GBP-receipt matching. This plan preserves the full handover goal; a parser or private prerequisite is not complete foreign-account support.
+
+## Required finished vertical slice
+
+One supported foreign-currency bank/card statement → preview exact original units/date/sign → encrypted immutable source/account/row registration → reviewed evidence-backed GBP valuation → separately confirmed Business/Mixed/Personal decision → one existing GBP `financial_records` effect where applicable → source-linked dimensioned exports, tax/filing/finance coverage → reviewed correction/reversal with historical replay.
+
+Support both incoming Business receipts and outgoing Business/Mixed expenses, Personal exclusions and unresolved Unknown observations. Transfers, refunds, fees, credits and invoice allocation against foreign cash require their own evidence/capacity/reversal designs; they must remain explicit unsupported exceptions until complete. Source preservation alone is not accounting completion.
+
+## Reuse and boundaries established from actual code
+
+- Existing `source-csv.ts`, source encryption, registration/recovery, immutable source rows, duplicate review and canonical `financial_records` remain the foundation.
+- Existing currency rules/BigInt rational conversion in `lib/fx/currency.ts` supports GBP/USD/EUR/JPY/KWD. Currency support is an engineering representation, not tax treatment approval.
+- `FxValuation` in the detached settlement model already distinguishes foreign source units from GBP recognition. Live invoice lots/catalogs assume actual GBP receipts and cannot value foreign bank accounts.
+- Accounts and observations currently have GBP-only SQL constraints. `signed_amount_pence` is immutable and directly feeds posting, imports UI, refunds/transfers/duplicates, exports and reports. Never put foreign units into this field or let NULL silently become zero.
+- Current tax, filing and finance contracts need new complete foreign-source coverage before admission. Preserve older serializers, source fingerprints, recovery plans, native requests and frozen artifacts exactly.
+
+## Ordered implementation
+
+1. **Versioned parser foundation.** Add a separate `mapped-csv/2` dimensioned parser using the existing strict CSV tokenizer and currency catalog. Require explicit selected account currency, exact exponent, amount/sign mapping and all-row account-currency parity. Preserve original cells/logical row numbers and separate nullable GBP compatibility projection. Native V1 parser/registration bytes remain unchanged. Do not connect V2 to ingestion yet.
+2. **Private observation/valuation persistence design.** Extend existing `bank_transactions` with immutable original minor units/currency/ruleset representation, keeping GBP pence GBP-only. Add append-only GBP valuation revisions with source identity, date, positive rational rate/method, evidence, author/request and exact rounding trace. Valuation alone creates no financial posting. Keep foreign account/row admission closed at this stage.
+3. **Containment and complete coverage.** Audit every native consumer for currency/NULL coercion. Version source/reconciliation exports and tax/filing/finance authoritative inputs; include complete original/valuation/unresolved/source-loss counts and stable sources, not sampled absence. Native operations retain explicit GBP eligibility. Unresolved foreign amounts cannot disappear or yield complete tax/safe-to-draw claims. Preserve old snapshots and exact retries.
+4. **Foreign ingestion and recovery.** Enable reviewed account currency and versioned registration only after containment. Require transaction/account/import/source-row ownership and exact account/import/row/currency closure. Preserve encrypted original file/rows/hashes, currency-aware fingerprints, same-file dedupe, genuine identical rows and concurrent account locks. Recovery must retain the creating parser/ruleset/mapping rather than reinterpret an old request.
+5. **Valuation and classification application.** Human read-back shows original amount, GBP valuation, rate direction/method/date/evidence and rounding. Server reloads owned source versions; SQL validates current evidence and post-wait freshness under owner/source locks. A separate reviewed classification posts at most once, linked to exact valuation revision. Mixed use applies a versioned GBP rounding policy requiring treatment review. Nonzero originals may round to GBP zero: retain them explicitly without fake positive postings. Personal exclusion need not fabricate GBP value. Missing treatment remains unresolved.
+6. **Corrections and reversal.** Append valuation successors and exact financial corrections; never edit immutable originals or overwrite accepted history. Active settlement/transfer/refund dependencies block correction until separately reviewed release. Import reversal retains originals/evidence/history and excludes each affected canonical posting once. Exact completed retries recover before mutable evidence/current versions.
+7. **End-to-end certification.** Disposable actual SQL + synthetic encrypted evidence, browser read-back/reset/pending tests, independent concurrent writers, complete dimensioned exports and tax/filing/finance replay. Demonstrate the entire finished slice, then certify representative formats and actual hosted Auth/PostgREST/Storage separately.
+
+## Acceptance matrix
+
+- USD/EUR two decimals, JPY zero and KWD three; reject unsupported codes, excessive precision, exponent mismatch, unsafe integers, scientific notation, ambiguous separators/symbols and mixed account currencies.
+- Preserve sign, logical CSV row, raw cells and raw file bytes; source cash date and valuation date remain independent. 5/6 April classification follows reviewed accounting treatment rather than valuation creation time.
+- Same source reimport/concurrent retries add zero observations/effects; distinct genuine purchases survive. Foreign aliases cannot bypass source currency/account closure.
+- Rate sign/direction is explicit; original sign determines effect direction. Exact rational conversion retains numerator/denominator/rounding trace. GBP zero is visible and distinct from unavailable.
+- Evidence owner/hash/version/date and source withdrawal/currentness are checked. Valuation itself posts zero; classification creates one GBP record with exact valuation ancestry; missing facts are never assumed zero.
+- Currency-aware source/export totals preserve original units separately from GBP recognised amounts; unlike currencies never add. All tax/filing/finance coverage is complete and versioned, including unvalued and unsupported foreign observations.
+- Corrections/reversal retain original rows and prior snapshots, reject stranded dependencies and prove both commit orders with real independent connections.
+- Native V1 parser outputs, registration fingerprints, request recovery, OIDs/grants and frozen artifact bytes remain unchanged.
+- Two-owner/anonymous/service boundaries, source/path/key minimisation and coordinated restore remain required. No real account connection or filing is authorized.
+
+## First increment status
+
+The versioned parser dependency is implemented locally in `lib/records/source-csv-v2.ts`; see [verification and synthetic demo](foreign-source-parser.md). It is an internal preparation dependency only. Current UI, SQL GBP constraints and ingestion continue using V1 until steps 2–6 are coordinated. No exchange rate provider, real account connection or tax-eligibility claim is introduced. Later annual tax/evidence policy requires current official-source and independent review before financial treatment is enabled.
+
+
+## Private persistence checkpoint
+
+Step 2 is implemented locally by migration `19090000` and [private bank valuation persistence](bank-valuations.md). Original fields extend the existing observation model without backfill or opening GBP admission. Private immutable rate/source history creates zero accounting effects and does not certify bytes/tax treatment. The next work is [complete coverage and native consumer containment](foreign-source-containment-plan.md) before guarded ingestion and separately reviewed accounting/reversal.
+
+## Current implementation work
+
+Coverage, native review containment and dimensioned standalone exports are now implemented locally. Work is on steps 4–6 as one workflow; admission remains closed while integration is unfinished. `source-persistence-v2.ts` adds foreign original-unit recovery plans, versioned fingerprints, encrypted original/row preparation and exact retained-key recovery alongside unchanged V1. Focused parser/preservation/recovery tests pass (16); this is not a separately completed ingestion milestone.
+
+The private V2 registration branch is now present in migration `20261019170000_dimensioned_source_registration.sql`, dispatched through the existing service-only wrapper and recovery path. It preserves native function identity/body and completed-attempt replay, validates exact original-unit rows and selected mapping columns, and creates only Unknown observations. Foreign admission constraints remain closed.
+
+Verification: 12 focused registration/recovery tests and one native PostgreSQL concurrency test pass. The latter observes actual account-lock waits for identical files and overlapping files in both commit orders; genuine repeated purchases remain distinct, later overlaps require review, and no financial records are posted. These are local synthetic checks, not hosted acceptance.
+
+Migration `20261019180000_foreign_source_closure.sql` now enforces foreign owner/account/import/source-row/currency relationships on insert, with account locking and existing immutable-source guards preserving them afterwards. It also appends safe dimensional fields to the owner-scoped recovery view without changing existing stamp inputs. Recovery read-back uses original currency figures and words, rejects mismatched dimensions, resets confirmation after changed scope and prevents repeated submission while pending. Local SQL/concurrency/export checks (8 tests), recovery checks (11 tests), and the import/recovery browser suite passed. No admission constraints were opened.
+
+The owned valuation review interface is now connected at `/dashboard/imports/valuation` through migration `20261019190000_bank_valuation_review.sql`. It reuses private valuation persistence, exposes safe source/document metadata, validates local-original identity for reviewed values, and recovers exact completed requests before live checks. The form reads back original units, rational rate direction, dates, rounding trace and GBP figures/words; it supports provisional/reviewed/withdrawn revisions and creates no accounting effects. Synthetic SQL and browser checks cover stale review, wrong original, owner isolation, reviewed zero, withdrawal, lost-response recovery, confirmation reset and pending state. This does not complete steps 5–6.
+
+Migration `20261019200000_foreign_classification.sql` adds a private classification writer and immutable requests linked from canonical classification decisions to exact valuation revisions. It updates one canonical GBP record, preserves financial change history, permits Personal/Unknown without inventing a valuation, and retains zero outcomes without positive postings. Mixed use applies `gbp_business_share_half_up/1` after GBP valuation. Record detachment/reassignment/deletion and unaudited foreign decision-version changes are blocked. Valuation correction requires first reviewing exclusion of dependent approved effects. Native classification remains on its existing path.
+
+The underlying writer remains private; migration `20261019210000` exposes an authenticated confirmation wrapper after the separate review screen. SQL tests cover outgoing Business/Mixed, incoming Business, Personal/Unknown, zero with and without an earlier posting, exact retry, stale request, ownership boundaries and tampering; concurrent writers use the owner lock. Existing native import, merchant and connected-store checks pass. These local checks do not certify the full lifecycle.
+
+The classification review is now connected from Imports and valuation review at `/dashboard/imports/classification`. Its stamp includes category metadata. Read-back shows original units, exact valuation ancestry, current/proposed GBP effects and the signed correction, with separate treatment and final-confirmation gates. Changes reset both gates; pending submissions disable confirmation. SQL tests cover category renames, authenticated writes, mixed corrections, reviewed zero, stale evidence, Personal/Unknown, retained retries and owner/role isolation. Ten focused database/concurrency checks, the classification browser suite, TypeScript and focused lint pass. These are synthetic local checks; foreign admission remains closed.
+
+Next: extend tax/filing accounting coverage with classification ancestry, then connect account/import preview before opening foreign admission. Standalone exports now carry and validate that ancestry. Run focused checks during development and a full regression at the coherent workflow gate.
+
+
+### Reversal integration established from the current code
+
+Keep native V3 reversal unchanged. Its native scope assertion, GBP-only refund closure and bulk exclusion/reset order cannot safely handle foreign records. The foreign branch must read complete owned sources, actual GBP effects and canonical classification ancestry; inspect actual allocation, transfer, refund, FX and duplicate dependencies; and show original units separately from GBP effect deltas.
+
+Use an authenticated foreign review/confirm RPC behind the existing reversal route. Under the existing owner lock, recover exact completed parent requests first, freeze inputs and compare a digest covering all displayed source/effect/decision/dependency fields. Invoke the private classification writer with Unknown for each source, refreshing its stamp after each child. Retain child request IDs/results, original rows, valuations and excluded record pointers; discard the selected import only after all children succeed. A missing valuation document must not prevent exclusion. Never bypass the posting guards or feed foreign original units to a GBP formatter.
+
+Verification must cover multi-observation atomicity, exact retry after discard/document loss, stale effects and blockers, both concurrent commit orders, zero outcomes, ownership, native regression and browser read-back/reset/pending states. This integration is implemented locally by migration `20261019220000_foreign_import_reversal.sql`, the foreign reversal model, and the existing reversal page. The native route remains unchanged when its source scope is eligible.
+
+
+Foreign reversal verification: actual SQL covers USD/EUR/JPY/KWD, exact GBP effects, multiple source rows, rollback on a later child failure, lost valuation evidence, stale review, retained canonical pointers, one lifecycle audit event and retry, and owner/role isolation. A synthetic retained duplicate relationship blocks reversal even without a transaction marker. Real PostgreSQL sessions prove classification-first, reversal-first and simultaneous-retry ordering under the owner lock. Server-action tests cover exact form/auth/stamp gates and retained retries. Both foreign and native reversal browser suites pass; the foreign suite caught and fixed negative-zero formatting of an empty income/expense delta. TypeScript and focused lint passed. No hosted schema was changed, and foreign account/import admission remains closed pending coverage/export and preview integration.
+
+
+### Remaining reporting integration (current code verified)
+
+Add bank-source coverage `/2` with reciprocal transaction/decision/request/valuation/record closure, exact recognized GBP amounts and separate accounting eligibility. Preserve `/1` semantics for saved inputs. Foreign representation and native-cash eligibility must not change. Business/Mixed need a current reviewed decision valuation and exact canonical effect; reviewed zero requires no fabricated positive record; Personal needs its reviewed exclusion; Unknown and unsupported dependencies remain unresolved.
+
+Tax requires a coordinated input `/4`: update year-scoped `bankTaxScope`, the independent currency blocker in `calculateTax`, SQL `tax_bank_sources_blocked`, input/capture/currentness checks and lock coverage for foreign requests. Validate each approved foreign CalculationRecord against the frozen accounting projection; never sum original units or valuation history as additional income. Retain input versions ≤3 for historical replay.
+
+Filing requires input `/5` and bundle `/6` with matching current calculation/coverage, step digests and decision/valuation ancestry in ledger, expense history, manifest and trace. Keep input versions ≤4 and bundles ≤5 replayable, and recover exact completed requests before current-source checks. Tax-fact source selection has independent native-only guards and snapshot formats: it needs a dimensioned fact contract before foreign sources can populate reviewed facts. Do not weaken the native fact guard.
+
+Finance still needs an independently reviewed accessible cash balance; transaction GBP valuations cannot supply it. Preserve the owner-wide foreign-account cash restriction in `financeBankCoverageBlocks` and `freezePlanningSources` while exposing accounting readiness separately. Operational exception counts also require a versioned accounting-readiness update.
+
+Verify once-only ledger inclusion, zero/Personal/Unknown states, source loss and corrections, cross-year connected sources, unrelated-year exclusion, old snapshot replay, exact retries and fully classified foreign tax accounting with finance drawings still withheld. The reporting integration is partially implemented as detailed below; current capture RPCs and screens now use the accounting contracts described below; foreign admission and the broader lifecycle remain unfinished.
+
+
+### Reporting implementation checkpoint
+
+Migration `20261019230000_bank_accounting_coverage.sql` exposes owned coverage V2 while retaining V1 unchanged. `bank-accounting-coverage.ts` verifies complete decision/request/valuation/record ancestry. Tax input V4 now validates exact canonical GBP effects and source linkage, supports Personal and reviewed-zero outcomes, and withholds dependent totals for unresolved or stale evidence. Retained excluded records alone do not keep a discarded import active in the tax scope.
+
+Filing input V5 / bundle V6 now carries that coverage through review digests, normalized ledger, foreign decision proof rows, manifest and calculation trace. Ledger rows retain original currency units, full valuation/decision histories and the separately calculated year GBP effects. Saved V6 verification regenerates both ledger and decision CSVs, rejecting altered bodies even when their artifact and outer hashes have been recomputed. Current filing observation amounts and business-use shares must agree with the authoritative accounting proof. Predecessor pack serialization and verification remain supported.
+
+Verification: 13 focused database/model tests pass, including an actual SQL KWD Business→Mixed history (2500p→750p), source-unit preservation, conflicting projection rejection, rehashed CSV/JSON tampering, and predecessor filing regression. TypeScript and focused ESLint pass. These are synthetic local tests, not hosted or tax-form acceptance.
+
+Migration `20261020000000_tax_bank_accounting_coverage.sql` activates current tax input V4 and filing input V5 / bundle V6 locally. It adds the accounting eligibility withholding gate, freezes foreign classification requests with the existing source tables, and retains predecessor helpers and exact retry-first recovery. The current calculation and filing screens require the new versions and render accounting readiness independently of foreign account cash eligibility. Displayed source scope includes cross-year fact/record connections. Shared tax arithmetic moved unchanged into `lib/tax/arithmetic.ts` so the finance browser preview does not import server-only snapshot hashing.
+
+Actual SQL verification covers predecessor calculation/pack/step retries, unchanged native results, unresolved foreign sources, reviewed Mixed effects, source-loss withholding/currentness and current capture retries. The classification lifecycle additionally compares SQL/model eligibility through reviewed zero, reversal and Personal. No hosted migration has been applied; foreign admission remains closed pending account/import preview and the remaining reconciliation lifecycle.
+
+Run `npx tsx scripts/demo-foreign-accounting.ts` to generate `/tmp/vibecount-foreign-accounting-demo/`: the current server-rendered evidence readback, seven saved/verified filing artifacts and a report. It uses a disposable database, KWD -10.001, a separately reviewed valuation and 30% business share yielding GBP 7.50. Required tax facts and step reviews are deliberately absent, so the bundle remains `draft_incomplete`. It makes no provider calls or hosted changes.
+
+Activation checks: the 780-test full run passed 777 tests and exposed three route fixtures still using predecessor current-input versions. After updating those fixtures, all seven affected route tests passed. All 21 browser suites passed after resolving the server-only import in the finance preview. Focused accounting capture, eligibility parity and 24 unchanged tax/finance arithmetic checks passed. Final TypeScript, focused lint and clean-cache production build passed; the existing build-cache cleanup twice returned ENOTEMPTY, so the previous generated cache was preserved outside the repository before rebuilding. This is local engineering evidence, not hosted Auth/Storage acceptance, independent tax review or completion of the handover.

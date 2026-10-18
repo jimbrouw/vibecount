@@ -1,3 +1,7 @@
+/** @deprecated Profit-only legacy helper. The tax-prep UI no longer uses it.
+ * Reviewed year/profile/fact inputs and a sourced versioned rules engine must replace it.
+ * Its result cannot establish PAYE credits, pension relief, NI maximums or POA eligibility.
+ */
 export type TaxEstimate = {
   profitPence: number;
   taxableProfitPence: number;

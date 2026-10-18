@@ -1,5 +1,7 @@
 "use server";
 
+import { readImportConfirmation } from "@/lib/records/import-confirmation";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -8,7 +10,6 @@ import {
   ensureRecordCategories,
   parseFallbackCategoryId,
 } from "@/lib/records/categories";
-import { parseRecordsCsv } from "@/lib/records/csv";
 import {
   normaliseRecordStatus,
   validateManualRecordInput,
@@ -251,72 +252,9 @@ export async function applyRecordCategory(formData: FormData) {
   redirect("/dashboard/records?categorised=1");
 }
 
-export async function uploadRecordsCsv(formData: FormData) {
-  const userId = await requireUserId();
-  const file = formData.get("csvFile");
-
-  if (!(file instanceof File) || file.size === 0) {
-    redirect(`/dashboard/records?error=${encodeURIComponent("Choose a CSV file.")}`);
-  }
-
-  if (file.size > 1_000_000) {
-    redirect(
-      `/dashboard/records?error=${encodeURIComponent("CSV file must be under 1MB.")}`
-    );
-  }
-
-  const supabase = await createClient();
-  const categories = await ensureRecordCategories(supabase, userId);
-  const parsed = parseRecordsCsv(await file.text(), categories);
-
-  if (!parsed.ok) {
-    redirect(`/dashboard/records?error=${encodeURIComponent(parsed.error)}`);
-  }
-
-  const { data: importRow, error: importError } = await supabase
-    .from("record_imports")
-    .insert({
-      user_id: userId,
-      source_type: "csv",
-      original_filename: file.name || "records.csv",
-      status: "review",
-      metadata: {
-        row_count: parsed.rows.length,
-      },
-    })
-    .select("id")
-    .single();
-
-  if (importError || !importRow) {
-    redirect(
-      `/dashboard/records?error=${encodeURIComponent("Could not create the CSV import.")}`
-    );
-  }
-
-  const { error: rowsError } = await supabase.from("csv_import_rows").insert(
-    parsed.rows.map((row) => ({
-      user_id: userId,
-      import_id: importRow.id,
-      row_number: row.rowNumber,
-      record_type: row.recordType,
-      record_date: row.recordDate,
-      description: row.description || null,
-      amount: row.amountPence === null ? null : row.amountPence / 100,
-      category_id: row.categoryId,
-      status: row.errorMessage ? "invalid" : "review",
-      error_message: row.errorMessage,
-      raw_row: row.rawRow,
-    }))
-  );
-
-  if (rowsError) {
-    redirect(
-      `/dashboard/records?error=${encodeURIComponent("Could not stage CSV rows.")}`
-    );
-  }
-
-  revalidatePath("/dashboard/records");
-  redirect(`/dashboard/records?csvImported=${parsed.rows.length}`);
+export async function uploadRecordsCsv() {
+  await requireUserId();
+  redirect("/dashboard/imports");
 }
 
 export async function setCsvImportRowStatus(formData: FormData) {
@@ -348,79 +286,19 @@ export async function setCsvImportRowStatus(formData: FormData) {
   redirect("/dashboard/records?csvReviewed=1");
 }
 
-export async function commitApprovedCsvRows() {
-  const userId = await requireUserId();
+export async function commitApprovedCsvRows(formData: FormData) {
+  await requireUserId();
+  const rows = readImportConfirmation(formData);
+  if (!rows) {
+    redirect(`/dashboard/records?error=${encodeURIComponent("Review the selected rows and confirm before committing.")}`);
+  }
   const supabase = await createClient();
-  const { data: rows, error: rowsError } = await supabase
-    .from("csv_import_rows")
-    .select("id, import_id, record_type, record_date, description, amount, category_id")
-    .eq("user_id", userId)
-    .eq("status", "approved")
-    .not("record_date", "is", null)
-    .not("description", "is", null)
-    .not("amount", "is", null)
-    .not("category_id", "is", null)
-    .limit(100);
-
-  if (rowsError) {
-    redirect(
-      `/dashboard/records?error=${encodeURIComponent("Could not read approved CSV rows.")}`
-    );
+  const { data, error } = await supabase.rpc("confirm_import_rows", { p_source: "csv", p_rows: rows });
+  if (error) {
+    redirect(`/dashboard/records?error=${encodeURIComponent("Could not confirm rows. Reload and review again; check that the atomic import migration is applied.")}`);
   }
-
-  if (!rows || rows.length === 0) {
-    redirect(
-      `/dashboard/records?error=${encodeURIComponent("Approve at least one valid CSV row first.")}`
-    );
-  }
-
-  const { data: inserted, error: insertError } = await supabase
-    .from("financial_records")
-    .insert(
-      rows.map((row) => ({
-        user_id: userId,
-        record_type: row.record_type,
-        record_date: row.record_date,
-        description: row.description,
-        amount: row.amount,
-        category_id: row.category_id,
-        import_id: row.import_id,
-        source_type: "csv",
-        source_reference: `CSV row ${row.id}`,
-        status: "approved",
-        approved_at: new Date().toISOString(),
-      }))
-    )
-    .select("id");
-
-  if (insertError || !inserted) {
-    redirect(
-      `/dashboard/records?error=${encodeURIComponent("Could not commit approved CSV rows.")}`
-    );
-  }
-
-  for (let index = 0; index < rows.length; index += 1) {
-    await supabase
-      .from("csv_import_rows")
-      .update({
-        status: "committed",
-        committed_record_id: inserted[index]?.id ?? null,
-      })
-      .eq("id", rows[index].id)
-      .eq("user_id", userId);
-  }
-
-  await supabase
-    .from("record_imports")
-    .update({
-      status: "committed",
-      committed_at: new Date().toISOString(),
-    })
-    .in("id", [...new Set(rows.map((row) => row.import_id))])
-    .eq("user_id", userId);
-
   revalidatePath("/dashboard/records");
-  redirect(`/dashboard/records?csvCommitted=${inserted.length}`);
+  redirect(`/dashboard/records?csvCommitted=${Number(data?.committed ?? 0)}`);
 }
 
 export async function uploadBankStatement(formData: FormData) {
@@ -541,64 +419,19 @@ export async function setBankStatementRowStatus(formData: FormData) {
   redirect("/dashboard/records?bankReviewed=1");
 }
 
-export async function commitApprovedBankRows() {
-  const userId = await requireUserId();
+export async function commitApprovedBankRows(formData: FormData) {
+  await requireUserId();
+  const rows = readImportConfirmation(formData);
+  if (!rows) {
+    redirect(`/dashboard/records?error=${encodeURIComponent("Review the selected rows and confirm before committing.")}`);
+  }
   const supabase = await createClient();
-  const { data: rows, error: rowsError } = await supabase
-    .from("bank_statement_import_rows")
-    .select("id, import_id, record_type, record_date, description, amount, category_id")
-    .eq("user_id", userId)
-    .eq("status", "approved")
-    .not("record_date", "is", null)
-    .not("description", "is", null)
-    .not("amount", "is", null)
-    .not("category_id", "is", null)
-    .limit(100);
-
-  if (rowsError || !rows || rows.length === 0) {
-    redirect(
-      `/dashboard/records?error=${encodeURIComponent("Approve at least one valid bank row first.")}`
-    );
+  const { data, error } = await supabase.rpc("confirm_import_rows", { p_source: "bank_statement_pdf", p_rows: rows });
+  if (error) {
+    redirect(`/dashboard/records?error=${encodeURIComponent("Could not confirm rows. Reload and review again; check that the atomic import migration is applied.")}`);
   }
-
-  const { data: inserted, error: insertError } = await supabase
-    .from("financial_records")
-    .insert(
-      rows.map((row) => ({
-        user_id: userId,
-        record_type: row.record_type,
-        record_date: row.record_date,
-        description: row.description,
-        amount: row.amount,
-        category_id: row.category_id,
-        import_id: row.import_id,
-        source_type: "bank_statement_pdf",
-        source_reference: `Bank statement row ${row.id}`,
-        status: "approved",
-        approved_at: new Date().toISOString(),
-      }))
-    )
-    .select("id");
-
-  if (insertError || !inserted) {
-    redirect(
-      `/dashboard/records?error=${encodeURIComponent("Could not commit approved bank rows.")}`
-    );
-  }
-
-  for (let index = 0; index < rows.length; index += 1) {
-    await supabase
-      .from("bank_statement_import_rows")
-      .update({
-        status: "committed",
-        committed_record_id: inserted[index]?.id ?? null,
-      })
-      .eq("id", rows[index].id)
-      .eq("user_id", userId);
-  }
-
   revalidatePath("/dashboard/records");
-  redirect(`/dashboard/records?bankCommitted=${inserted.length}`);
+  redirect(`/dashboard/records?bankCommitted=${Number(data?.committed ?? 0)}`);
 }
 
 function readRecordForm(formData: FormData) {

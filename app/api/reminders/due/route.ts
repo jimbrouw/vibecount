@@ -1,5 +1,7 @@
+import { isNativeGbpInvoice } from "@/lib/invoices/native";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { minorPence } from "@/lib/records/allocations";
 import {
   buildReminderEmail,
   parseReminderSchedule,
@@ -12,6 +14,7 @@ export async function GET(request: Request) {
 }
 
 type DueInvoiceRow = {
+  origin: string; currency: string;
   id: string;
   user_id: string;
   client_id: string;
@@ -21,6 +24,7 @@ type DueInvoiceRow = {
   due_date: string;
   payment_terms: string;
   reminder_schedule: unknown;
+  updated_at: string;
   clients:
     | {
         name: string;
@@ -52,7 +56,7 @@ export async function POST(request: Request) {
   if (!supabase || !fromEmail) {
     return NextResponse.json(
       { error: "Reminder draft environment is not configured." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
@@ -60,7 +64,7 @@ export async function POST(request: Request) {
   const { data: invoices, error } = await supabase
     .from("invoices")
     .select(
-      "id, user_id, client_id, number, amount, invoice_date, due_date, payment_terms, reminder_schedule, clients(name, email)"
+      "id, user_id, client_id, number, amount, origin, currency, invoice_date, due_date, payment_terms, reminder_schedule, updated_at, clients(name, email)",
     )
     .eq("status", "finalised")
     .eq("reminder_enabled", true)
@@ -70,7 +74,10 @@ export async function POST(request: Request) {
     .limit(50);
 
   if (error) {
-    return NextResponse.json({ error: "Could not read due reminders." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Could not read due reminders." },
+      { status: 500 },
+    );
   }
 
   const results = {
@@ -81,6 +88,27 @@ export async function POST(request: Request) {
   };
 
   for (const invoice of (invoices ?? []) as DueInvoiceRow[]) {
+    if (!isNativeGbpInvoice(invoice)) {results.failed++;continue;}
+    const { data: balance, error: balanceError } = await supabase
+      .from("invoice_payment_balances")
+      .select("updated_at,outstanding_pence,credited_pence,currency")
+      .eq("id", invoice.id)
+      .eq("user_id", invoice.user_id)
+      .maybeSingle();
+    if (
+      balanceError ||
+      !balance ||
+      balance.currency !== "GBP" ||
+      balance.updated_at !== invoice.updated_at
+    ) {
+      results.failed++;
+      continue;
+    }
+    const duePence = minorPence(balance.outstanding_pence);
+    if (duePence <= 0 || minorPence(balance.credited_pence) > 0) {
+      results.skipped++;
+      continue;
+    }
     const schedule = parseReminderSchedule(invoice.reminder_schedule);
     const sentCount = await readSentReminderCount(supabase, invoice.id);
     const client = joinedClient(invoice.clients);
@@ -90,26 +118,15 @@ export async function POST(request: Request) {
         .from("invoices")
         .update({ reminder_enabled: false, next_reminder_at: null })
         .eq("id", invoice.id)
-        .eq("user_id", invoice.user_id);
+        .eq("user_id", invoice.user_id)
+        .eq("updated_at", invoice.updated_at);
       results.skipped += 1;
       continue;
     }
 
     const recipient = client?.email?.trim() ?? "";
     if (!recipient) {
-      await insertReminderAudit(supabase, invoice, {
-        recipientEmail: "",
-        subject: `Payment reminder for invoice ${invoice.number}`,
-        message: "Skipped because the client has no email address.",
-        status: "skipped",
-        error: "Missing client email.",
-      });
-      await supabase
-        .from("invoices")
-        .update({ reminder_enabled: false, next_reminder_at: null })
-        .eq("id", invoice.id)
-        .eq("user_id", invoice.user_id);
-      results.skipped += 1;
+      results.failed++;
       continue;
     }
 
@@ -117,7 +134,7 @@ export async function POST(request: Request) {
     const email = buildReminderEmail({
       invoice: {
         number: invoice.number,
-        amountPence: Math.round(Number(invoice.amount) * 100),
+        amountPence: duePence,
         invoiceDate: invoice.invoice_date,
         dueDate: invoice.due_date,
         paymentTerms: invoice.payment_terms,
@@ -134,21 +151,12 @@ export async function POST(request: Request) {
       reminderCount: sentCount + 1,
     });
 
-    await insertReminderAudit(supabase, invoice, {
-      recipientEmail: recipient,
-      subject: email.subject,
-      message: email.text,
-      status: "pending",
+    const { error: draftError } = await supabase.rpc("create_due_reminder", {
+      p_owner:invoice.user_id,p_invoice:invoice.id,p_updated_at:balance.updated_at,
+      p_amount:duePence,p_from:fromEmail,p_recipient:recipient,
+      p_subject:email.subject,p_message:email.text,
     });
-
-    await supabase
-      .from("invoices")
-      .update({
-        reminder_enabled: false,
-        next_reminder_at: null,
-      })
-      .eq("id", invoice.id)
-      .eq("user_id", invoice.user_id);
+    if (draftError) { results.failed++; continue; }
 
     results.drafted += 1;
   }
@@ -157,18 +165,19 @@ export async function POST(request: Request) {
 }
 
 function joinedClient(value: DueInvoiceRow["clients"]) {
-  return Array.isArray(value) ? value[0] ?? null : value;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
 async function readReminderSettings(
   supabase: NonNullable<ReturnType<typeof createAdminClient>>,
-  userId: string
+  userId: string,
 ): Promise<ReminderSettings> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("user_settings")
     .select("legal_name, payment_link_url")
     .eq("id", userId)
     .maybeSingle();
+  if (error) throw new Error("Reminder settings unavailable.");
 
   return {
     legal_name: String(data?.legal_name ?? ""),
@@ -178,46 +187,14 @@ async function readReminderSettings(
 
 async function readSentReminderCount(
   supabase: NonNullable<ReturnType<typeof createAdminClient>>,
-  invoiceId: string
+  invoiceId: string,
 ) {
-  const { count } = await supabase
+  const { count, error } = await supabase
     .from("invoice_reminders")
     .select("id", { count: "exact", head: true })
     .eq("invoice_id", invoiceId)
     .eq("status", "sent");
+  if (error || count === null) throw new Error("Reminder history unavailable.");
 
   return count ?? 0;
-}
-
-async function insertReminderAudit(
-  supabase: NonNullable<ReturnType<typeof createAdminClient>>,
-  invoice: DueInvoiceRow,
-  input: {
-    recipientEmail: string;
-    subject: string;
-    message: string;
-    status: "pending" | "sent" | "failed" | "skipped";
-    error?: string;
-  }
-) {
-  const { data, error } = await supabase
-    .from("invoice_reminders")
-    .insert({
-      user_id: invoice.user_id,
-      invoice_id: invoice.id,
-      client_id: invoice.client_id,
-      recipient_email: input.recipientEmail || "missing@example.invalid",
-      subject: input.subject,
-      message: input.message,
-      status: input.status,
-      error: input.error ?? null,
-    })
-    .select("id")
-    .single();
-
-  if (error || !data) {
-    throw new Error("Could not write reminder audit row.");
-  }
-
-  return data as { id: string };
 }

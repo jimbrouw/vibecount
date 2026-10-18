@@ -1,0 +1,26 @@
+[
+  {
+    "name": "usd-bank",
+    "currency": "USD",
+    "provider": "generic",
+    "csv": "Date,Description,Amount,Currency,Reference\r\n05/04/2026,Synthetic client receipt,1500.01,USD,Invoice demo\r\n06/04/2026,Synthetic software,-12.50,USD,Demo expense\r\n06/04/2026,Synthetic software,-12.50,USD,Demo expense\r\n"
+  },
+  {
+    "name": "eur-card",
+    "currency": "EUR",
+    "provider": "amex",
+    "csv": "Date,Description,Amount,Currency\n05/04/2026,Synthetic purchase,630.29,EUR\n06/04/2026,Synthetic card repayment,-700.00,EUR\n"
+  },
+  {
+    "name": "jpy-bank",
+    "currency": "JPY",
+    "provider": "generic",
+    "csv": "Date,Description,Amount,Currency\n05/04/2026,Synthetic receipt,2501,JPY\n06/04/2026,Synthetic expense,-1250,JPY\n"
+  },
+  {
+    "name": "kwd-bank",
+    "currency": "KWD",
+    "provider": "nationwide",
+    "csv": "Date,Description,Paid Out,Paid In,Currency\n05/04/2026,Synthetic receipt,,10.001,KWD\n06/04/2026,Synthetic expense,0.001,,KWD\n"
+  }
+]

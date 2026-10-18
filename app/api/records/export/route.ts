@@ -1,3 +1,14 @@
+import {
+  readConsistentReconciliation,
+  readFinancialStamp,
+} from "@/lib/records/consistent-reconciliation";
+import {
+  type AccountingAmount,
+  recordEffectDecimal,
+  recordEffectPence,
+} from "@/lib/records/accounting-effect";
+import { readAllExportRows } from "@/lib/records/export-pages";
+import { escapeCsv } from "@/lib/records/export-csv";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -9,6 +20,10 @@ type RecordExportRow = {
   record_date: string;
   description: string;
   amount: string | number;
+  effect_sign: number;
+  cash_effect_pence?: AccountingAmount["cash_effect_pence"];
+  cash_treatment?: AccountingAmount["cash_treatment"];
+  refund_link_id: string | null;
   source_type: string;
   source_reference: string | null;
   tax_year_start: number;
@@ -31,57 +46,78 @@ export async function GET(request: Request) {
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
-    return NextResponse.json({ error: "Sign in to export records." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Sign in to export records." },
+      { status: 401 },
+    );
   }
 
   const url = new URL(request.url);
   const taxYearStart = url.searchParams.get("taxYearStart");
   const format = url.searchParams.get("format") === "csv" ? "csv" : "json";
 
-  let query = supabase
-    .from("financial_records")
-    .select(
-      `
+  let rows: RecordExportRow[];
+  try {
+    rows = await readConsistentReconciliation(
+      () =>
+        readFinancialStamp(() => supabase.rpc("reconciliation_export_stamp")),
+      () =>
+        readAllExportRows<RecordExportRow>(async (afterId) => {
+          let query = supabase
+            .from("financial_records")
+            .select(
+              `
       id,
       record_type,
       record_date,
       description,
       amount,
+      effect_sign,
+      cash_effect_pence,
+      cash_treatment,
+      refund_link_id,
       source_type,
       source_reference,
       tax_year_start,
       tax_quarter,
       record_categories(name, sa103_box),
-      record_attachments(id, original_filename, content_type, size_bytes, status)
-    `
-    )
-    .eq("user_id", user.id)
-    .eq("status", "approved")
-    .order("record_date", { ascending: true });
-
-  if (taxYearStart) {
-    query = query.eq("tax_year_start", Number(taxYearStart));
-  }
-
-  const { data: records, error } = await query;
-
-  if (error) {
+      record_attachments!record_attachments_record_same_user_fk(id, original_filename, content_type, size_bytes, status)
+    `,
+            )
+            .eq("user_id", user.id)
+            .eq("status", "approved")
+            .order("id", { ascending: true })
+            .limit(500);
+          if (taxYearStart)
+            query = query.eq("tax_year_start", Number(taxYearStart));
+          if (afterId) query = query.gt("id", afterId);
+          const result = await query;
+          return {
+            data: result.data as unknown as RecordExportRow[] | null,
+            error: result.error,
+          };
+        }),
+    );
+  } catch {
     return NextResponse.json(
-      { error: "Records export is not ready. Apply the secure records migration first." },
-      { status: 500 }
+      { error: "Could not read a complete records export." },
+      { status: 500 },
     );
   }
-
-  const rows = (records ?? []) as unknown as RecordExportRow[];
+  rows.sort(
+    (a, b) =>
+      a.record_date.localeCompare(b.record_date) || a.id.localeCompare(b.id),
+  );
   const attachmentCount = rows.reduce(
     (count, record) =>
       count +
-      record.record_attachments.filter((attachment) => attachment.status === "active")
-        .length,
-    0
+      record.record_attachments.filter(
+        (attachment) => attachment.status === "active",
+      ).length,
+    0,
   );
 
-  await supabase.from("record_exports").insert({
+  const { error: exportError } = await supabase.from("record_exports").insert({
     user_id: user.id,
     export_type: format,
     tax_year_start: taxYearStart ? Number(taxYearStart) : null,
@@ -89,6 +125,13 @@ export async function GET(request: Request) {
     record_count: rows.length,
     attachment_count: attachmentCount,
   });
+
+  if (exportError) {
+    return NextResponse.json(
+      { error: "Could not record export. Please try again." },
+      { status: 500 },
+    );
+  }
 
   const filename = `vibecount-mtd-ready-records${
     taxYearStart ? `-${taxYearStart}` : ""
@@ -107,7 +150,7 @@ export async function GET(request: Request) {
   return NextResponse.json(
     {
       label: "MTD-ready records export",
-      note: "This export is for record keeping and review. It is not an HMRC-recognised MTD software submission.",
+      note: "Amounts are signed recognised accounting effects; amountMagnitude preserves the positive magnitude. This export is for record keeping and review. It is not an HMRC-recognised MTD software submission.",
       exportedAt: new Date().toISOString(),
       taxYearStart: taxYearStart ? Number(taxYearStart) : null,
       records: rows.map((record) => ({
@@ -115,7 +158,12 @@ export async function GET(request: Request) {
         type: record.record_type,
         date: record.record_date,
         description: record.description,
-        amount: Number(record.amount),
+        amount: Number(recordEffectDecimal(record)),
+        amountMagnitude: String(record.amount),
+        recognizedPence: String(recordEffectPence(record)),
+        effectSign: record.effect_sign,
+        cashTreatment: record.cash_treatment,
+        refundLinkId: record.refund_link_id,
         category: record.record_categories?.name ?? null,
         selfAssessmentHint: record.record_categories?.sa103_box ?? null,
         sourceType: record.source_type,
@@ -136,7 +184,7 @@ export async function GET(request: Request) {
       headers: {
         "Content-Disposition": `attachment; filename="${filename}"`,
       },
-    }
+    },
   );
 }
 
@@ -153,13 +201,17 @@ function toCsv(records: RecordExportRow[]) {
     "tax_year_start",
     "tax_quarter",
     "attachment_count",
+    "amount_magnitude",
+    "effect_sign",
+    "refund_link_id",
+    "cash_treatment",
   ];
 
   const rows = records.map((record) => [
     record.record_type,
     record.record_date,
     record.description,
-    String(record.amount),
+    recordEffectDecimal(record),
     record.record_categories?.name ?? "",
     record.record_categories?.sa103_box ?? "",
     record.source_type,
@@ -167,18 +219,17 @@ function toCsv(records: RecordExportRow[]) {
     String(record.tax_year_start),
     String(record.tax_quarter),
     String(
-      record.record_attachments.filter((attachment) => attachment.status === "active")
-        .length
+      record.record_attachments.filter(
+        (attachment) => attachment.status === "active",
+      ).length,
     ),
+    String(record.amount),
+    String(record.effect_sign),
+    record.refund_link_id ?? "",
+    record.cash_treatment ?? "",
   ]);
 
-  return [header, ...rows].map((row) => row.map(escapeCsv).join(",")).join("\n");
-}
-
-function escapeCsv(value: string) {
-  if (/[",\n\r]/.test(value)) {
-    return `"${value.replaceAll('"', '""')}"`;
-  }
-
-  return value;
+  return [header, ...rows]
+    .map((row) => row.map(escapeCsv).join(","))
+    .join("\n");
 }

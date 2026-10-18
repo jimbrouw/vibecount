@@ -1,129 +1,31 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentTaxYearStart, getQuarterDates, type TaxQuarter } from "@/lib/records/tax-periods";
-
-export const runtime = "nodejs";
-
-export async function GET(request: Request) {
-  return POST(request);
-}
-
-function getCurrentQuarter(today = new Date()): TaxQuarter {
-  const taxYearStart = getCurrentTaxYearStart(today);
-  const quarters: TaxQuarter[] = [1, 2, 3, 4];
-  for (const q of quarters.slice().reverse()) {
-    const { start } = getQuarterDates(taxYearStart, q);
-    if (today >= start) return q;
-  }
-  return 1;
-}
-
-export async function POST(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  const authHeader = request.headers.get("authorization");
-
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
-
-  const supabase = createAdminClient();
-  if (!supabase) {
-    return NextResponse.json({ error: "Database not configured." }, { status: 500 });
-  }
-
-  const now = new Date();
-  const taxYearStart = getCurrentTaxYearStart(now);
-  const taxQuarter = getCurrentQuarter(now);
-
-  const { data: users, error: usersError } = await supabase
-    .from("financial_records")
-    .select("user_id")
-    .eq("tax_year_start", taxYearStart)
-    .eq("tax_quarter", taxQuarter);
-
-  if (usersError) {
-    return NextResponse.json({ error: "Could not list users." }, { status: 500 });
-  }
-
-  const uniqueUserIds = [...new Set((users ?? []).map((r: { user_id: string }) => r.user_id))];
-
-  const results = { checked: uniqueUserIds.length, saved: 0, failed: 0 };
-
-  for (const userId of uniqueUserIds) {
-    try {
-      const [
-        { count: uncategorised },
-        { count: inReview },
-        { data: quarterSummary },
-        { count: overdueInvoices },
-      ] = await Promise.all([
-        supabase
-          .from("financial_records")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", userId)
-          .eq("tax_year_start", taxYearStart)
-          .eq("tax_quarter", taxQuarter)
-          .eq("status", "approved")
-          .is("category_id", null),
-        supabase
-          .from("financial_records")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", userId)
-          .eq("tax_year_start", taxYearStart)
-          .eq("tax_quarter", taxQuarter)
-          .eq("status", "review"),
-        supabase
-          .from("financial_record_quarter_summaries")
-          .select("net_total")
-          .eq("user_id", userId)
-          .eq("tax_year_start", taxYearStart)
-          .eq("tax_quarter", taxQuarter)
-          .maybeSingle(),
-        supabase
-          .from("invoices")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", userId)
-          .eq("status", "finalised")
-          .eq("delivery_status", "sent")
-          .is("paid_at", null)
-          .lt("due_date", now.toISOString().slice(0, 10)),
-      ]);
-
-      const uncategorisedCount = uncategorised ?? 0;
-      const reviewCount = inReview ?? 0;
-      const overdueCount = overdueInvoices ?? 0;
-      const netProfitPence = Math.round(Number(quarterSummary?.net_total ?? 0) * 100);
-      const needsAttention = uncategorisedCount > 0 || reviewCount > 0 || overdueCount > 0;
-
-      const notesParts: string[] = [];
-      if (uncategorisedCount > 0) notesParts.push(`${uncategorisedCount} approved record(s) without a category`);
-      if (reviewCount > 0) notesParts.push(`${reviewCount} record(s) awaiting review`);
-      if (overdueCount > 0) notesParts.push(`${overdueCount} overdue invoice(s) not marked paid`);
-
-      const { error: upsertError } = await supabase
-        .from("quarterly_readiness_checks")
-        .upsert({
-          user_id: userId,
-          tax_year_start: taxYearStart,
-          tax_quarter: taxQuarter,
-          checked_at: now.toISOString(),
-          uncategorised_count: uncategorisedCount,
-          review_count: reviewCount,
-          overdue_invoice_count: overdueCount,
-          net_profit_pence: netProfitPence,
-          status: needsAttention ? "needs_attention" : "ok",
-          notes: notesParts.join("; ") || "All clear.",
-        }, { onConflict: "user_id,tax_year_start,tax_quarter" });
-
-      if (upsertError) {
-        results.failed++;
-      } else {
-        results.saved++;
-      }
-    } catch {
-      results.failed++;
-    }
-  }
-
-  return NextResponse.json({ ok: true, ...results });
+import { NextResponse } from 'next/server';
+import { readAllExportRows } from '@/lib/records/export-pages';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { getCurrentTaxYearStart,getQuarterDates,type TaxQuarter } from '@/lib/records/tax-periods';
+import { FINANCIAL_REVIEW_VERSION } from '@/lib/records/financial-review';
+export const runtime='nodejs';
+export async function GET(request:Request){return POST(request)}
+function currentQuarter(today:Date):TaxQuarter{const year=getCurrentTaxYearStart(today);return([4,3,2,1] as TaxQuarter[]).find(q=>today>=getQuarterDates(year,q).start)!}
+export async function POST(request:Request){
+ const secret=process.env.CRON_SECRET;if(!secret||request.headers.get('authorization')!==`Bearer ${secret}`)return NextResponse.json({error:'Unauthorized.'},{status:401});
+ const db=createAdminClient();if(!db)return NextResponse.json({error:'Database not configured.'},{status:500});
+ const now=new Date(),year=getCurrentTaxYearStart(now),quarter=currentQuarter(now),asOf=now.toISOString().slice(0,10);
+ let owners:string[];
+ try{
+  const rows=await Promise.all(['financial_records','invoices','bank_transactions'].map(table=>readAllExportRows<{id:string;user_id:string}>(async after=>{
+   let q=db.from(table).select('id,user_id').order('id').limit(500);
+   if(table==='invoices')q=q.eq('status','finalised');else q=q.eq('tax_year_start',year);
+   if(after)q=q.gt('id',after);return await q;
+  })));
+  owners=[...new Set(rows.flat().map(r=>{if(typeof r.user_id!=='string'||!r.user_id)throw new Error();return r.user_id}))];
+ }catch{return NextResponse.json({error:'Could not list complete readiness scope.'},{status:500})}
+ const result={checked:owners.length,saved:0,failed:0};
+ for(const owner of owners){
+  try{
+   const r=await db.rpc('capture_quarter_readiness',{p_owner:owner,p_year:year,p_quarter:quarter,p_as_of:asOf}),data=r.data;
+   if(r.error||!data||data.owner_id!==owner||data.tax_year_start!==year||data.tax_quarter!==quarter||data.coverage_version!==FINANCIAL_REVIEW_VERSION||!['ok','needs_attention'].includes(data.status))throw new Error();
+   result.saved++;
+  }catch{result.failed++}
+ }
+ return NextResponse.json({ok:result.failed===0,...result},{status:result.failed?503:200,headers:{'Cache-Control':'private, no-store'}});
 }

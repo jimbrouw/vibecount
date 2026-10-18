@@ -1,7 +1,9 @@
+import { recordEffectPence,recordCashNote,type AccountingAmount } from "@/lib/records/accounting-effect";
+import { requirePence, sumPence } from "@/lib/money";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { formatPounds } from "@/lib/invoices/money";
+import { amountToWords, formatPounds } from "@/lib/invoices/money";
 import {
   ensureRecordCategories,
   withFallbackRecordCategories,
@@ -22,7 +24,6 @@ import {
   setCsvImportRowStatus,
   updateManualRecord,
   uploadBankStatement,
-  uploadRecordsCsv,
 } from "./actions";
 import LogoutButton from "../LogoutButton";
 import PlainLanguageNote from "../PlainLanguageNote";
@@ -42,10 +43,15 @@ type CategoryOption = {
 
 type ManualRecordRow = {
   id: string;
+  bank_transaction_id: string | null;
+  import_id: string | null;
   record_type: "income" | "expense";
   record_date: string;
   description: string;
   amount: string | number;
+  effect_sign?: number;
+  cash_effect_pence?: AccountingAmount["cash_effect_pence"];
+  cash_treatment?: AccountingAmount["cash_treatment"];
   status: "draft" | "review" | "approved" | "excluded";
   source_type: string;
   category_id: string | null;
@@ -60,6 +66,7 @@ type TaxYearRow = {
 
 type CsvImportReviewRow = {
   id: string;
+  updated_at: string;
   row_number: number;
   record_type: "income" | "expense";
   record_date: string | null;
@@ -73,6 +80,7 @@ type CsvImportReviewRow = {
 
 type BankStatementReviewRow = {
   id: string;
+  updated_at: string;
   row_number: number;
   record_type: "income" | "expense";
   record_date: string | null;
@@ -105,7 +113,7 @@ export default async function RecordsPage({
   const activeTab = getRecordsTab(resolvedSearchParams);
   const selectedTaxYearStart = getSelectedTaxYearStart(
     resolvedSearchParams,
-    currentTaxYearStart
+    currentTaxYearStart,
   );
 
   const categories = await ensureRecordCategories(supabase, user.id);
@@ -128,92 +136,108 @@ export default async function RecordsPage({
     csvRowsResult,
     bankRowsResult,
   ] = await Promise.all([
-      supabase
-        .from("financial_record_quarter_summaries")
-        .select(
-          "tax_quarter, income_total, expense_total, net_total, income_count, expense_count"
-        )
-        .eq("user_id", user.id)
-        .eq("tax_year_start", selectedTaxYearStart),
-      supabase
-        .from("record_categories")
-        .select("id", { count: "exact", head: true })
-        .or(`user_id.eq.${user.id},is_default.eq.true`),
-      supabase
-        .from("financial_records")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id),
-      supabase
-        .from("record_attachments")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .eq("status", "active"),
-      supabase
-        .from("record_exports")
-        .select("requested_at")
-        .eq("user_id", user.id)
-        .order("requested_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from("financial_records")
-        .select(
-          "id, record_type, record_date, description, amount, status, source_type, category_id, tax_year_start, tax_quarter, record_categories(name)"
-        )
-        .eq("user_id", user.id)
-        .order("record_date", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(20),
-      supabase
-        .from("financial_records")
-        .select("tax_year_start")
-        .eq("user_id", user.id)
-        .eq("status", "approved"),
-      supabase
-        .from("csv_import_rows")
-        .select(
-          "id, row_number, record_type, record_date, description, amount, status, error_message, record_imports(original_filename), record_categories(name)"
-        )
-        .eq("user_id", user.id)
-        .in("status", ["review", "approved", "discarded", "invalid"])
-        .order("created_at", { ascending: false })
-        .order("row_number", { ascending: true })
-        .limit(20),
-      supabase
-        .from("bank_statement_import_rows")
-        .select(
-          "id, row_number, record_type, record_date, description, amount, status, error_message, redacted_line, record_imports(original_filename), record_categories(name)"
-        )
-        .eq("user_id", user.id)
-        .in("status", ["review", "approved", "discarded", "invalid"])
-        .order("created_at", { ascending: false })
-        .order("row_number", { ascending: true })
-        .limit(20),
-    ]);
+    supabase
+      .from("financial_record_quarter_summaries")
+      .select(
+        "tax_quarter, income_total, expense_total, net_total, income_count, expense_count",
+      )
+      .eq("user_id", user.id)
+      .eq("tax_year_start", selectedTaxYearStart),
+    supabase
+      .from("record_categories")
+      .select("id", { count: "exact", head: true })
+      .or(`user_id.eq.${user.id},is_default.eq.true`),
+    supabase
+      .from("financial_records")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id),
+    supabase
+      .from("record_attachments")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("status", "active"),
+    supabase
+      .from("record_exports")
+      .select("requested_at")
+      .eq("user_id", user.id)
+      .order("requested_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("financial_records")
+      .select(
+        "id, bank_transaction_id, import_id, record_type, record_date, description, amount, effect_sign, cash_effect_pence, cash_treatment, status, source_type, category_id, tax_year_start, tax_quarter, record_categories(name)",
+      )
+      .eq("user_id", user.id)
+      .order("record_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("financial_records")
+      .select("tax_year_start")
+      .eq("user_id", user.id)
+      .eq("status", "approved"),
+    supabase
+      .from("csv_import_rows")
+      .select(
+        "id, updated_at, row_number, record_type, record_date, description, amount, status, error_message, record_imports(original_filename), record_categories(name)",
+      )
+      .eq("user_id", user.id)
+      .in("status", ["review", "approved", "discarded", "invalid"])
+      .order("created_at", { ascending: false })
+      .order("row_number", { ascending: true })
+      .limit(20),
+    supabase
+      .from("bank_statement_import_rows")
+      .select(
+        "id, updated_at, row_number, record_type, record_date, description, amount, status, error_message, redacted_line, record_imports(original_filename), record_categories(name)",
+      )
+      .eq("user_id", user.id)
+      .in("status", ["review", "approved", "discarded", "invalid"])
+      .order("created_at", { ascending: false })
+      .order("row_number", { ascending: true })
+      .limit(20),
+  ]);
 
-  const manualRecords = (manualRecordsResult.data ?? []) as unknown as ManualRecordRow[];
+  const manualRecords = (manualRecordsResult.data ??
+    []) as unknown as ManualRecordRow[];
   const csvRows = (csvRowsResult.data ?? []) as unknown as CsvImportReviewRow[];
-  const bankRows = (bankRowsResult.data ?? []) as unknown as BankStatementReviewRow[];
+  const bankRows = (bankRowsResult.data ??
+    []) as unknown as BankStatementReviewRow[];
   const taxYearOptions = buildTaxYearOptions(
     currentTaxYearStart,
-    (taxYearsResult.data ?? []) as TaxYearRow[]
+    (taxYearsResult.data ?? []) as TaxYearRow[],
   );
+  if (summaryResult.error)
+    return (
+      <main className="p-6">
+        <h1>Records</h1>
+        <p role="alert">
+          Complete record totals are unavailable. Reload before relying on any
+          figure.
+        </p>
+        <Link href="/dashboard">Return to dashboard</Link>
+      </main>
+    );
   const summaries = buildQuarterSummaries(
     selectedTaxYearStart,
-    (summaryResult.data ?? []) as Parameters<typeof buildQuarterSummaries>[1]
+    (summaryResult.data ?? []) as Parameters<typeof buildQuarterSummaries>[1],
   );
   const annualIncomePence = summaries.reduce(
     (total, summary) => total + summary.incomePence,
-    0
+    0,
   );
   const annualExpensePence = summaries.reduce(
     (total, summary) => total + summary.expensePence,
-    0
+    0,
   );
   const thresholdStatus = getThresholdStatus(annualIncomePence);
   const netIncomePence = annualIncomePence - annualExpensePence;
-  const taxPotPercentage = settingsRow?.tax_pot_percentage ?? 27.00;
-  const taxPotEstimatePence = Math.max(0, Math.round(netIncomePence * (taxPotPercentage / 100)));
+  const taxPotPercentage = settingsRow?.tax_pot_percentage ?? 27.0;
+  const taxPotEstimatePence = Math.max(
+    0,
+    Math.round(netIncomePence * (taxPotPercentage / 100)),
+  );
 
   return (
     <main className="min-h-screen bg-[#f0fdf4]">
@@ -262,7 +286,9 @@ export default async function RecordsPage({
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <span className="hidden text-sm text-white/80 sm:block">{user.email}</span>
+          <span className="hidden text-sm text-white/80 sm:block">
+            {user.email}
+          </span>
           <LogoutButton />
         </div>
       </header>
@@ -280,8 +306,8 @@ export default async function RecordsPage({
             <div className="mt-3 max-w-2xl">
               <PlainLanguageNote>
                 This is a record-keeping foundation, not HMRC-recognised filing
-                software. It keeps the figures organised before any tax submission
-                workflow is added.
+                software. It keeps the figures organised before any tax
+                submission workflow is added.
               </PlainLanguageNote>
             </div>
           </div>
@@ -293,8 +319,9 @@ export default async function RecordsPage({
               {Math.max(
                 categoryResult.count ?? 0,
                 categories.length,
-                manualCategoryOptions.length
-              )} categories ready
+                manualCategoryOptions.length,
+              )}{" "}
+              categories ready
             </p>
           </div>
         </div>
@@ -312,18 +339,12 @@ export default async function RecordsPage({
         )}
 
         <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <SummaryTile
-            label="Income"
-            value={formatPounds(annualIncomePence)}
-          />
+          <SummaryTile label="Income" value={formatPounds(annualIncomePence)} />
           <SummaryTile
             label="Expenses"
             value={formatPounds(annualExpensePence)}
           />
-          <SummaryTile
-            label="Net"
-            value={formatPounds(netIncomePence)}
-          />
+          <SummaryTile label="Net" value={formatPounds(netIncomePence)} />
           <SummaryTile
             label="Tax pot nudge"
             value={formatPounds(taxPotEstimatePence)}
@@ -366,12 +387,13 @@ export default async function RecordsPage({
                 Secure records storage
               </h2>
               <p className="mt-1 text-sm leading-6 text-[#4b8068]">
-                Approved records, attachment metadata, and change history are kept
-                behind per-user row-level security. Attachments use private storage
-                and short-lived signed links.
+                Approved records, attachment metadata, and change history are
+                kept behind per-user row-level security. Attachments use private
+                storage and short-lived signed links.
               </p>
               <p className="mt-2 text-xs font-medium text-[#166534]">
-                Positioning: MTD-ready records, not HMRC-recognised MTD software.
+                Positioning: MTD-ready records, not HMRC-recognised MTD
+                software.
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
@@ -382,7 +404,9 @@ export default async function RecordsPage({
                 <p className="mt-2 text-lg font-semibold text-[#14532d]">
                   {attachmentResult.count ?? 0}
                 </p>
-                <p className="mt-1 text-xs text-[#4b8068]">Active stored files</p>
+                <p className="mt-1 text-xs text-[#4b8068]">
+                  Active stored files
+                </p>
               </div>
               <div className="rounded-lg border border-[#dcfce7] bg-[#f7fef9] p-4">
                 <p className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
@@ -391,7 +415,9 @@ export default async function RecordsPage({
                 <p className="mt-2 text-sm font-semibold text-[#14532d]">
                   {formatExportDate(exportResult.data?.requested_at)}
                 </p>
-                <p className="mt-1 text-xs text-[#4b8068]">Logged for audit trail</p>
+                <p className="mt-1 text-xs text-[#4b8068]">
+                  Logged for audit trail
+                </p>
               </div>
             </div>
           </div>
@@ -419,7 +445,10 @@ export default async function RecordsPage({
           }`}
         >
           <ManualRecordForm categories={manualCategoryOptions} />
-          <ManualRecordsList records={manualRecords} categories={manualCategoryOptions} />
+          <ManualRecordsList
+            records={manualRecords}
+            categories={manualCategoryOptions}
+          />
         </section>
 
         {activeTab === "csv" ? <CsvImportPanel rows={csvRows} /> : null}
@@ -436,10 +465,14 @@ export default async function RecordsPage({
                 Tax year and threshold tracker
               </h2>
               <p className="mt-1 text-sm text-[#4b8068]">
-                Self-employment totals by quarter, based on approved records only.
+                Self-employment totals by quarter, based on approved records
+                only.
               </p>
             </div>
-            <form className="flex items-center gap-2" action="/dashboard/records">
+            <form
+              className="flex items-center gap-2"
+              action="/dashboard/records"
+            >
               <label
                 htmlFor="taxYearStart"
                 className="text-xs font-semibold uppercase tracking-widest text-[#166534]"
@@ -482,7 +515,10 @@ export default async function RecordsPage({
           </div>
           <div className="mt-4 space-y-3">
             {MTD_THRESHOLDS_PENCE.map((threshold) => {
-              const progress = Math.min(100, (annualIncomePence / threshold) * 100);
+              const progress = Math.min(
+                100,
+                (annualIncomePence / threshold) * 100,
+              );
 
               return (
                 <div key={threshold}>
@@ -519,8 +555,12 @@ export default async function RecordsPage({
                 className="grid gap-3 px-5 py-4 sm:grid-cols-[1.2fr_1fr_1fr_1fr]"
               >
                 <div>
-                  <p className="text-sm font-semibold text-[#14532d]">{summary.label}</p>
-                  <p className="mt-0.5 text-xs text-[#4b8068]">{summary.period}</p>
+                  <p className="text-sm font-semibold text-[#14532d]">
+                    {summary.label}
+                  </p>
+                  <p className="mt-0.5 text-xs text-[#4b8068]">
+                    {summary.period}
+                  </p>
                 </div>
                 <QuarterAmount
                   label={`${summary.incomeCount} income records`}
@@ -547,9 +587,14 @@ function ManualRecordForm({ categories }: { categories: CategoryOption[] }) {
     <section className="rounded-xl border border-[#bbf7d0] bg-white p-5 shadow-sm">
       <h2 className="text-base font-semibold text-[#14532d]">Add a record</h2>
       <p className="mt-1 text-sm text-[#4b8068]">
-        Enter income or expenses now. Imports can use the same record model later.
+        Enter income or expenses now. Imports can use the same record model
+        later.
       </p>
-      <form action={createManualRecord} className="mt-5 space-y-4" data-testid="record-create-form">
+      <form
+        action={createManualRecord}
+        className="mt-5 space-y-4"
+        data-testid="record-create-form"
+      >
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
@@ -610,7 +655,10 @@ function ManualRecordForm({ categories }: { categories: CategoryOption[] }) {
             <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
               Category
             </span>
-            <CategorySelect categories={categories} testId="record-category-select" />
+            <CategorySelect
+              categories={categories}
+              testId="record-category-select"
+            />
           </label>
         </div>
         <label className="block">
@@ -626,7 +674,8 @@ function ManualRecordForm({ categories }: { categories: CategoryOption[] }) {
             <option value="review">Needs review</option>
           </select>
           <span className="mt-1 block text-xs text-[#4b8068]">
-            New records are saved for review first. Approve them from the review list.
+            New records are saved for review first. Approve them from the review
+            list.
           </span>
         </label>
         <button
@@ -651,9 +700,12 @@ function ManualRecordsList({
   return (
     <section className="rounded-xl border border-[#bbf7d0] bg-white shadow-sm">
       <div className="border-b border-[#f0fdf4] px-5 py-4">
-        <h2 className="text-base font-semibold text-[#14532d]">Review records</h2>
+        <h2 className="text-base font-semibold text-[#14532d]">
+          Review records
+        </h2>
         <p className="mt-1 text-sm text-[#4b8068]">
-          Edit, approve, or exclude manual records before they count in summaries.
+          Edit, approve, or exclude manual records before they count in
+          summaries.
         </p>
       </div>
       {records.length === 0 ? (
@@ -678,8 +730,8 @@ function ManualRecordsList({
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#4b8068]">
                     <span>
                       {formatRecordDate(record.record_date)} ·{" "}
-                      {record.record_categories?.name ?? "No category"} · Quarter{" "}
-                      {record.tax_quarter}
+                      {record.record_categories?.name ?? "No category"} ·
+                      Quarter {record.tax_quarter}
                     </span>
                     {!record.category_id && (
                       <SuggestCategoryButton recordId={record.id} />
@@ -688,107 +740,144 @@ function ManualRecordsList({
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold text-[#14532d]">
-                    {record.record_type === "expense" ? "-" : ""}
-                    {formatPounds(Math.round(Number(record.amount) * 100))}
+                    {formatPounds(
+                      recordEffectPence(record) *
+                        (record.record_type === "expense" ? -1 : 1),
+                    )}
+                    {recordEffectPence(record) < 0 && (
+                      <span className="block text-xs">
+                        Refund reduces{" "}
+                        {record.record_type === "expense"
+                          ? "expenses"
+                          : "income"}{" "}
+                        by {formatPounds(Math.abs(recordEffectPence(record)))} (
+                        {amountToWords(Math.abs(recordEffectPence(record)))})
+                      </span>
+                    )}
                   </p>
+                  {recordCashNote(record)&&<p data-testid={`record-cash-note-${record.id}`} className="text-xs">{recordCashNote(record)}{record.cash_treatment==='unpaid'?`. Original amount: ${formatPounds(requirePence(record.amount))}`:''}</p>}
                   <p className="mt-1 text-xs text-[#4b8068]">Edit</p>
                 </div>
               </summary>
               <div className="border-t border-[#f0fdf4] bg-[#f7fef9] px-5 py-4">
-                <form action={updateManualRecord} className="grid gap-4" data-testid={`record-review-form-${record.id}`}>
-                  <input type="hidden" name="recordId" value={record.id} />
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="block">
-                      <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
-                        Type
-                      </span>
-                      <select
-                        name="recordType"
-                        data-testid={`record-review-type-select-${record.id}`}
-                        className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
-                        defaultValue={record.record_type}
-                      >
-                        <option value="income">Income</option>
-                        <option value="expense">Expense</option>
-                      </select>
-                    </label>
-                    <label className="block">
-                      <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
-                        Date
-                      </span>
-                      <input
-                        name="recordDate"
-                        data-testid={`record-review-date-input-${record.id}`}
-                        type="date"
-                        className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
-                        defaultValue={record.record_date}
-                      />
-                    </label>
-                  </div>
-                  <label className="block">
-                    <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
-                      Description
-                    </span>
-                    <input
-                      name="description"
-                      data-testid={`record-review-description-input-${record.id}`}
-                      className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
-                      defaultValue={record.description}
-                    />
-                  </label>
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <label className="block">
-                      <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
-                        Amount
-                      </span>
-                      <input
-                        name="amount"
-                        data-testid={`record-review-amount-input-${record.id}`}
-                        inputMode="decimal"
-                        className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
-                        defaultValue={Number(record.amount).toFixed(2)}
-                      />
-                    </label>
-                    <label className="block sm:col-span-2">
-                      <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
-                        Category
-                      </span>
-                      <CategorySelect
-                        categories={categories}
-                        defaultValue={record.category_id ?? undefined}
-                        testId={`record-review-category-select-${record.id}`}
-                      />
-                    </label>
-                  </div>
-                  <div className="flex flex-wrap items-end gap-3">
-                    <label className="block min-w-44">
-                      <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
-                        Review state
-                      </span>
-                      <select
-                        name="status"
-                        data-testid={`record-review-status-select-${record.id}`}
-                        className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
-                        defaultValue={record.status}
-                      >
-                        <option value="review">Needs review</option>
-                        <option value="approved">Approved</option>
-                        <option value="excluded">Excluded</option>
-                      </select>
-                    </label>
-                    <button
-                      type="submit"
-                      data-testid={`record-review-save-button-${record.id}`}
-                      className="inline-flex h-10 items-center rounded-lg bg-[#15803d] px-4 text-sm font-semibold text-white transition hover:bg-[#14532d]"
+                {record.bank_transaction_id ? (
+                  <Link
+                    href={`/dashboard/imports?import=${record.import_id}`}
+                    data-testid={`record-source-review-${record.id}`}
+                    className="font-semibold underline"
+                  >
+                    Review the source transaction and its classification
+                  </Link>
+                ) : (
+                  <>
+                    <form
+                      action={updateManualRecord}
+                      className="grid gap-4"
+                      data-testid={`record-review-form-${record.id}`}
                     >
-                      Save changes
-                    </button>
-                  </div>
-                </form>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <ReviewButton recordId={record.id} status="approved" label="Approve" />
-                  <ReviewButton recordId={record.id} status="excluded" label="Exclude" />
-                </div>
+                      <input type="hidden" name="recordId" value={record.id} />
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <label className="block">
+                          <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
+                            Type
+                          </span>
+                          <select
+                            name="recordType"
+                            data-testid={`record-review-type-select-${record.id}`}
+                            className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
+                            defaultValue={record.record_type}
+                          >
+                            <option value="income">Income</option>
+                            <option value="expense">Expense</option>
+                          </select>
+                        </label>
+                        <label className="block">
+                          <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
+                            Date
+                          </span>
+                          <input
+                            name="recordDate"
+                            data-testid={`record-review-date-input-${record.id}`}
+                            type="date"
+                            className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
+                            defaultValue={record.record_date}
+                          />
+                        </label>
+                      </div>
+                      <label className="block">
+                        <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
+                          Description
+                        </span>
+                        <input
+                          name="description"
+                          data-testid={`record-review-description-input-${record.id}`}
+                          className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
+                          defaultValue={record.description}
+                        />
+                      </label>
+                      <div className="grid gap-4 sm:grid-cols-3">
+                        <label className="block">
+                          <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
+                            Amount
+                          </span>
+                          <input
+                            name="amount"
+                            data-testid={`record-review-amount-input-${record.id}`}
+                            inputMode="decimal"
+                            className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
+                            defaultValue={Number(record.amount).toFixed(2)}
+                          />
+                        </label>
+                        <label className="block sm:col-span-2">
+                          <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
+                            Category
+                          </span>
+                          <CategorySelect
+                            categories={categories}
+                            defaultValue={record.category_id ?? undefined}
+                            testId={`record-review-category-select-${record.id}`}
+                          />
+                        </label>
+                      </div>
+                      <div className="flex flex-wrap items-end gap-3">
+                        <label className="block min-w-44">
+                          <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
+                            Review state
+                          </span>
+                          <select
+                            name="status"
+                            data-testid={`record-review-status-select-${record.id}`}
+                            className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
+                            defaultValue={record.status}
+                          >
+                            <option value="review">Needs review</option>
+                            <option value="approved">Approved</option>
+                            <option value="excluded">Excluded</option>
+                          </select>
+                        </label>
+                        <button
+                          type="submit"
+                          data-testid={`record-review-save-button-${record.id}`}
+                          className="inline-flex h-10 items-center rounded-lg bg-[#15803d] px-4 text-sm font-semibold text-white transition hover:bg-[#14532d]"
+                        >
+                          Save changes
+                        </button>
+                      </div>
+                    </form>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <ReviewButton
+                        recordId={record.id}
+                        status="approved"
+                        label="Approve"
+                      />
+                      <ReviewButton
+                        recordId={record.id}
+                        status="excluded"
+                        label="Exclude"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             </details>
           ))}
@@ -799,7 +888,8 @@ function ManualRecordsList({
 }
 
 function CsvImportPanel({ rows }: { rows: CsvImportReviewRow[] }) {
-  const approvedCount = rows.filter((row) => row.status === "approved").length;
+  const approved = rows.filter((row) => row.status === "approved");
+  const approvedCount = approved.length;
 
   return (
     <section className="mb-6 rounded-xl border border-[#bbf7d0] bg-white shadow-sm">
@@ -807,43 +897,29 @@ function CsvImportPanel({ rows }: { rows: CsvImportReviewRow[] }) {
         <div>
           <h2 className="text-base font-semibold text-[#14532d]">CSV import</h2>
           <p className="mt-1 text-sm leading-6 text-[#4b8068]">
-            Upload spreadsheet rows into review first. Only approved rows become
-            income or expense records.
+            Import new statements through source-preserving imports. Legacy
+            staged rows remain available below for review.
           </p>
           <p className="mt-2 text-xs text-[#166534]">
-            Accepted headers include date, description/details, amount, debit/credit,
-            paid in/paid out, and category. Rows are staged for review before they
-            affect tax prep.
+            Accepted headers include date, description/details, amount,
+            debit/credit, paid in/paid out, and category. Rows are staged for
+            review before they affect tax prep.
           </p>
         </div>
-        <form action={uploadRecordsCsv} className="flex flex-col gap-3" data-testid="csv-import-upload-form">
-          <label htmlFor="csvFile" className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
-            Choose CSV file
-          </label>
-          <input
-            id="csvFile"
-            name="csvFile"
-            data-testid="csv-import-file-input"
-            type="file"
-            accept=".csv,text/csv"
-            className={fileInputCls}
-            required
-          />
-          <div>
-            <button
-              type="submit"
-              data-testid="csv-import-upload-button"
-              className="inline-flex h-11 items-center justify-center rounded-lg bg-[#15803d] px-5 text-sm font-semibold text-white transition hover:bg-[#14532d]"
-            >
-              Upload CSV
-            </button>
-          </div>
-        </form>
+        <Link
+          href="/dashboard/imports"
+          data-testid="secure-source-import-link"
+          className="inline-flex items-center justify-center rounded-md bg-[#15803d] px-5 py-3 font-semibold text-white"
+        >
+          Open source-preserving imports
+        </Link>
       </div>
 
       {rows.length === 0 ? (
         <div className="p-8 text-center">
-          <p className="text-sm text-[#4b8068]">No CSV rows waiting for review.</p>
+          <p className="text-sm text-[#4b8068]">
+            No CSV rows waiting for review.
+          </p>
           <p className="mt-1 text-xs text-[#86a88e]">
             Uploaded rows will appear here before they affect your records.
           </p>
@@ -869,8 +945,10 @@ function CsvImportPanel({ rows }: { rows: CsvImportReviewRow[] }) {
                     {row.description || "Missing description"}
                   </p>
                   <p className="mt-1 text-xs text-[#4b8068]">
-                    {row.record_date ? formatRecordDate(row.record_date) : "Missing date"} ·{" "}
-                    {row.record_categories?.name ?? "No category"}
+                    {row.record_date
+                      ? formatRecordDate(row.record_date)
+                      : "Missing date"}{" "}
+                    · {row.record_categories?.name ?? "No category"}
                   </p>
                   {row.error_message && (
                     <p className="mt-1 text-xs font-medium text-red-700">
@@ -892,8 +970,16 @@ function CsvImportPanel({ rows }: { rows: CsvImportReviewRow[] }) {
                   <StatusBadge status={row.status} />
                   {row.status !== "invalid" && (
                     <>
-                      <CsvRowButton rowId={row.id} status="approved" label="Approve" />
-                      <CsvRowButton rowId={row.id} status="discarded" label="Discard" />
+                      <CsvRowButton
+                        rowId={row.id}
+                        status="approved"
+                        label="Approve"
+                      />
+                      <CsvRowButton
+                        rowId={row.id}
+                        status="discarded"
+                        label="Discard"
+                      />
                     </>
                   )}
                 </div>
@@ -902,9 +988,14 @@ function CsvImportPanel({ rows }: { rows: CsvImportReviewRow[] }) {
           </div>
           <div className="flex flex-col gap-3 border-t border-[#f0fdf4] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-[#4b8068]">
-              {approvedCount} approved rows ready to commit.
+              {approvedCount} approved rows shown here are ready to commit.
+              Other pages are not included.
             </p>
-            <form action={commitApprovedCsvRows} data-testid="csv-import-commit-form">
+            <form
+              action={commitApprovedCsvRows}
+              data-testid="csv-import-commit-form"
+            >
+              <ImportConfirmation rows={approved} source="csv" />
               <button
                 type="submit"
                 data-testid="csv-import-commit-approved-button"
@@ -920,6 +1011,57 @@ function CsvImportPanel({ rows }: { rows: CsvImportReviewRow[] }) {
   );
 }
 
+function ImportConfirmation({
+  rows,
+  source,
+}: {
+  rows: (CsvImportReviewRow | BankStatementReviewRow)[];
+  source: string;
+}) {
+  const income = sumPence(
+    rows
+      .filter((row) => row.record_type === "income")
+      .map((row) => requirePence(row.amount!)),
+  );
+  const expenses = sumPence(
+    rows
+      .filter((row) => row.record_type === "expense")
+      .map((row) => requirePence(row.amount!)),
+  );
+  return (
+    <div
+      className="mb-3 max-w-md text-sm"
+      data-testid={`${source}-import-confirmation`}
+    >
+      <input
+        type="hidden"
+        name="reviewedRows"
+        value={JSON.stringify(
+          rows.map(({ id, updated_at }) => ({ id, updated_at })),
+        )}
+      />
+      <p>
+        Income: {formatPounds(income)} ({amountToWords(income)}).
+      </p>
+      <p>
+        Expenses: {formatPounds(expenses)} ({amountToWords(expenses)}).
+      </p>
+      <label className="mt-2 flex items-start gap-2">
+        <input
+          type="checkbox"
+          name="humanConfirmed"
+          value="yes"
+          required
+          disabled={rows.length === 0}
+          data-testid={`${source}-import-confirm-checkbox`}
+        />
+        I have reviewed these {rows.length} rows and confirm adding them to my
+        financial records.
+      </label>
+    </div>
+  );
+}
+
 function CsvRowButton({
   rowId,
   status,
@@ -930,7 +1072,10 @@ function CsvRowButton({
   label: string;
 }) {
   return (
-    <form action={setCsvImportRowStatus} data-testid={`csv-import-row-form-${rowId}`}>
+    <form
+      action={setCsvImportRowStatus}
+      data-testid={`csv-import-row-form-${rowId}`}
+    >
       <input type="hidden" name="rowId" value={rowId} />
       <input type="hidden" name="status" value={status} />
       <button
@@ -945,7 +1090,8 @@ function CsvRowButton({
 }
 
 function BankStatementPanel({ rows }: { rows: BankStatementReviewRow[] }) {
-  const approvedCount = rows.filter((row) => row.status === "approved").length;
+  const approved = rows.filter((row) => row.status === "approved");
+  const approvedCount = approved.length;
 
   return (
     <section className="mb-6 rounded-xl border border-[#bbf7d0] bg-white shadow-sm">
@@ -957,11 +1103,19 @@ function BankStatementPanel({ rows }: { rows: BankStatementReviewRow[] }) {
           <p className="mt-1 text-sm leading-6 text-[#4b8068]">
             Upload statement text or a text-readable PDF. VibeCount redacts
             account-like numbers before staging rows, and does not store the raw
-            statement file. Scanned image-only PDFs still need CSV or text export.
+            statement file. Scanned image-only PDFs still need CSV or text
+            export.
           </p>
         </div>
-        <form action={uploadBankStatement} className="flex flex-col gap-3" data-testid="bank-import-upload-form">
-          <label htmlFor="statementFile" className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
+        <form
+          action={uploadBankStatement}
+          className="flex flex-col gap-3"
+          data-testid="bank-import-upload-form"
+        >
+          <label
+            htmlFor="statementFile"
+            className="text-xs font-semibold uppercase tracking-widest text-[#166534]"
+          >
             Choose statement PDF or text file
           </label>
           <input
@@ -987,7 +1141,9 @@ function BankStatementPanel({ rows }: { rows: BankStatementReviewRow[] }) {
 
       {rows.length === 0 ? (
         <div className="p-8 text-center">
-          <p className="text-sm text-[#4b8068]">No bank statement rows waiting for review.</p>
+          <p className="text-sm text-[#4b8068]">
+            No bank statement rows waiting for review.
+          </p>
         </div>
       ) : (
         <>
@@ -1010,8 +1166,10 @@ function BankStatementPanel({ rows }: { rows: BankStatementReviewRow[] }) {
                     {row.description || "Missing description"}
                   </p>
                   <p className="mt-1 text-xs text-[#4b8068]">
-                    {row.record_date ? formatRecordDate(row.record_date) : "Missing date"} ·{" "}
-                    {row.record_categories?.name ?? "No category"}
+                    {row.record_date
+                      ? formatRecordDate(row.record_date)
+                      : "Missing date"}{" "}
+                    · {row.record_categories?.name ?? "No category"}
                   </p>
                   <p className="mt-1 text-xs text-[#86a88e]">
                     Redacted: {row.redacted_line}
@@ -1036,8 +1194,16 @@ function BankStatementPanel({ rows }: { rows: BankStatementReviewRow[] }) {
                   <StatusBadge status={row.status} />
                   {row.status !== "invalid" && (
                     <>
-                      <BankRowButton rowId={row.id} status="approved" label="Approve" />
-                      <BankRowButton rowId={row.id} status="discarded" label="Discard" />
+                      <BankRowButton
+                        rowId={row.id}
+                        status="approved"
+                        label="Approve"
+                      />
+                      <BankRowButton
+                        rowId={row.id}
+                        status="discarded"
+                        label="Discard"
+                      />
                     </>
                   )}
                 </div>
@@ -1048,7 +1214,11 @@ function BankStatementPanel({ rows }: { rows: BankStatementReviewRow[] }) {
             <p className="text-sm text-[#4b8068]">
               {approvedCount} approved bank rows ready to commit.
             </p>
-            <form action={commitApprovedBankRows} data-testid="bank-import-commit-form">
+            <form
+              action={commitApprovedBankRows}
+              data-testid="bank-import-commit-form"
+            >
+              <ImportConfirmation rows={approved} source="bank" />
               <button
                 type="submit"
                 data-testid="bank-import-commit-approved-button"
@@ -1074,7 +1244,10 @@ function BankRowButton({
   label: string;
 }) {
   return (
-    <form action={setBankStatementRowStatus} data-testid={`bank-import-row-form-${rowId}`}>
+    <form
+      action={setBankStatementRowStatus}
+      data-testid={`bank-import-row-form-${rowId}`}
+    >
       <input type="hidden" name="rowId" value={rowId} />
       <input type="hidden" name="status" value={status} />
       <button
@@ -1100,9 +1273,14 @@ function CategorySelect({
   defaultValue?: string;
   testId: string;
 }) {
-  const income = categories.filter((category) => category.record_type === "income");
-  const expenses = categories.filter((category) => category.record_type === "expense");
-  const selectedValue = defaultValue ?? income[0]?.id ?? categories[0]?.id ?? "";
+  const income = categories.filter(
+    (category) => category.record_type === "income",
+  );
+  const expenses = categories.filter(
+    (category) => category.record_type === "expense",
+  );
+  const selectedValue =
+    defaultValue ?? income[0]?.id ?? categories[0]?.id ?? "";
 
   return (
     <select
@@ -1140,7 +1318,10 @@ function ReviewButton({
   label: string;
 }) {
   return (
-    <form action={setManualRecordStatus} data-testid={`record-review-${status}-form-${recordId}`}>
+    <form
+      action={setManualRecordStatus}
+      data-testid={`record-review-${status}-form-${recordId}`}
+    >
       <input type="hidden" name="recordId" value={recordId} />
       <input type="hidden" name="status" value={status} />
       <button
@@ -1178,20 +1359,24 @@ function StatusBadge({
   const className =
     status === "approved" || status === "committed"
       ? "bg-[#dcfce7] text-[#15803d]"
-    : status === "excluded" || status === "discarded"
+      : status === "excluded" || status === "discarded"
         ? "bg-[#fef3c7] text-[#92400e]"
         : status === "invalid"
           ? "bg-red-50 text-red-800"
           : "bg-[#e0f2fe] text-[#075985]";
 
   return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${className}`}>
+    <span
+      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${className}`}
+    >
       {label}
     </span>
   );
 }
 
-function getPageMessage(params: { [key: string]: string | string[] | undefined }) {
+function getPageMessage(params: {
+  [key: string]: string | string[] | undefined;
+}) {
   const error = getSingleParam(params.error);
   if (error) {
     return { type: "error" as const, text: error };
@@ -1242,7 +1427,10 @@ function getPageMessage(params: { [key: string]: string | string[] | undefined }
   }
 
   if (params.bankReviewed) {
-    return { type: "success" as const, text: "Bank statement row review state updated." };
+    return {
+      type: "success" as const,
+      text: "Bank statement row review state updated.",
+    };
   }
 
   const bankCommitted = getSingleParam(params.bankCommitted);
@@ -1258,7 +1446,7 @@ function getPageMessage(params: { [key: string]: string | string[] | undefined }
 
 function getSelectedTaxYearStart(
   params: { [key: string]: string | string[] | undefined },
-  fallback: number
+  fallback: number,
 ) {
   const requested = Number(getSingleParam(params.taxYearStart));
 
@@ -1269,7 +1457,9 @@ function getSelectedTaxYearStart(
   return fallback;
 }
 
-function getRecordsTab(params: { [key: string]: string | string[] | undefined }) {
+function getRecordsTab(params: {
+  [key: string]: string | string[] | undefined;
+}) {
   const requested = getSingleParam(params.tab) ?? "";
   return ["records", "csv", "bank", "exports"].includes(requested)
     ? requested

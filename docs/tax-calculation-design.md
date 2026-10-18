@@ -1,0 +1,14 @@
+# Versioned draft tax calculation — M4 plan
+
+The initial supported slice is now implemented locally; see [tax-calculations.md](tax-calculations.md) for its actual contracts, verification, rollout and unfinished scope. This plan is retained as design context, not proof of full M4 completion.
+
+17 October 2026. Continue the handover plan with a deterministic 2025/26 sole-trader estimate using reviewed facts, a reviewed calculation-scope declaration and the signed trading ledger. Preserve the full handover goal; unsupported branches remain explicit blockers, never silently omitted or counted as zero.
+
+- Add sourced immutable rules parameters and pure exact-integer calculation with input IDs, rounding policy and trace. Implement EWNI/Scotland non-savings bands, allowance taper, PAYE, pension/Gift Aid band extension, NI/Reg100, conditional POA and actual allocated payments. Vehicle method substitutes mileage for linked actual costs. Keep engine estimates distinct from annual HMRC form rounding/mapping.
+- Add explicit reviewed scope answers for NI status/voluntary Class 2, pension eligibility/net-pay treatment, distinct employment/termination/payment totals, vehicle-method coverage and unmodelled trading/NI adjustments. Unknowns and unsupported facts block affected results. A scope declaration creates no financial posting and is not professional tax certification.
+- Read canonical owner/year inputs in one database statement, using safe metadata only. Preserve signed approved records, current fact/section/scope revisions, original file/row hashes, category snapshots and unresolved observations. The explicit-owner private financial-stamp helper mirrors the existing authenticated stamp without changing JWT claims.
+- Save only a server-computed result after figures/words read-back and human confirmation. A service-only capture RPC reconstructs inputs and rejects any change; authenticated users can read only their own snapshots. Brief non-waiting table read locks protect against legacy direct record edits/inserts and category changes without adding inverted row-trigger locks. Busy capture fails for reload/retry.
+- Store immutable input/rules/result canonical JSON and SHA-256, engine/rule versions, author/reason/request. Exact retry recovers the saved snapshot before mutable reads. Captures are always draft, including blocked results; no financial approval, accepted tax output or filing state is created.
+- Render/export saved input, result and trace rather than independently recalculating a historical figure. Verify native concurrency, independent arithmetic boundary fixtures, ownership/retry/rollback/privacy, read-back/reset and production unauthenticated denial.
+
+M4 special-case coverage, accountant review, M5 annual form/filing pack, M6 forecasting and outstanding release/reconciliation work remain required. No deployment, real financial approval, filing or account connection is authorised by implementing this slice.

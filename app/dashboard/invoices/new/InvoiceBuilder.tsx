@@ -2,8 +2,16 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { amountToWords, formatPounds, parseAmountToPence } from "@/lib/invoices/money";
-import type { UserSettings } from "@/lib/settings";
+import {
+  amountToWords,
+  formatPounds,
+  parseAmountToPence,
+} from "@/lib/invoices/money";
+import { invoiceEconomics } from "@/lib/invoices/economics";
+import {
+  invoiceSellerReview,
+  type InvoiceDefaults,
+} from "@/lib/settings-public";
 import { buildInvoiceEmailDraft } from "@/lib/invoices/reminders";
 import {
   DEFAULT_PAYMENT_TERMS,
@@ -33,10 +41,7 @@ type CHSuggestion = {
   address: string;
 };
 
-type UserDefaults = UserSettings & {
-  hasSettings: boolean;
-  companiesHouseConfigured: boolean;
-};
+type UserDefaults = InvoiceDefaults;
 
 type Props = {
   existingClients: ClientOption[];
@@ -51,6 +56,11 @@ type Props = {
     clientAddress: string;
     clientCompanyNumber: string;
     invoiceId?: string;
+    expectedUpdated?: string;
+    vatEnabled?: boolean;
+    vatRate?: string;
+    vatNumber?: string;
+    legacyGrossPence?: number;
     clientEmail?: string;
     clientVatNumber?: string;
     paymentTerms?: string;
@@ -88,6 +98,29 @@ export default function InvoiceBuilder({
   initialDraft,
 }: Props) {
   const { plainLanguage } = useAccessibility();
+  const [confirmed, setConfirmed] = useState(false);
+  const [legacyConfirmed, setLegacyConfirmed] = useState(false);
+  const [revisionReason, setRevisionReason] = useState("");
+  const [vatRate, setVatRate] = useState(
+    initialDraft.vatRate ?? String(userDefaults.vat_rate),
+  );
+  const [vatNumber, setVatNumber] = useState(
+    initialDraft.vatNumber ?? userDefaults.vat_number,
+  );
+  const [savedIdentity, setSavedIdentity] = useState({
+    id: initialDraft.invoiceId ?? "",
+    updated: initialDraft.expectedUpdated ?? (null as string | null),
+  });
+  const requestIdentity = useRef<{
+    key: string;
+    invoice: string;
+    revision: string;
+  } | null>(null);
+  const isLegacy = initialDraft.legacyGrossPence !== undefined;
+  const savedVat =
+    initialDraft.invoiceId &&
+    initialDraft.vatEnabled !== undefined &&
+    !isLegacy;
   const [form, setForm] = useState<FormState>({
     clientName: initialDraft.clientName,
     clientEmail: initialDraft.clientEmail || "",
@@ -97,27 +130,46 @@ export default function InvoiceBuilder({
     invoiceDate: initialDate,
     description: initialDraft.description,
     amount: initialDraft.amount,
-    paymentTerms: initialDraft.paymentTerms || userDefaults.default_payment_terms || DEFAULT_PAYMENT_TERMS,
-    vatEnabled: userDefaults.vat_registered,
+    paymentTerms:
+      initialDraft.paymentTerms ||
+      userDefaults.default_payment_terms ||
+      DEFAULT_PAYMENT_TERMS,
+    vatEnabled: initialDraft.vatEnabled ?? userDefaults.vat_registered,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [lastInvoice, setLastInvoice] = useState("");
-  const [generatedInvoice, setGeneratedInvoice] = useState<GeneratedInvoice | null>(null);
+  const [generatedInvoice, setGeneratedInvoice] =
+    useState<GeneratedInvoice | null>(null);
   const [copyStatus, setCopyStatus] = useState("");
   const hasTrackedManualEntry = useRef(false);
   const [chSuggestions, setChSuggestions] = useState<CHSuggestion[]>([]);
   const [showChDropdown, setShowChDropdown] = useState(false);
   const chTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const amountPence = useMemo(() => parseAmountToPence(form.amount), [form.amount]);
-  const vatPence = useMemo(() => {
-    if (!form.vatEnabled || amountPence === null) return 0;
-    return Math.round(amountPence * (userDefaults.vat_rate / 100));
-  }, [form.vatEnabled, amountPence, userDefaults.vat_rate]);
-  const totalPence = amountPence !== null ? amountPence + vatPence : null;
+  const amountPence = useMemo(
+    () => parseAmountToPence(form.amount),
+    [form.amount],
+  );
+  const economics = useMemo(() => {
+    try {
+      return invoiceEconomics(
+        amountPence ?? 0,
+        form.vatEnabled,
+        vatRate,
+        vatNumber,
+      );
+    } catch {
+      return null;
+    }
+  }, [amountPence, form.vatEnabled, vatRate, vatNumber]);
+  const vatPence = economics?.vatPence ?? 0;
+  const totalPence = economics?.totalPence ?? null;
+  const legacyMatches =
+    !isLegacy || totalPence === initialDraft.legacyGrossPence;
 
-  const amountFigure = amountPence === null ? "£0.00" : formatPounds(amountPence);
+  const amountFigure =
+    amountPence === null ? "£0.00" : formatPounds(amountPence);
   const totalFigure = totalPence === null ? "£0.00" : formatPounds(totalPence);
   const amountWords =
     totalPence === null
@@ -175,23 +227,48 @@ export default function InvoiceBuilder({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (
+      !confirmed ||
+      !economics ||
+      !legacyMatches ||
+      (isLegacy && !legacyConfirmed)
+    ) {
+      setError(
+        "Review the amount and VAT breakdown, then confirm the invoice.",
+      );
+      return;
+    }
     setIsSubmitting(true);
     setError("");
     setLastInvoice("");
     setGeneratedInvoice(null);
     setCopyStatus("");
 
+    const requestBody = {
+      sellerReview: invoiceSellerReview(userDefaults),
+      ...form,
+      vatPence,
+      vatRate: String(economics.vatRateBps / 100),
+      vatNumber: economics.vatNumber,
+      legacyConfirmed,
+      reason: savedIdentity.id ? revisionReason : "Original invoice",
+      expectedUpdated: savedIdentity.updated,
+    };
+    const key = JSON.stringify(requestBody);
+    if (requestIdentity.current?.key !== key)
+      requestIdentity.current = {
+        key,
+        invoice: savedIdentity.id || crypto.randomUUID(),
+        revision: crypto.randomUUID(),
+      };
     const response = await fetch("/api/invoices/pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ...form,
-        vatPence,
-        humanConfirmed: true,
-        clientAddress: form.clientAddress,
-        clientCompanyNumber: form.clientCompanyNumber,
-        clientVatNumber: form.clientVatNumber,
-        invoiceId: initialDraft.invoiceId,
+        ...requestBody,
+        humanConfirmed: confirmed,
+        invoiceId: requestIdentity.current.invoice,
+        revisionId: requestIdentity.current.revision,
       }),
     });
 
@@ -203,6 +280,11 @@ export default function InvoiceBuilder({
     }
 
     const blob = await response.blob();
+    setSavedIdentity({
+      id: response.headers.get("X-Invoice-Id") ?? "",
+      updated: response.headers.get("X-Invoice-Updated-At"),
+    });
+    setConfirmed(false);
     const invoiceId = response.headers.get("X-Invoice-Id") ?? "";
     const invoiceNumber = response.headers.get("X-Invoice-Number") ?? "invoice";
     const dueDate = response.headers.get("X-Invoice-Due-Date") ?? "";
@@ -218,9 +300,13 @@ export default function InvoiceBuilder({
     setLastInvoice(invoiceNumber);
     let invoiceLinkUrl = "";
     if (invoiceId) {
-      const shareResponse = await fetch(`/api/invoices/share-url?id=${encodeURIComponent(invoiceId)}`);
+      const shareResponse = await fetch(
+        `/api/invoices/share-url?id=${encodeURIComponent(invoiceId)}`,
+      );
       if (shareResponse.ok) {
-        const share = await shareResponse.json().catch(() => null) as { url?: string } | null;
+        const share = (await shareResponse.json().catch(() => null)) as {
+          url?: string;
+        } | null;
         invoiceLinkUrl = share?.url ?? "";
       }
     }
@@ -240,8 +326,16 @@ export default function InvoiceBuilder({
       number: invoiceNumber,
       dueDate,
       ...emailDraft,
-      htmlBody: buildInvoiceEmailHtml(emailDraft.body, invoiceLinkUrl, invoiceNumber),
-      mailtoHref: buildMailtoHref(form.clientEmail, emailDraft.subject, emailDraft.body),
+      htmlBody: buildInvoiceEmailHtml(
+        emailDraft.body,
+        invoiceLinkUrl,
+        invoiceNumber,
+      ),
+      mailtoHref: buildMailtoHref(
+        form.clientEmail,
+        emailDraft.subject,
+        emailDraft.body,
+      ),
       invoiceLinkUrl,
     });
     trackEvent("pdf_invoices_generated", {
@@ -251,7 +345,12 @@ export default function InvoiceBuilder({
     setIsSubmitting(false);
   }
 
-  function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
+  function updateField<K extends keyof FormState>(
+    field: K,
+    value: FormState[K],
+  ) {
+    setConfirmed(false);
+    setLegacyConfirmed(false);
     setForm((current) => ({ ...current, [field]: value }));
   }
 
@@ -260,7 +359,7 @@ export default function InvoiceBuilder({
 
     // Pre-fill from saved clients
     const saved = existingClients.find(
-      (c) => c.name.toLowerCase().trim() === value.toLowerCase().trim()
+      (c) => c.name.toLowerCase().trim() === value.toLowerCase().trim(),
     );
     if (saved) {
       setForm((f) => ({
@@ -284,8 +383,10 @@ export default function InvoiceBuilder({
     if (chTimer.current) clearTimeout(chTimer.current);
     chTimer.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/companies-house/search?q=${encodeURIComponent(value)}`);
-        const data = await res.json() as { companies?: CHSuggestion[] };
+        const res = await fetch(
+          `/api/companies-house/search?q=${encodeURIComponent(value)}`,
+        );
+        const data = (await res.json()) as { companies?: CHSuggestion[] };
         setChSuggestions(data.companies ?? []);
         setShowChDropdown((data.companies?.length ?? 0) > 0);
       } catch {
@@ -295,6 +396,8 @@ export default function InvoiceBuilder({
   }
 
   function selectChSuggestion(company: CHSuggestion) {
+    setConfirmed(false);
+    setLegacyConfirmed(false);
     setForm((f) => ({
       ...f,
       clientName: company.name,
@@ -313,8 +416,10 @@ export default function InvoiceBuilder({
         new ClipboardItem({
           "text/plain": new Blob([text], { type: "text/plain" }),
           "text/html": new Blob(
-            [`<p><strong>Subject:</strong> ${escapeHtml(generatedInvoice.subject)}</p>${generatedInvoice.htmlBody}`],
-            { type: "text/html" }
+            [
+              `<p><strong>Subject:</strong> ${escapeHtml(generatedInvoice.subject)}</p>${generatedInvoice.htmlBody}`,
+            ],
+            { type: "text/html" },
           ),
         }),
       ]);
@@ -363,7 +468,13 @@ export default function InvoiceBuilder({
               fill="none"
               className="flex-shrink-0 text-[#2d6a4a]"
             >
-              <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+              <circle
+                cx="8"
+                cy="8"
+                r="7"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              />
               <line
                 x1="8"
                 y1="5"
@@ -389,18 +500,23 @@ export default function InvoiceBuilder({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5" data-testid="invoice-form">
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-5"
+          data-testid="invoice-form"
+        >
           {plainLanguage ? (
             <p className="plain-language-note">
               Fill in who the invoice is for, what the work was, and how much to
-              charge. The app will show the total in numbers and words before you download.
+              charge. The app will show the total in numbers and words before
+              you download.
             </p>
           ) : null}
 
           {initialDraft.source === "voice" ? (
             <div className="rounded-lg border border-[#c8dfc8] bg-[#f0f8f0] px-4 py-3 text-sm text-[#1a3a2a]">
-              Voice draft loaded into the normal invoice preview. Check every field before
-              you download the PDF.
+              Voice draft loaded into the normal invoice preview. Check every
+              field before you download the PDF.
             </div>
           ) : null}
 
@@ -413,9 +529,13 @@ export default function InvoiceBuilder({
                   data-testid="invoice-client-input"
                   list="saved-clients"
                   value={form.clientName}
-                  onChange={(event) => handleClientNameChange(event.target.value)}
+                  onChange={(event) =>
+                    handleClientNameChange(event.target.value)
+                  }
                   onBlur={() => setTimeout(() => setShowChDropdown(false), 200)}
-                  onFocus={() => chSuggestions.length > 0 && setShowChDropdown(true)}
+                  onFocus={() =>
+                    chSuggestions.length > 0 && setShowChDropdown(true)
+                  }
                   required
                   className={inputCls}
                   placeholder="Client or company name"
@@ -435,8 +555,12 @@ export default function InvoiceBuilder({
                           onMouseDown={() => selectChSuggestion(company)}
                           className="w-full px-4 py-2.5 text-left transition hover:bg-[#f0f8f0]"
                         >
-                          <p className="text-sm font-semibold text-[#1a3a2a]">{company.name}</p>
-                          <p className="text-xs text-[#4a6a5a]">{company.company_number} · {company.address}</p>
+                          <p className="text-sm font-semibold text-[#1a3a2a]">
+                            {company.name}
+                          </p>
+                          <p className="text-xs text-[#4a6a5a]">
+                            {company.company_number} · {company.address}
+                          </p>
                         </button>
                       </li>
                     ))}
@@ -454,7 +578,9 @@ export default function InvoiceBuilder({
                 data-testid="invoice-client-email-input"
                 type="email"
                 value={form.clientEmail}
-                onChange={(event) => updateField("clientEmail", event.target.value)}
+                onChange={(event) =>
+                  updateField("clientEmail", event.target.value)
+                }
                 className={inputCls}
                 placeholder="client@example.com"
               />
@@ -467,29 +593,36 @@ export default function InvoiceBuilder({
           </div>
 
           <label className="block">
-            <span className="text-sm font-medium text-[#1a3a2a]">Client address</span>
+            <span className="text-sm font-medium text-[#1a3a2a]">
+              Client address
+            </span>
             <textarea
               name="clientAddress"
               data-testid="invoice-client-address-input"
               value={form.clientAddress}
-              onChange={(event) => updateField("clientAddress", event.target.value)}
+              onChange={(event) =>
+                updateField("clientAddress", event.target.value)
+              }
               rows={2}
               className="mt-2 w-full resize-y rounded-lg border border-[#d5d0c8] bg-white px-3 py-3 text-base leading-6 text-[#1a3a2a] outline-none transition focus:border-[#2d6a4a] focus:ring-2 focus:ring-[#b9d2bd]"
               placeholder="Client address"
             />
           </label>
 
-
           <div className="grid gap-5 sm:grid-cols-2">
             <label className="block">
-              <span className="text-sm font-medium text-[#1a3a2a]">Invoice date</span>
+              <span className="text-sm font-medium text-[#1a3a2a]">
+                Invoice date
+              </span>
               <input
                 name="invoiceDate"
                 data-testid="invoice-date-input"
                 type="text"
                 inputMode="numeric"
                 value={form.invoiceDate}
-                onChange={(event) => updateField("invoiceDate", event.target.value)}
+                onChange={(event) =>
+                  updateField("invoiceDate", event.target.value)
+                }
                 required
                 className={inputCls}
                 placeholder="26/05/2026"
@@ -498,12 +631,16 @@ export default function InvoiceBuilder({
           </div>
 
           <label className="block">
-            <span className="text-sm font-medium text-[#1a3a2a]">What is this for?</span>
+            <span className="text-sm font-medium text-[#1a3a2a]">
+              What is this for?
+            </span>
             <textarea
               name="description"
               data-testid="invoice-description-input"
               value={form.description}
-              onChange={(event) => updateField("description", event.target.value)}
+              onChange={(event) =>
+                updateField("description", event.target.value)
+              }
               required
               rows={4}
               className="mt-2 w-full resize-y rounded-lg border border-[#d5d0c8] bg-white px-3 py-3 text-base leading-6 text-[#1a3a2a] outline-none transition focus:border-[#2d6a4a] focus:ring-2 focus:ring-[#b9d2bd]"
@@ -513,7 +650,9 @@ export default function InvoiceBuilder({
 
           <div className="grid gap-5 sm:grid-cols-2">
             <label className="block">
-              <span className="text-sm font-medium text-[#1a3a2a]">Amount (excl. VAT)</span>
+              <span className="text-sm font-medium text-[#1a3a2a]">
+                Amount (excl. VAT)
+              </span>
               <div className="mt-2 flex h-12 overflow-hidden rounded-lg border border-[#d5d0c8] bg-white focus-within:border-[#2d6a4a] focus-within:ring-2 focus-within:ring-[#b9d2bd]">
                 <span className="flex w-11 items-center justify-center border-r border-[#e5e0d8] bg-[#f8f5ef] text-[#4a6a5a]">
                   £
@@ -523,7 +662,9 @@ export default function InvoiceBuilder({
                   data-testid="invoice-amount-input"
                   inputMode="decimal"
                   value={form.amount}
-                  onChange={(event) => updateField("amount", event.target.value)}
+                  onChange={(event) =>
+                    updateField("amount", event.target.value)
+                  }
                   required
                   className="min-w-0 flex-1 px-3 text-base text-[#1a3a2a] outline-none"
                   placeholder="850.00"
@@ -539,7 +680,9 @@ export default function InvoiceBuilder({
                 name="paymentTerms"
                 data-testid="invoice-payment-terms-input"
                 value={form.paymentTerms}
-                onChange={(event) => updateField("paymentTerms", event.target.value)}
+                onChange={(event) =>
+                  updateField("paymentTerms", event.target.value)
+                }
                 className={inputCls}
               />
               {plainLanguage ? (
@@ -550,16 +693,27 @@ export default function InvoiceBuilder({
             </label>
           </div>
 
+          {savedIdentity.id && (
+            <Link
+              data-testid="invoice-history-link"
+              href={`/dashboard/invoices/history?id=${savedIdentity.id}`}
+            >
+              View preserved invoice history
+            </Link>
+          )}
           {/* VAT toggle (only if VAT registered in settings) */}
-          {userDefaults.vat_registered && (
+          {(userDefaults.vat_registered || initialDraft.invoiceId) && (
             <div className="flex items-center gap-3 rounded-lg border border-[#d5d0c8] bg-[#f8f5ef] px-4 py-3">
               <label className="flex cursor-pointer items-center gap-3">
                 <div className="relative">
                   <input
                     type="checkbox"
                     data-testid="invoice-vat-toggle"
+                    disabled={Boolean(savedVat)}
                     checked={form.vatEnabled}
-                    onChange={(e) => updateField("vatEnabled", e.target.checked)}
+                    onChange={(e) =>
+                      updateField("vatEnabled", e.target.checked)
+                    }
                     className="sr-only"
                     id="vat-toggle"
                   />
@@ -576,8 +730,8 @@ export default function InvoiceBuilder({
                 </div>
                 <span className="text-sm text-[#1a3a2a]">
                   Add{" "}
-                  <ExplainTerm term="Value Added Tax (VAT)">VAT</ExplainTerm>{" "}
-                  ({userDefaults.vat_rate}%)
+                  <ExplainTerm term="Value Added Tax (VAT)">VAT</ExplainTerm> (
+                  {vatRate || "unverified"}%)
                 </span>
               </label>
               {form.vatEnabled && amountPence !== null && (
@@ -588,19 +742,113 @@ export default function InvoiceBuilder({
             </div>
           )}
 
+          {isLegacy && (
+            <section
+              data-testid="invoice-legacy-review"
+              className="rounded-lg border p-4 space-y-3"
+            >
+              <p>
+                The original total is{" "}
+                {formatPounds(initialDraft.legacyGrossPence!)} (
+                {amountToWords(initialDraft.legacyGrossPence!)}). Its net amount
+                and VAT were not saved. Check the original invoice before
+                confirming this breakdown. The first reviewed breakdown must
+                match the original total.
+              </p>
+              {form.vatEnabled && (
+                <>
+                  <label className="block">
+                    Original VAT rate (%)
+                    <input
+                      data-testid="invoice-legacy-vat-rate"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      required
+                      value={vatRate}
+                      onChange={(e) => {
+                        setVatRate(e.target.value);
+                        setConfirmed(false);
+                        setLegacyConfirmed(false);
+                      }}
+                      className={inputCls}
+                    />
+                  </label>
+                  <label className="block">
+                    Original VAT registration number
+                    <input
+                      data-testid="invoice-legacy-vat-number"
+                      required
+                      value={vatNumber}
+                      onChange={(e) => {
+                        setVatNumber(e.target.value);
+                        setConfirmed(false);
+                        setLegacyConfirmed(false);
+                      }}
+                      className={inputCls}
+                    />
+                  </label>
+                </>
+              )}
+              {!legacyMatches && (
+                <p role="alert">
+                  The reviewed breakdown must equal the original total. Do not
+                  guess the VAT treatment.
+                </p>
+              )}
+              <label className="block">
+                <input
+                  data-testid="invoice-legacy-confirm"
+                  type="checkbox"
+                  required
+                  checked={legacyConfirmed}
+                  onChange={(e) => {
+                    setLegacyConfirmed(e.target.checked);
+                    setConfirmed(false);
+                  }}
+                />{" "}
+                I checked the original invoice and verified the net amount and
+                VAT treatment.
+              </label>
+            </section>
+          )}
+          {savedIdentity.id && (
+            <label className="block">
+              Reason for this revision
+              <input
+                data-testid="invoice-revision-reason"
+                required
+                maxLength={1000}
+                value={revisionReason}
+                onChange={(e) => {
+                  setRevisionReason(e.target.value);
+                  setConfirmed(false);
+                }}
+                className={inputCls}
+              />
+            </label>
+          )}
           {/* Amount check */}
           <div className="rounded-lg border border-[#d7d1c3] bg-[#f6f2ea] p-4">
             <div className="flex items-start justify-between gap-3">
               <p className="text-sm font-medium text-[#1a3a2a]">Amount check</p>
-              <ReadAloudButton text={amountReadAloudText} label="amount summary" />
+              <ReadAloudButton
+                text={amountReadAloudText}
+                label="amount summary"
+              />
             </div>
-            <p className="mt-2 text-2xl font-semibold text-[#1a3a2a]">{totalFigure}</p>
+            <p className="mt-2 text-2xl font-semibold text-[#1a3a2a]">
+              {totalFigure}
+            </p>
             {form.vatEnabled && amountPence !== null && (
               <p className="mt-0.5 text-xs text-[#7a9a87]">
                 {amountFigure} + {formatPounds(vatPence)} VAT
               </p>
             )}
-            <p className="mt-1 text-sm leading-6 text-[#4a6a5a]">{amountWords}</p>
+            <p className="mt-1 text-sm leading-6 text-[#4a6a5a]">
+              {amountWords}
+            </p>
           </div>
 
           {error ? (
@@ -615,10 +863,27 @@ export default function InvoiceBuilder({
             </p>
           ) : null}
 
+          <label className="block">
+            <input
+              data-testid="invoice-confirm-review"
+              type="checkbox"
+              required
+              checked={confirmed}
+              onChange={(e) => setConfirmed(e.target.checked)}
+            />{" "}
+            I reviewed the invoice details, VAT and total of {totalFigure} (
+            {amountWords}).
+          </label>
           <button
             type="submit"
             data-testid="invoice-confirm-download-button"
-            disabled={isSubmitting}
+            disabled={
+              isSubmitting ||
+              !confirmed ||
+              !economics ||
+              !legacyMatches ||
+              (isLegacy && !legacyConfirmed)
+            }
             className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#1a3a2a] px-5 text-sm font-semibold text-white transition hover:bg-[#2d6a4a] disabled:cursor-not-allowed disabled:bg-[#8a9a91] sm:w-auto"
           >
             {isSubmitting ? "Creating PDF…" : "Confirm and download PDF"}
@@ -633,7 +898,8 @@ export default function InvoiceBuilder({
                   Email draft for {generatedInvoice.number}
                 </p>
                 <p className="mt-1 text-xs leading-5 text-[#4a6a5a]">
-                  Send this from your own email app, then mark the invoice as sent.
+                  Send this from your own email app, then mark the invoice as
+                  sent.
                 </p>
               </div>
               <button
@@ -656,14 +922,22 @@ export default function InvoiceBuilder({
                   const plainBody = generatedInvoice.body;
                   const htmlBody = generatedInvoice.htmlBody;
                   if ("ClipboardItem" in window) {
-                    navigator.clipboard.write([
-                      new ClipboardItem({
-                        "text/plain": new Blob([plainBody], { type: "text/plain" }),
-                        "text/html": new Blob([htmlBody], { type: "text/html" }),
-                      }),
-                    ]).catch(console.error);
+                    navigator.clipboard
+                      .write([
+                        new ClipboardItem({
+                          "text/plain": new Blob([plainBody], {
+                            type: "text/plain",
+                          }),
+                          "text/html": new Blob([htmlBody], {
+                            type: "text/html",
+                          }),
+                        }),
+                      ])
+                      .catch(console.error);
                   } else {
-                    navigator.clipboard.writeText(plainBody).catch(console.error);
+                    navigator.clipboard
+                      .writeText(plainBody)
+                      .catch(console.error);
                   }
 
                   setCopyStatus("Draft copied!");
@@ -680,7 +954,9 @@ export default function InvoiceBuilder({
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#4a6a5a]">
                 Subject
               </p>
-              <p className="mt-1 text-sm text-[#1a3a2a]">{generatedInvoice.subject}</p>
+              <p className="mt-1 text-sm text-[#1a3a2a]">
+                {generatedInvoice.subject}
+              </p>
               <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-[#4a6a5a]">
                 Body
               </p>
@@ -692,10 +968,26 @@ export default function InvoiceBuilder({
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <form action={markInvoiceSent} className="space-y-3" data-testid="invoice-mark-sent-form">
-                <input type="hidden" name="invoiceId" value={generatedInvoice.id} />
-                <input type="hidden" name="clientEmail" value={form.clientEmail} />
-                <input type="hidden" name="redirectTo" value="/dashboard?reminders=1" />
+              <form
+                action={markInvoiceSent}
+                className="space-y-3"
+                data-testid="invoice-mark-sent-form"
+              >
+                <input
+                  type="hidden"
+                  name="invoiceId"
+                  value={generatedInvoice.id}
+                />
+                <input
+                  type="hidden"
+                  name="clientEmail"
+                  value={form.clientEmail}
+                />
+                <input
+                  type="hidden"
+                  name="redirectTo"
+                  value="/dashboard?reminders=1"
+                />
                 <button
                   type="submit"
                   data-testid="invoice-mark-sent-button"
@@ -705,9 +997,21 @@ export default function InvoiceBuilder({
                 </button>
               </form>
 
-              <form action={enableInvoiceReminders} className="space-y-3" data-testid="invoice-enable-reminders-form">
-                <input type="hidden" name="invoiceId" value={generatedInvoice.id} />
-                <input type="hidden" name="clientEmail" value={form.clientEmail} />
+              <form
+                action={enableInvoiceReminders}
+                className="space-y-3"
+                data-testid="invoice-enable-reminders-form"
+              >
+                <input
+                  type="hidden"
+                  name="invoiceId"
+                  value={generatedInvoice.id}
+                />
+                <input
+                  type="hidden"
+                  name="clientEmail"
+                  value={form.clientEmail}
+                />
                 <input type="hidden" name="redirectTo" value="/dashboard" />
                 <button
                   type="submit"
@@ -736,18 +1040,24 @@ export default function InvoiceBuilder({
               <h2 className="text-3xl font-semibold tracking-tight text-[#1a3a2a]">
                 Invoice
               </h2>
-              <p className="mt-1 text-sm text-[#4a6a5a]">Number generated on download</p>
+              <p className="mt-1 text-sm text-[#4a6a5a]">
+                Number generated on download
+              </p>
             </div>
             <div className="text-right text-sm text-[#4a6a5a]">
               {formatPreviewDate(form.invoiceDate)}
             </div>
           </div>
 
-          <ReadAloudButton text={summaryReadAloudText} label="invoice summary" />
+          <ReadAloudButton
+            text={summaryReadAloudText}
+            label="invoice summary"
+          />
 
           {plainLanguage ? (
             <p className="plain-language-note">
-              This is the short version of what the PDF will say when you download it.
+              This is the short version of what the PDF will say when you
+              download it.
             </p>
           ) : null}
 
@@ -769,15 +1079,19 @@ export default function InvoiceBuilder({
                   {userDefaults.contact_details}
                 </p>
               ) : null}
-              {form.vatEnabled && userDefaults.vat_number ? (
+              {form.vatEnabled && vatNumber ? (
                 <p className="mt-1 text-sm leading-6 text-[#4a6a5a]">
-                  VAT reg: {userDefaults.vat_number}
+                  VAT reg: {vatNumber}
                 </p>
               ) : null}
             </div>
           )}
 
-          <div className={userDefaults.legal_name ? "" : "border-t border-[#e5e0d8] pt-4"}>
+          <div
+            className={
+              userDefaults.legal_name ? "" : "border-t border-[#e5e0d8] pt-4"
+            }
+          >
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#4a6a5a]">
               To
             </p>
@@ -807,10 +1121,12 @@ export default function InvoiceBuilder({
             </p>
             {form.vatEnabled && amountPence !== null && (
               <p className="mt-1 text-xs text-[#7a9a87]">
-                inc. {formatPounds(vatPence)} VAT ({userDefaults.vat_rate}%)
+                inc. {formatPounds(vatPence)} VAT ({vatRate || "unverified"}%)
               </p>
             )}
-            <p className="mt-2 text-sm leading-6 text-[#4a6a5a]">{amountWords}</p>
+            <p className="mt-2 text-sm leading-6 text-[#4a6a5a]">
+              {amountWords}
+            </p>
           </div>
 
           <div>
@@ -871,7 +1187,11 @@ function EmailBodyPreview({
   invoiceNumber: string;
 }) {
   if (!invoiceLinkUrl) {
-    return <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[#1a3a2a]">{body}</p>;
+    return (
+      <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[#1a3a2a]">
+        {body}
+      </p>
+    );
   }
 
   const target = `[${invoiceNumber}](${invoiceLinkUrl})`;
@@ -880,7 +1200,12 @@ function EmailBodyPreview({
     return (
       <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[#1a3a2a]">
         {before}
-        <a href={invoiceLinkUrl} className="font-semibold underline underline-offset-4" target="_blank" rel="noreferrer">
+        <a
+          href={invoiceLinkUrl}
+          className="font-semibold underline underline-offset-4"
+          target="_blank"
+          rel="noreferrer"
+        >
           {invoiceNumber}
         </a>
         {after}
@@ -892,7 +1217,12 @@ function EmailBodyPreview({
   return (
     <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[#1a3a2a]">
       {before}
-      <a href={invoiceLinkUrl} className="font-semibold underline underline-offset-4" target="_blank" rel="noreferrer">
+      <a
+        href={invoiceLinkUrl}
+        className="font-semibold underline underline-offset-4"
+        target="_blank"
+        rel="noreferrer"
+      >
         {invoiceNumber}
       </a>
       {after}
@@ -904,18 +1234,28 @@ function buildMailtoHref(to: string, subject: string, body: string) {
   return `mailto:${encodeURIComponent(to.trim())}?subject=${encodeMailtoParam(subject)}&body=${encodeMailtoParam(body)}`;
 }
 
-function buildInvoiceEmailHtml(body: string, invoiceLinkUrl: string, invoiceNumber: string) {
+function buildInvoiceEmailHtml(
+  body: string,
+  invoiceLinkUrl: string,
+  invoiceNumber: string,
+) {
   const escaped = escapeHtml(body);
   const target = `[${invoiceNumber}](${invoiceLinkUrl})`;
   const escapedTarget = escapeHtml(target);
 
   if (escaped.includes(escapedTarget)) {
-    const linked = escaped.replace(escapedTarget, `<a href="${escapeHtml(invoiceLinkUrl)}">${escapeHtml(invoiceNumber)}</a>`);
+    const linked = escaped.replace(
+      escapedTarget,
+      `<a href="${escapeHtml(invoiceLinkUrl)}">${escapeHtml(invoiceNumber)}</a>`,
+    );
     return `<div>${linked.replace(/\n/g, "<br>")}</div>`;
   }
 
   const linked = invoiceLinkUrl
-    ? escaped.replace(escapeHtml(invoiceLinkUrl), `<a href="${escapeHtml(invoiceLinkUrl)}">${escapeHtml(invoiceNumber)}</a>`)
+    ? escaped.replace(
+        escapeHtml(invoiceLinkUrl),
+        `<a href="${escapeHtml(invoiceLinkUrl)}">${escapeHtml(invoiceNumber)}</a>`,
+      )
     : escaped;
   return `<div>${linked.replace(/\n/g, "<br>")}</div>`;
 }
@@ -929,8 +1269,9 @@ function escapeHtml(value: string) {
 }
 
 function encodeMailtoParam(value: string) {
-  return encodeURIComponent(value).replace(/[!'()*]/g, (char) =>
-    `%${char.charCodeAt(0).toString(16).toUpperCase()}`
+  return encodeURIComponent(value).replace(
+    /[!'()*]/g,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
   );
 }
 
