@@ -749,6 +749,32 @@ export default function SettingsForm() {
         </a>
       </fieldset>
 
+      {/* External Agent Access (MCP) */}
+      <fieldset
+        className="rounded-xl border border-[#e5e0d8] bg-white p-6 shadow-sm"
+        data-testid="settings-agent-fieldset"
+      >
+        <legend className="mb-1 -ml-1 px-1 text-xs font-semibold uppercase tracking-widest text-[#4a6a5a]">
+          External Agent Access (MCP)
+        </legend>
+        <p className="mb-1 text-xs font-medium text-[#1a3a2a]">
+          Model Context Protocol (MCP) API Key
+        </p>
+        <p className="mb-4 text-xs text-[#7a9a87]">
+          Connect external AI agents (such as Claude Desktop, Cursor, or Codex) to your VibeCount account.
+          Agents can inspect finances, draft invoices, and stage spreadsheet imports, but can never finalise
+          or commit transactions without your explicit confirmation.
+        </p>
+        <div className="mb-4 rounded-lg bg-[#f0f4f1] p-3 text-xs text-[#2d4a3a]">
+          <p className="mb-1 font-semibold">MCP Server Endpoint:</p>
+          <code className="block rounded border border-[#d5d0c8] bg-white px-2 py-1 font-mono text-[11px] text-[#1a3a2a]">
+            POST /api/mcp
+          </code>
+          <p className="mt-1 text-[11px] text-[#5a7a67]">Header: Authorization: Bearer &lt;your_key&gt;</p>
+        </div>
+        <VibecountApiKey />
+      </fieldset>
+
       {/* Status feedback + submit */}
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
         <button
@@ -912,4 +938,150 @@ function formatBankDetails(bank: BankDetails) {
     .filter(([, value]) => value.trim())
     .map(([label, value]) => `${label}: ${value.trim()}`)
     .join("\n");
+}
+
+function VibecountApiKey() {
+  const [keyState, setKeyState] = useState<
+    | { status: "loading" }
+    | { status: "none" }
+    | { status: "exists"; preview: string }
+    | { status: "generated"; key: string }
+    | { status: "error"; message: string }
+  >({ status: "loading" });
+  const [generating, setGenerating] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/agent/key")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && data.set) {
+          setKeyState({ status: "exists", preview: data.preview });
+        } else {
+          setKeyState({ status: "none" });
+        }
+      })
+      .catch(() => setKeyState({ status: "error", message: "Could not load API key status." }));
+  }, []);
+
+  async function generate() {
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/agent/key", { method: "POST" });
+      const data = await res.json();
+      if (data && data.key) {
+        setKeyState({ status: "generated", key: data.key });
+      } else {
+        setKeyState({ status: "error", message: data?.error ?? "Generation failed." });
+      }
+    } catch {
+      setKeyState({ status: "error", message: "Could not generate API key." });
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function revoke() {
+    await fetch("/api/agent/key", { method: "DELETE" });
+    setKeyState({ status: "none" });
+  }
+
+  async function copyKey(key: string) {
+    await navigator.clipboard.writeText(key).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  if (keyState.status === "loading") {
+    return <p className="text-xs text-[#7a9a87]">Checking key status…</p>;
+  }
+
+  if (keyState.status === "error") {
+    return <p className="text-xs text-red-600">{keyState.message}</p>;
+  }
+
+  if (keyState.status === "generated") {
+    return (
+      <div
+        className="rounded-lg border border-amber-200 bg-amber-50 p-4"
+        data-testid="agent-key-generated-alert"
+      >
+        <p className="mb-1 text-xs font-semibold text-amber-900">
+          Copy your secret key now — it will not be displayed in full again:
+        </p>
+        <div className="mt-2 flex items-center gap-2">
+          <code
+            className="flex-1 select-all break-all rounded border border-amber-300 bg-white px-3 py-2 font-mono text-xs text-[#1a3a2a]"
+            data-testid="agent-generated-key-text"
+          >
+            {keyState.key}
+          </code>
+          <button
+            type="button"
+            onClick={() => copyKey(keyState.key)}
+            data-testid="agent-copy-key-button"
+            className="shrink-0 rounded-lg bg-amber-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-800"
+          >
+            {copied ? "Copied!" : "Copy"}
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            setKeyState({
+              status: "exists",
+              preview: `vc_live_...${keyState.key.slice(-8)}`,
+            })
+          }
+          className="mt-3 text-xs text-amber-800 underline hover:text-amber-950"
+        >
+          I have saved my key securely
+        </button>
+      </div>
+    );
+  }
+
+  if (keyState.status === "none") {
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={generate}
+          disabled={generating}
+          data-testid="agent-generate-key-button"
+          className="inline-flex h-9 items-center rounded-lg border border-[#d5d0c8] bg-white px-4 text-xs font-semibold text-[#1a3a2a] transition hover:bg-[#f5f2ee] disabled:opacity-50"
+        >
+          {generating ? "Generating key…" : "Generate VibeCount MCP Key"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <code
+        className="rounded bg-[#f0ece4] px-3 py-1.5 font-mono text-xs text-[#1a3a2a]"
+        data-testid="agent-key-preview"
+      >
+        {keyState.preview}
+      </code>
+      <button
+        type="button"
+        onClick={generate}
+        disabled={generating}
+        data-testid="agent-regenerate-key-button"
+        className="text-xs font-medium text-[#4a6a5a] underline decoration-[#7a9a87] underline-offset-2 hover:text-[#1a3a2a] disabled:opacity-50"
+      >
+        {generating ? "Regenerating…" : "Regenerate"}
+      </button>
+      <button
+        type="button"
+        onClick={revoke}
+        data-testid="agent-revoke-key-button"
+        className="text-xs font-medium text-[#7a271a] underline underline-offset-2 hover:text-red-700"
+      >
+        Revoke
+      </button>
+    </div>
+  );
 }
