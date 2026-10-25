@@ -5,9 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 import { ensureRecordCategories } from "@/lib/records/categories";
 import ImportWizard, { type AccountOption } from "./ImportWizard";
 import TransactionReview, { type LedgerTransaction } from "./TransactionReview";
+import MerchantClusterReview from "./MerchantClusterReview";
 import {
   createFinancialAccount,
   reopenSourceImport,
+  undoMerchantCluster,
 } from "./actions";
 import { formatPounds, amountToWords } from "@/lib/invoices/money";
 import DocumentIntake from "./DocumentIntake";
@@ -98,6 +100,20 @@ export default async function ImportsPage({
   const transactionResult = available ? await query : null;
   const txs = (transactionResult?.data ?? []) as LedgerTransaction[];
   const transactions = txs.slice(0, 50);
+
+  // Fetch unreviewed transactions for the merchant cluster triage (up to 500 rows)
+  let clusterQuery = db
+    .from("refund_source_transactions")
+    .select(
+      "id,import_id,transaction_date,signed_amount_pence,currency,original_signed_minor,source_units_ruleset,description,reference,classification,decision_version,business_use_bps,category_id,dedupe_status,source_row_id",
+    )
+    .eq("user_id", user.id)
+    .eq("classification", "Unknown");
+  if (selected) clusterQuery = clusterQuery.eq("import_id", selected);
+  const clusterResult = available
+    ? await clusterQuery.order("transaction_date", { ascending: false }).limit(500)
+    : null;
+  const clusterTransactions = (clusterResult?.data ?? txs) as LedgerTransaction[];
   const chosen = selected
     ? await db
         .from("record_imports")
@@ -169,6 +185,40 @@ export default async function ImportsPage({
         <p role="status">
           Import reversed. Its financial effects are excluded; the original
           evidence and decision history remain preserved.
+        </p>
+      )}
+      {params.result === "cluster-reviewed" && (
+        <div
+          role="status"
+          data-testid="cluster-reviewed-banner"
+          className="flex flex-col gap-2 rounded-xl border border-[#86efac] bg-[#dcfce7] p-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div>
+            <p className="text-sm font-semibold text-[#14532d]">
+              ✓ Approved {params.count ?? "grouped"} payments for {params.clusterName ?? "merchant"}.
+            </p>
+            <p className="text-xs text-[#166534]">
+              Decisions saved. You can undo this cluster at any time.
+            </p>
+          </div>
+          {typeof params.undo === "string" && params.undo && (
+            <form action={undoMerchantCluster}>
+              <input type="hidden" name="undo" value={params.undo} />
+              <input type="hidden" name="importId" value={selected ?? ""} />
+              <button
+                type="submit"
+                data-testid="cluster-undo-button"
+                className="cursor-pointer rounded-lg border border-[#15803d] bg-white px-3 py-1.5 text-xs font-semibold text-[#15803d] hover:bg-[#f0fdf4]"
+              >
+                Undo this cluster
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+      {params.result === "cluster-undone" && (
+        <p role="status" className="rounded-xl border border-[#bbf7d0] bg-[#f0fdf4] p-3 text-sm text-[#14532d]">
+          Cluster review undone. Those payments are back in the unreviewed queue.
         </p>
       )}
       <details className="rounded-xl border bg-white p-4" data-testid="source-tools"><summary className="cursor-pointer font-semibold">Source checks and upload recovery</summary>
@@ -548,9 +598,18 @@ export default async function ImportsPage({
               )}
             </div>
           </section>
-          <section className="space-y-3">
-            <h2 className="text-lg font-semibold">Transaction decisions</h2>
-            <p className="text-sm">
+          {/* Fast Merchant Cluster Triage */}
+          <MerchantClusterReview
+            transactions={clusterTransactions}
+            categories={categories}
+            importId={selected}
+          />
+
+          <details className="mt-8 space-y-3 rounded-xl border border-[#c8d4cb] bg-white p-4" data-testid="all-transactions-accordion">
+            <summary className="cursor-pointer font-semibold text-[#14532d]">
+              Review individual payments one by one ({transactions.length} shown on this page)
+            </summary>
+            <p className="mt-2 text-sm text-[#4b8068]">
               Verified source amounts are separate from provisional business
               treatment. Personal and unknown items remain auditable and
               contribute nothing to approved totals.
@@ -561,21 +620,23 @@ export default async function ImportsPage({
             {!transactions.length && !transactionResult?.error && (
               <p>No transactions on this page.</p>
             )}
-            {transactions.map((tx) => (
-              <section key={`${tx.id}-${tx.decision_version}`}>
-                <TransactionReview tx={tx} categories={categories} />
-                <Link
-                  href={`/dashboard/review/memory?year=${getCurrentTaxYearStart(new Date(tx.transaction_date + "T00:00:00Z"))}&transaction=${tx.id}`}
-                  data-testid={`remember-merchant-${tx.id}`}
-                  className="underline"
-                >
-                  Remember or override merchant treatment
-                </Link>
-              </section>
-            ))}
-            <nav aria-label="Transaction pages" className="flex gap-4">
+            <div className="mt-3 space-y-3">
+              {transactions.map((tx) => (
+                <section key={`${tx.id}-${tx.decision_version}`}>
+                  <TransactionReview tx={tx} categories={categories} />
+                  <Link
+                    href={`/dashboard/review/memory?year=${getCurrentTaxYearStart(new Date(tx.transaction_date + "T00:00:00Z"))}&transaction=${tx.id}`}
+                    data-testid={`remember-merchant-${tx.id}`}
+                    className="mt-1 inline-block text-xs text-[#15803d] underline"
+                  >
+                    Remember or override merchant treatment
+                  </Link>
+                </section>
+              ))}
+            </div>
+            <nav aria-label="Transaction pages" className="mt-4 flex gap-4 text-sm">
               {after && (
-                <Link href={linkBase} data-testid="transactions-first">
+                <Link href={linkBase} data-testid="transactions-first" className="underline">
                   First transactions
                 </Link>
               )}
@@ -583,12 +644,13 @@ export default async function ImportsPage({
                 <Link
                   href={`${linkBase}&after=${transactions.at(-1)!.id}`}
                   data-testid="transactions-next"
+                  className="underline"
                 >
                   Next transactions
                 </Link>
               )}
             </nav>
-          </section>
+          </details>
         </>
       )}
     </main>

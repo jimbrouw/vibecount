@@ -1,4 +1,4 @@
-import { requirePence } from "../money";
+import { requirePence } from "../money.ts";
 export type TaxQuarter = 1 | 2 | 3 | 4;
 
 export type QuarterSummary = {

@@ -1,4 +1,4 @@
-import { decimalToPence } from "../money";
+import { decimalToPence } from "../money.ts";
 
 const SMALL_NUMBERS = [
   "zero",

@@ -12,6 +12,8 @@ import {
   type TaxPrepRecord,
   type TaxPrepYear,
 } from "@/lib/records/tax-prep-data";
+import { AccountantHandoverPack } from "./AccountantHandoverPack";
+import { buildAccountantHandover } from "@/lib/tax/accountant-handover";
 import LogoutButton from "../LogoutButton";
 import PlainLanguageNote from "../PlainLanguageNote";
 
@@ -117,6 +119,26 @@ export default async function TaxPrepPage({
 
   const checklist = buildSelfAssessmentChecklist(data.records);
   const taxYearOptions = buildTaxYearOptions(currentTaxYearStart, data.years);
+
+  const { data: userSettings } = await supabase
+    .from("user_settings")
+    .select("legal_name")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const userName =
+    userSettings?.legal_name || user.email?.split("@")[0] || "Sole Trader";
+
+  const handoverData = buildAccountantHandover({
+    userName,
+    taxYearStart: selectedTaxYearStart,
+    incomeTotalPence: checklist.incomeTotal,
+    expenseTotalPence: checklist.expenseTotal,
+    profitTotalPence: checklist.profitTotal,
+    incomeCount: checklist.incomeCount,
+    expenseCount: checklist.expenseCount,
+    sa103Boxes: [],
+  });
 
   return (
     <main className="min-h-screen bg-[#f0fdf4]">
@@ -224,6 +246,18 @@ export default async function TaxPrepPage({
         </div>
 
         {checklist.cashExcludedCount>0&&<p data-testid="tax-prep-cash-exclusions" className="mb-4 text-sm">{checklist.cashExcludedCount} records excluded from GBP cash totals: unpaid, unsupported currency or not approved. Original evidence remains in Records.</p>}
+
+        <AccountantHandoverPack
+          taxYearStart={selectedTaxYearStart}
+          taxYearLabel={getTaxYearLabel(selectedTaxYearStart)}
+          incomeTotalPence={checklist.incomeTotal}
+          expenseTotalPence={checklist.expenseTotal}
+          profitTotalPence={checklist.profitTotal}
+          incomeCount={checklist.incomeCount}
+          expenseCount={checklist.expenseCount}
+          emailTemplateText={handoverData.emailTemplateText}
+        />
+
         <section className="mb-6 grid gap-4 sm:grid-cols-3">
           <SummaryTile
             label="Income"

@@ -28,6 +28,7 @@ import {
 import LogoutButton from "../LogoutButton";
 import PlainLanguageNote from "../PlainLanguageNote";
 import SuggestCategoryButton from "./SuggestCategoryButton";
+import AllowableExpenseFinder from "./AllowableExpenseFinder";
 
 export const metadata = {
   title: "Records — VibeCount",
@@ -354,6 +355,10 @@ export default async function RecordsPage({
             value={String(recordsResult.count ?? 0)}
           />
         </section>
+
+        <div className="mb-6">
+          <AllowableExpenseFinder categories={categories} />
+        </div>
 
         <nav className="mb-6 flex flex-wrap gap-2 border-b border-[#dfe5df]">
           {[

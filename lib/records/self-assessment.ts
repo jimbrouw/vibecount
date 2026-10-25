@@ -212,7 +212,7 @@ function sumRecords(
   );
 }
 
-function sumByCategory(
+export function sumByCategory(
   records: SelfAssessmentRecord[],
   matchers: readonly string[],
 ) {
@@ -223,7 +223,7 @@ function sumByCategory(
   );
 }
 
-function countByCategory(
+export function countByCategory(
   records: SelfAssessmentRecord[],
   matchers: readonly string[],
 ) {

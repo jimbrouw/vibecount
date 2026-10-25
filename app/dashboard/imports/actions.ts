@@ -143,6 +143,97 @@ export async function classifySourceTransaction(form: FormData) {
   );
 }
 
+export async function classifyMerchantCluster(form: FormData) {
+  const { db } = await ownerClient();
+  if (form.get("humanConfirmed") !== "yes")
+    fail("Review the cluster and confirm this decision.");
+
+  let items: { id: string; version: number }[] = [];
+  try {
+    items = JSON.parse(String(form.get("items") ?? "[]"));
+  } catch {
+    fail("Invalid cluster items.");
+  }
+  if (!items.length) fail("No transactions selected in this cluster.");
+
+  const classification = String(form.get("classification") ?? "Unknown");
+  const percent = String(form.get("percent") ?? "").trim();
+  if (classification === "Mixed" && !/^\d{1,2}(\.\d{1,2})?$/.test(percent))
+    fail("Enter a mixed business percentage between 0 and 100.");
+  const [whole, fraction = ""] = percent.split(".");
+  const bps =
+    classification === "Business"
+      ? 10000
+      : classification === "Mixed"
+        ? Number(whole) * 100 + Number(fraction.padEnd(2, "0"))
+        : 0;
+  const included = ["Business", "Mixed"].includes(classification);
+  const categoryId = included ? String(form.get("categoryId") ?? "") || null : null;
+  const clusterName = String(form.get("clusterName") ?? "merchant");
+  const rationale = redactBankDetailsForPrompt(
+    String(form.get("rationale") ?? `Reviewed merchant cluster: ${clusterName}`).trim(),
+  );
+
+  const undoItems: string[] = [];
+  for (const item of items) {
+    const { data: res, error } = await db.rpc("review_bank_transaction", {
+      p_id: item.id,
+      p_version: item.version,
+      p_classification: classification,
+      p_category: categoryId,
+      p_bps: bps,
+      p_rationale: rationale,
+    });
+    if (error) {
+      fail(`Could not classify ${clusterName}. Some items may have changed. Reload and review.`);
+    }
+    const newVersion = (res as { version?: number })?.version ?? (item.version + 1);
+    undoItems.push(`${item.id}:${newVersion}`);
+  }
+
+  revalidatePath("/dashboard/imports");
+  revalidatePath("/dashboard/records");
+  revalidatePath("/dashboard/tax-prep");
+  revalidatePath("/dashboard/review");
+
+  const importId = String(form.get("importId") ?? "");
+  const undoToken = encodeURIComponent(undoItems.join(","));
+  redirect(
+    `/dashboard/imports?${importId ? `import=${encodeURIComponent(importId)}&` : ""}result=cluster-reviewed&clusterName=${encodeURIComponent(clusterName)}&count=${items.length}&undo=${undoToken}`,
+  );
+}
+
+export async function undoMerchantCluster(form: FormData) {
+  const { db } = await ownerClient();
+  const rawUndo = String(form.get("undo") ?? "");
+  if (!rawUndo) fail("Nothing to undo.");
+
+  const tokens = decodeURIComponent(rawUndo).split(",").filter(Boolean);
+  for (const tok of tokens) {
+    const [id, versionStr] = tok.split(":");
+    const version = Number(versionStr);
+    if (!id || !Number.isInteger(version)) continue;
+    await db.rpc("review_bank_transaction", {
+      p_id: id,
+      p_version: version,
+      p_classification: "Unknown",
+      p_category: null,
+      p_bps: 0,
+      p_rationale: "Undid merchant cluster review",
+    });
+  }
+
+  revalidatePath("/dashboard/imports");
+  revalidatePath("/dashboard/records");
+  revalidatePath("/dashboard/tax-prep");
+  revalidatePath("/dashboard/review");
+
+  const importId = String(form.get("importId") ?? "");
+  redirect(
+    `/dashboard/imports?${importId ? `import=${encodeURIComponent(importId)}&` : ""}result=cluster-undone`,
+  );
+}
+
 export async function reverseSourceImport(form: FormData) {
   const { db } = await ownerClient();
   if (form.get("humanConfirmed") !== "yes")

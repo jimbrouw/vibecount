@@ -200,6 +200,13 @@ export default async function DashboardPage({
               Invoices
             </Link>
             <Link
+              href="/dashboard/check-in"
+              className="rounded-lg px-3 py-1.5 text-sm font-semibold text-white/95 bg-white/10 hover:bg-white/20 transition"
+              data-testid="nav-checkin-link"
+            >
+              10-Min Check-In
+            </Link>
+            <Link
               href="/dashboard/records"
               className="rounded-lg px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/15 hover:text-white"
             >
@@ -358,6 +365,33 @@ export default async function DashboardPage({
             </div>
           </div>
         )}
+
+        {/* Weekly Ritual Hero Card */}
+        <div
+          className="mb-8 rounded-2xl border-2 border-[#86efac] bg-white p-6 shadow-xs"
+          data-testid="dashboard-checkin-card"
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <span className="rounded-full bg-[#dcfce7] px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#15803d]">
+                Weekly Ritual
+              </span>
+              <h2 className="mt-2 text-xl font-bold text-[#14532d]">
+                The 10-Minute Friday Check-In
+              </h2>
+              <p className="mt-1 text-xs text-[#4b8068]">
+                Sort recent payments, match client invoices, and see your Safe to Spend cash in 4 easy steps.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/check-in"
+              data-testid="start-checkin-btn"
+              className="inline-flex h-11 items-center justify-center rounded-xl bg-[#15803d] px-6 text-xs font-bold text-white shadow-xs transition hover:bg-[#14532d]"
+            >
+              Start 10-Minute Check-In →
+            </Link>
+          </div>
+        </div>
 
         {/* Complete evidence-backed totals; unavailable data never becomes zero. */}
         {totals ? (

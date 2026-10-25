@@ -13,6 +13,9 @@ const bundle = await build({
   platform: "browser",
   format: "iife",
   jsx: "automatic",
+  define: {
+    "process.env": "{}",
+  },
   stdin: {
     resolveDir: process.cwd(),
     sourcefile: "import-ui-fixture.jsx",
@@ -74,13 +77,22 @@ const bundle = await build({
             loader: "js",
           }),
         );
+        builder.onResolve({ filter: /^next\/link$/ }, () => ({
+          path: "test-link",
+          namespace: "fixture-link",
+        }));
+        builder.onLoad({ filter: /.*/, namespace: "fixture-link" }, () => ({
+          contents: "import React from 'react';export default function Link(p){return <a {...p}/>}",
+          loader: "jsx",
+          resolveDir: process.cwd(),
+        }));
         builder.onResolve({ filter: /^\.\/actions$/ }, () => ({
           path: "test-actions",
           namespace: "fixture",
         }));
         builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({
           contents:
-            "export async function importSourceCsv(){}; export async function importSourceGroup(){return {importId:"synthetic-group",created:true}}; export async function classifySourceTransaction(){}; export async function approveAllocations(){}; export async function approveTransfer(){}; export async function approveRefund(){}; export async function reverseRefundGroup(){}; export async function reverseCredit(){}; export async function approveInvoiceRefund(){}; export async function reverseInvoiceRefund(){}; export async function approveDuplicate(){}; export async function reverseDuplicate(){};export async function recoverUpload(){await new Promise(r=>setTimeout(r,1200))};export async function saveMerchantRule(){};export async function saveMerchantRollover(){};export async function approveMerchantBatch(){};export async function undoMerchantBatch(){};export async function reviewTaxInputs(){};",
+            "export async function importSourceCsv(){}; export async function importSourceGroup(){return {importId:'synthetic-group',created:true}}; export async function classifySourceTransaction(){}; export async function classifyMerchantCluster(){}; export async function undoMerchantCluster(){}; export async function approveAllocations(){}; export async function approveTransfer(){}; export async function approveRefund(){}; export async function reverseRefundGroup(){}; export async function reverseCredit(){}; export async function approveInvoiceRefund(){}; export async function reverseInvoiceRefund(){}; export async function approveDuplicate(){}; export async function reverseDuplicate(){};export async function recoverUpload(){await new Promise(r=>setTimeout(r,1200))};export async function saveMerchantRule(){};export async function saveMerchantRollover(){};export async function approveMerchantBatch(){};export async function undoMerchantBatch(){};export async function reviewTaxInputs(){};",
           loader: "js",
         }));
       },
@@ -105,7 +117,11 @@ try {
   browser = await chromium.launch({ headless: true, executablePath });
   const page = await browser.newPage();
   const errors = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("pageerror", (e) => {
+    console.error("PAGE_ERROR:", e);
+    errors.push(e.message || String(e));
+  });
+  page.on("console", (msg) => console.log("PAGE_CONSOLE:", msg.text()));
   await page.addInitScript(() => {
     const read = File.prototype.arrayBuffer;
     File.prototype.arrayBuffer = async function () {

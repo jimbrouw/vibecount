@@ -13,8 +13,11 @@ import {
 } from "@/lib/records/tax-periods";
 import {
   buildSelfAssessmentChecklist,
+  countByCategory,
+  sumByCategory,
   type SelfAssessmentRecord,
 } from "@/lib/records/self-assessment";
+import { buildAccountantHandover } from "@/lib/tax/accountant-handover";
 
 export const runtime = "nodejs";
 
@@ -36,7 +39,13 @@ export async function GET(request: Request) {
   const taxYearStart =
     Number(url.searchParams.get("taxYearStart")) || getCurrentTaxYearStart();
 
-  const format = url.searchParams.get("format") === "txt" ? "txt" : "csv";
+  const formatParam = url.searchParams.get("format");
+  const format =
+    formatParam === "txt"
+      ? "txt"
+      : formatParam === "handover"
+        ? "handover"
+        : "csv";
 
   let records: (SelfAssessmentRecord & { id: string })[];
   try {
@@ -78,7 +87,77 @@ export async function GET(request: Request) {
   let outputContent = "";
   let contentType = "text/csv; charset=utf-8";
 
-  if (format === "txt") {
+  if (format === "handover") {
+    contentType = "text/plain; charset=utf-8";
+    const { data: userSettings } = await supabase
+      .from("user_settings")
+      .select("legal_name")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const handover = buildAccountantHandover({
+      userName:
+        userSettings?.legal_name || user.email?.split("@")[0] || "Sole Trader",
+      taxYearStart,
+      incomeTotalPence: checklist.incomeTotal,
+      expenseTotalPence: checklist.expenseTotal,
+      profitTotalPence: checklist.profitTotal,
+      incomeCount: checklist.incomeCount,
+      expenseCount: checklist.expenseCount,
+      sa103Boxes: [
+        {
+          box: "Box 17",
+          label: "Cost of goods bought for resale",
+          amountPence: sumByCategory(records, ["cost of goods"]),
+          count: countByCategory(records, ["cost of goods"]),
+        },
+        {
+          box: "Box 18",
+          label: "Car, van and travel expenses",
+          amountPence: sumByCategory(records, ["travel costs"]),
+          count: countByCategory(records, ["travel costs"]),
+        },
+        {
+          box: "Box 19",
+          label: "Wages, salaries and other staff costs",
+          amountPence: sumByCategory(records, ["staff costs"]),
+          count: countByCategory(records, ["staff costs"]),
+        },
+        {
+          box: "Box 22",
+          label: "Phone, stationery and office costs",
+          amountPence: sumByCategory(records, ["office costs"]),
+          count: countByCategory(records, ["office costs"]),
+        },
+        {
+          box: "Box 23",
+          label: "Advertising and marketing costs",
+          amountPence: sumByCategory(records, ["advertising and marketing"]),
+          count: countByCategory(records, ["advertising and marketing"]),
+        },
+        {
+          box: "Box 26",
+          label: "Accountancy, legal and professional fees",
+          amountPence: sumByCategory(records, ["professional fees"]),
+          count: countByCategory(records, ["professional fees"]),
+        },
+        {
+          box: "Box 27",
+          label: "Subcontractor costs",
+          amountPence: sumByCategory(records, ["subcontractor costs"]),
+          count: countByCategory(records, ["subcontractor costs"]),
+        },
+        {
+          box: "Box 30",
+          label: "Other allowable business expenses",
+          amountPence: sumByCategory(records, ["other allowable expenses"]),
+          count: countByCategory(records, ["other allowable expenses"]),
+        },
+      ].filter((b) => b.amountPence > 0 || b.count > 0),
+    });
+
+    outputContent = handover.coverLetterText;
+  } else if (format === "txt") {
     contentType = "text/plain; charset=utf-8";
     outputContent = `Draft — not submitted to HMRC\nTax Prep Summary for ${getTaxYearLabel(taxYearStart)}\n`;
     outputContent += `=================================================\n\n`;
@@ -152,13 +231,16 @@ export async function GET(request: Request) {
     );
   }
 
+  const filename =
+    format === "handover"
+      ? `vibecount-accountant-handover-${getTaxYearLabel(taxYearStart)}.txt`
+      : `vibecount-tax-prep-${getTaxYearLabel(taxYearStart)}.${format}`;
+
   return new NextResponse(outputContent, {
     status: 200,
     headers: {
       "Content-Type": contentType,
-      "Content-Disposition": `attachment; filename="vibecount-tax-prep-${getTaxYearLabel(
-        taxYearStart,
-      )}.${format}"`,
+      "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
 }
