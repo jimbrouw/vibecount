@@ -18,6 +18,7 @@ import {
   type SelfAssessmentRecord,
 } from "@/lib/records/self-assessment";
 import { buildAccountantHandover } from "@/lib/tax/accountant-handover";
+import { getEmploymentRecord } from "@/lib/tax/employment";
 
 export const runtime = "nodejs";
 
@@ -95,6 +96,8 @@ export async function GET(request: Request) {
       .eq("id", user.id)
       .maybeSingle();
 
+    const employmentDetails = await getEmploymentRecord(user.id, taxYearStart);
+
     const handover = buildAccountantHandover({
       userName:
         userSettings?.legal_name || user.email?.split("@")[0] || "Sole Trader",
@@ -104,6 +107,7 @@ export async function GET(request: Request) {
       profitTotalPence: checklist.profitTotal,
       incomeCount: checklist.incomeCount,
       expenseCount: checklist.expenseCount,
+      employmentDetails,
       sa103Boxes: [
         {
           box: "Box 17",

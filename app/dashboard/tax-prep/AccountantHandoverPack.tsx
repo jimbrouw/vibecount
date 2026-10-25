@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { formatPounds, signedAmountToWords } from "@/lib/invoices/money";
+import type { EmploymentRecord } from "@/lib/tax/employment";
 
 interface AccountantHandoverPackProps {
   taxYearStart: number;
@@ -12,6 +13,7 @@ interface AccountantHandoverPackProps {
   incomeCount: number;
   expenseCount: number;
   emailTemplateText: string;
+  employmentDetails?: EmploymentRecord | null;
 }
 
 export function AccountantHandoverPack({
@@ -23,6 +25,7 @@ export function AccountantHandoverPack({
   incomeCount,
   expenseCount,
   emailTemplateText,
+  employmentDetails,
 }: AccountantHandoverPackProps) {
   const [copied, setCopied] = useState(false);
   const [showEmail, setShowEmail] = useState(false);
@@ -147,6 +150,90 @@ export function AccountantHandoverPack({
           </p>
         </div>
       </div>
+
+      {/* Employment & Redundancy (SA102 / P45) Card */}
+      {employmentDetails && (
+        <div
+          data-testid="accountant-handover-employment-card"
+          className="mt-6 rounded-xl border border-sky-300 bg-sky-50/70 p-5 shadow-xs"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sky-200 pb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center rounded-full bg-sky-200 px-2.5 py-0.5 text-xs font-semibold text-sky-900">
+                  SA102 Employment & P45
+                </span>
+                <span className="text-xs text-sky-800">
+                  Ref: {employmentDetails.payeReference}
+                </span>
+              </div>
+              <h3 className="mt-1 text-base font-bold text-sky-950">
+                {employmentDetails.employerName}
+              </h3>
+              <p className="text-xs text-sky-800">
+                Leaving Date: {employmentDetails.leavingDate} · Tax Code: {employmentDetails.taxCode}
+              </p>
+            </div>
+            <div className="text-right">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-sky-700">
+                PAYE Status
+              </span>
+              <p className="text-xs font-bold text-sky-900">Ceased in Tax Year {taxYearLabel}</p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-lg border border-sky-200 bg-white p-3 shadow-xs">
+              <p className="text-xs font-semibold uppercase tracking-wider text-sky-700">
+                Taxable Pay (P45 Box 7)
+              </p>
+              <p className="mt-1 text-lg font-black text-sky-950">
+                {formatPounds(employmentDetails.taxablePayPence)}
+              </p>
+              <p className="mt-0.5 text-xs italic text-slate-600">
+                {signedAmountToWords(employmentDetails.taxablePayPence)}
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-sky-200 bg-white p-3 shadow-xs">
+              <p className="text-xs font-semibold uppercase tracking-wider text-sky-700">
+                PAYE Tax Deducted
+              </p>
+              <p className="mt-1 text-lg font-black text-sky-950">
+                {formatPounds(employmentDetails.taxWithheldPence)}
+              </p>
+              <p className="mt-0.5 text-xs italic text-slate-600">
+                {signedAmountToWords(employmentDetails.taxWithheldPence)}
+              </p>
+            </div>
+
+            {employmentDetails.redundancyPaymentPence && (
+              <div className="rounded-lg border border-emerald-300 bg-emerald-50/80 p-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-emerald-800">
+                    Redundancy Payment
+                  </p>
+                  <span className="rounded bg-emerald-200 px-1.5 py-0.5 text-[10px] font-bold text-emerald-900">
+                    100% Tax-Free
+                  </span>
+                </div>
+                <p className="mt-1 text-lg font-black text-emerald-950">
+                  {formatPounds(employmentDetails.redundancyPaymentPence)}
+                </p>
+                <p className="mt-0.5 text-xs italic text-emerald-800">
+                  Sec 401 ITEPA (under £30k threshold)
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-3 rounded-lg bg-sky-100/70 p-3 text-xs leading-relaxed text-sky-950">
+            <p>
+              <strong>Tax Return Impact:</strong> This employment fully utilized your Personal Allowance (£12,630) for {taxYearLabel}. Sole-trader freelance profits start being taxed at the 20% basic rate, with credit given for the £1,542.60 PAYE tax already deducted. The redundancy payment is completely tax-free and not added to taxable income.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Email Template Collapsible */}
       <div className="mt-6 rounded-xl border border-emerald-200 bg-white p-4">

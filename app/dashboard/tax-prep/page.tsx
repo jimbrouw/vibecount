@@ -14,6 +14,7 @@ import {
 } from "@/lib/records/tax-prep-data";
 import { AccountantHandoverPack } from "./AccountantHandoverPack";
 import { buildAccountantHandover } from "@/lib/tax/accountant-handover";
+import { getEmploymentRecord } from "@/lib/tax/employment";
 import LogoutButton from "../LogoutButton";
 import PlainLanguageNote from "../PlainLanguageNote";
 
@@ -129,6 +130,8 @@ export default async function TaxPrepPage({
   const userName =
     userSettings?.legal_name || user.email?.split("@")[0] || "Sole Trader";
 
+  const employmentDetails = await getEmploymentRecord(user.id, selectedTaxYearStart);
+
   const handoverData = buildAccountantHandover({
     userName,
     taxYearStart: selectedTaxYearStart,
@@ -138,6 +141,7 @@ export default async function TaxPrepPage({
     incomeCount: checklist.incomeCount,
     expenseCount: checklist.expenseCount,
     sa103Boxes: [],
+    employmentDetails,
   });
 
   return (
@@ -256,6 +260,7 @@ export default async function TaxPrepPage({
           incomeCount={checklist.incomeCount}
           expenseCount={checklist.expenseCount}
           emailTemplateText={handoverData.emailTemplateText}
+          employmentDetails={employmentDetails}
         />
 
         <section className="mb-6 grid gap-4 sm:grid-cols-3">

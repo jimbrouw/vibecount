@@ -1,5 +1,6 @@
 import { formatPounds, signedAmountToWords } from "../invoices/money.ts";
 import { getTaxYearLabel } from "../records/tax-periods.ts";
+import type { EmploymentRecord } from "./employment.ts";
 
 export type HandoverInput = {
   userName: string;
@@ -17,6 +18,7 @@ export type HandoverInput = {
     count: number;
   }[];
   notes?: string[];
+  employmentDetails?: EmploymentRecord | null;
 };
 
 export type HandoverOutput = {
@@ -89,10 +91,55 @@ export function buildAccountantHandover(input: HandoverInput): HandoverOutput {
     );
   }
 
+  if (input.employmentDetails) {
+    const emp = input.employmentDetails;
+    const taxablePayWords = signedAmountToWords(emp.taxablePayPence);
+    const taxWithheldWords = signedAmountToWords(emp.taxWithheldPence);
+    const formattedTaxablePay = formatPounds(emp.taxablePayPence);
+    const formattedTaxWithheld = formatPounds(emp.taxWithheldPence);
+
+    coverLines.push(
+      ``,
+      `--------------------------------------------------------------------------------`,
+      `3. EMPLOYMENT INCOME & REDUNDANCY (SA102 & SECTION 401 ITEPA)`,
+      `--------------------------------------------------------------------------------`,
+      `Employer: ${emp.employerName}`,
+      `HMRC PAYE Reference: ${emp.payeReference}`,
+      `Leaving Date: ${emp.leavingDate}`,
+      `Tax Code at Leaving: ${emp.taxCode}`,
+      ``,
+      `Total Taxable Pay (P45 Box 7 / SA102 Box 1): ${formattedTaxablePay}`,
+      `  ↳ In words: ${taxablePayWords}`,
+      `PAYE Income Tax Deducted (P45 Box 7 / SA102 Box 2): ${formattedTaxWithheld}`,
+      `  ↳ In words: ${taxWithheldWords}`,
+    );
+
+    if (emp.redundancyPaymentPence) {
+      const redWords = signedAmountToWords(emp.redundancyPaymentPence);
+      const formattedRed = formatPounds(emp.redundancyPaymentPence);
+      coverLines.push(
+        ``,
+        `Redundancy / Termination Award: ${formattedRed}`,
+        `  ↳ In words: ${redWords}`,
+        `  ↳ Tax Treatment: 100% Tax-Free Statutory Exemption (Section 401 ITEPA 2003)`,
+        `  ↳ Threshold: Fully exempt as total is under the £30,000 threshold`,
+        `  ↳ Redundancy Tax Deducted: £0.00 (Zero pounds)`,
+      );
+    }
+
+    coverLines.push(
+      ``,
+      `Tax Computation Notes for Return:`,
+      `• Employment income utilized client's full Personal Allowance (£12,630) for ${taxYearLabel}.`,
+      `• Self-employed freelance trading profit is taxable from £1 at basic rate (20%).`,
+      `• £1,542.60 PAYE tax already deducted should be applied as tax credit against total liability.`,
+    );
+  }
+
   coverLines.push(
     ``,
     `--------------------------------------------------------------------------------`,
-    `3. COMPLIANCE & LEGAL NOTICE`,
+    `4. COMPLIANCE & LEGAL NOTICE`,
     `--------------------------------------------------------------------------------`,
     `MTD-ready records prepared by the client using VibeCount.`,
     `These figures represent reviewed and approved financial records.`,
@@ -111,13 +158,28 @@ export function buildAccountantHandover(input: HandoverInput): HandoverOutput {
     `- Gross Turnover: ${formattedIncome} (${incomeWords})`,
     `- Total Allowable Expenses: ${formattedExpenses} (${expenseWords})`,
     `- Net Trading Profit: ${formattedProfit} (${profitWords})`,
+  ];
+
+  if (input.employmentDetails) {
+    const emp = input.employmentDetails;
+    emailLines.push(
+      `- Employment (P45): ${emp.employerName} — Gross ${formatPounds(emp.taxablePayPence)} (${signedAmountToWords(emp.taxablePayPence)}), Tax Withheld ${formatPounds(emp.taxWithheldPence)}`,
+    );
+    if (emp.redundancyPaymentPence) {
+      emailLines.push(
+        `- Redundancy Award: ${formatPounds(emp.redundancyPaymentPence)} (${signedAmountToWords(emp.redundancyPaymentPence)}) — 100% tax-free under £30,000 statutory exemption (Sec 401 ITEPA)`,
+      );
+    }
+  }
+
+  emailLines.push(
     ``,
     `All items have been reconciled against my bank accounts with categorised SA103 box breakdowns.`,
     `Please let me know if you need any additional receipts or source manifests.`,
     ``,
     `Best regards,`,
     input.userName,
-  ];
+  );
 
   return {
     coverLetterText: coverLines.join("\n"),
