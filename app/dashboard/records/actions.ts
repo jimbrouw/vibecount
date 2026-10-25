@@ -148,6 +148,30 @@ export async function setManualRecordStatus(formData: FormData) {
   redirect("/dashboard/records?reviewed=1");
 }
 
+export async function approveAllDraftRecords() {
+  const userId = await requireUserId();
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("financial_records")
+    .update({
+      status: "approved",
+      approved_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId)
+    .in("status", ["draft", "review"]);
+
+  if (error) {
+    redirect(
+      `/dashboard/records?error=${encodeURIComponent("Could not approve draft records.")}`
+    );
+  }
+
+  revalidatePath("/dashboard/records");
+  revalidatePath("/dashboard/tax-prep");
+  redirect("/dashboard/records?reviewed=1");
+}
+
 export async function applyBatchCategories(formData: FormData) {
   const userId = await requireUserId();
   const supabase = await createClient();

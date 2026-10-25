@@ -16,6 +16,7 @@ import {
   MTD_THRESHOLDS_PENCE,
 } from "@/lib/records/tax-periods";
 import {
+  approveAllDraftRecords,
   commitApprovedBankRows,
   commitApprovedCsvRows,
   createManualRecord,
@@ -702,17 +703,43 @@ function ManualRecordsList({
   records: ManualRecordRow[];
   categories: CategoryOption[];
 }) {
+  const pendingCount = records.filter(
+    (r) => r.status === "review" || r.status === "draft"
+  ).length;
+
   return (
-    <section className="rounded-xl border border-[#bbf7d0] bg-white shadow-sm">
-      <div className="border-b border-[#f0fdf4] px-5 py-4">
-        <h2 className="text-base font-semibold text-[#14532d]">
+    <section className="rounded-xl border border-[#bbf7d0] bg-white shadow-sm dark:border-[#2d6a4a] dark:bg-[#0d2818]">
+      <div className="border-b border-[#f0fdf4] px-5 py-4 dark:border-[#143522]">
+        <h2 className="text-base font-semibold text-[#14532d] dark:text-[#bbf7d0]">
           Review records
         </h2>
-        <p className="mt-1 text-sm text-[#4b8068]">
-          Edit, approve, or exclude manual records before they count in
-          summaries.
+        <p className="mt-1 text-sm text-[#4b8068] dark:text-[#86efac]">
+          Edit, approve, or exclude records before they count in summaries.
         </p>
       </div>
+
+      {pendingCount > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#bbf7d0] bg-[#f0fdf4] px-5 py-3 dark:border-[#2d6a4a] dark:bg-[#143522]">
+          <div>
+            <p className="text-sm font-semibold text-[#14532d] dark:text-[#bbf7d0]">
+              {pendingCount} records waiting for review
+            </p>
+            <p className="text-xs text-[#4b8068] dark:text-[#86efac]">
+              Approve individually below or approve all verified records at once.
+            </p>
+          </div>
+          <form action={approveAllDraftRecords}>
+            <button
+              type="submit"
+              data-testid="record-approve-all-button"
+              className="inline-flex h-9 items-center justify-center rounded-lg bg-[#15803d] px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-[#14532d] dark:bg-[#16a34a] dark:hover:bg-[#15803d]"
+            >
+              ✓ Approve all {pendingCount} records
+            </button>
+          </form>
+        </div>
+      )}
+
       {records.length === 0 ? (
         <div className="p-8 text-center">
           <p className="text-sm text-[#4b8068]">No manual records yet.</p>
@@ -775,6 +802,40 @@ function ManualRecordsList({
                   </Link>
                 ) : (
                   <>
+                    {/* Fast 1-Click Review Actions */}
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-[#bbf7d0] pb-4 dark:border-[#2d6a4a]">
+                      <div>
+                        <span className="block text-xs font-semibold uppercase tracking-widest text-[#166534] dark:text-[#86efac]">
+                          Fast Review
+                        </span>
+                        <p className="text-xs text-[#4b8068] dark:text-[#a7f3d0]">
+                          Click to set status immediately:
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <ReviewButton
+                          recordId={record.id}
+                          status="approved"
+                          label="✓ Approve"
+                          variant="primary"
+                        />
+                        <ReviewButton
+                          recordId={record.id}
+                          status="excluded"
+                          label="✕ Exclude"
+                          variant="secondary"
+                        />
+                        {record.status !== "review" && (
+                          <ReviewButton
+                            recordId={record.id}
+                            status="review"
+                            label="Needs review"
+                            variant="subtle"
+                          />
+                        )}
+                      </div>
+                    </div>
+
                     <form
                       action={updateManualRecord}
                       className="grid gap-4"
@@ -783,13 +844,13 @@ function ManualRecordsList({
                       <input type="hidden" name="recordId" value={record.id} />
                       <div className="grid gap-4 sm:grid-cols-2">
                         <label className="block">
-                          <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
+                          <span className="text-xs font-semibold uppercase tracking-widest text-[#166534] dark:text-[#86efac]">
                             Type
                           </span>
                           <select
                             name="recordType"
                             data-testid={`record-review-type-select-${record.id}`}
-                            className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
+                            className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d] dark:border-[#2d6a4a] dark:bg-[#142e20] dark:text-[#e0f2e9]"
                             defaultValue={record.record_type}
                           >
                             <option value="income">Income</option>
@@ -797,44 +858,44 @@ function ManualRecordsList({
                           </select>
                         </label>
                         <label className="block">
-                          <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
+                          <span className="text-xs font-semibold uppercase tracking-widest text-[#166534] dark:text-[#86efac]">
                             Date
                           </span>
                           <input
                             name="recordDate"
                             data-testid={`record-review-date-input-${record.id}`}
                             type="date"
-                            className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
+                            className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d] dark:border-[#2d6a4a] dark:bg-[#142e20] dark:text-[#e0f2e9]"
                             defaultValue={record.record_date}
                           />
                         </label>
                       </div>
                       <label className="block">
-                        <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
+                        <span className="text-xs font-semibold uppercase tracking-widest text-[#166534] dark:text-[#86efac]">
                           Description
                         </span>
                         <input
                           name="description"
                           data-testid={`record-review-description-input-${record.id}`}
-                          className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
+                          className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d] dark:border-[#2d6a4a] dark:bg-[#142e20] dark:text-[#e0f2e9]"
                           defaultValue={record.description}
                         />
                       </label>
                       <div className="grid gap-4 sm:grid-cols-3">
                         <label className="block">
-                          <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
+                          <span className="text-xs font-semibold uppercase tracking-widest text-[#166534] dark:text-[#86efac]">
                             Amount
                           </span>
                           <input
                             name="amount"
                             data-testid={`record-review-amount-input-${record.id}`}
                             inputMode="decimal"
-                            className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
+                            className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d] dark:border-[#2d6a4a] dark:bg-[#142e20] dark:text-[#e0f2e9]"
                             defaultValue={Number(record.amount).toFixed(2)}
                           />
                         </label>
                         <label className="block sm:col-span-2">
-                          <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
+                          <span className="text-xs font-semibold uppercase tracking-widest text-[#166534] dark:text-[#86efac]">
                             Category
                           </span>
                           <CategorySelect
@@ -844,15 +905,15 @@ function ManualRecordsList({
                           />
                         </label>
                       </div>
-                      <div className="flex flex-wrap items-end gap-3">
+                      <div className="flex flex-wrap items-end gap-3 pt-1">
                         <label className="block min-w-44">
-                          <span className="text-xs font-semibold uppercase tracking-widest text-[#166534]">
-                            Review state
+                          <span className="text-xs font-semibold uppercase tracking-widest text-[#166534] dark:text-[#86efac]">
+                            Status state
                           </span>
                           <select
                             name="status"
                             data-testid={`record-review-status-select-${record.id}`}
-                            className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d]"
+                            className="mt-1 h-10 w-full rounded-lg border border-[#bbf7d0] bg-white px-3 text-sm text-[#14532d] dark:border-[#2d6a4a] dark:bg-[#142e20] dark:text-[#e0f2e9]"
                             defaultValue={record.status}
                           >
                             <option value="review">Needs review</option>
@@ -865,22 +926,10 @@ function ManualRecordsList({
                           data-testid={`record-review-save-button-${record.id}`}
                           className="inline-flex h-10 items-center rounded-lg bg-[#15803d] px-4 text-sm font-semibold text-white transition hover:bg-[#14532d]"
                         >
-                          Save changes
+                          Save edits
                         </button>
                       </div>
                     </form>
-                    <div className="mt-4 flex flex-wrap gap-3">
-                      <ReviewButton
-                        recordId={record.id}
-                        status="approved"
-                        label="Approve"
-                      />
-                      <ReviewButton
-                        recordId={record.id}
-                        status="excluded"
-                        label="Exclude"
-                      />
-                    </div>
                   </>
                 )}
               </div>
@@ -1317,11 +1366,20 @@ function ReviewButton({
   recordId,
   status,
   label,
+  variant = "primary",
 }: {
   recordId: string;
-  status: "approved" | "excluded";
+  status: "approved" | "excluded" | "review";
   label: string;
+  variant?: "primary" | "secondary" | "subtle";
 }) {
+  const btnClass =
+    variant === "primary"
+      ? "bg-[#15803d] text-white hover:bg-[#14532d] dark:bg-[#16a34a] dark:hover:bg-[#15803d] border border-transparent font-semibold shadow-xs"
+      : variant === "secondary"
+        ? "bg-white dark:bg-[#1e293b] text-[#991b1b] dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/50"
+        : "bg-white dark:bg-[#1e293b] text-[#334155] dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800";
+
   return (
     <form
       action={setManualRecordStatus}
@@ -1332,7 +1390,7 @@ function ReviewButton({
       <button
         type="submit"
         data-testid={`record-review-${status}-button-${recordId}`}
-        className="inline-flex h-10 items-center rounded-lg border border-[#bbf7d0] bg-white px-4 text-sm font-semibold text-[#14532d] transition hover:bg-[#f0fdf4]"
+        className={`inline-flex h-9 items-center justify-center rounded-lg px-3.5 text-xs font-semibold transition ${btnClass}`}
       >
         {label}
       </button>
@@ -1363,16 +1421,16 @@ function StatusBadge({
 
   const className =
     status === "approved" || status === "committed"
-      ? "bg-[#dcfce7] text-[#15803d]"
+      ? "bg-[#dcfce7] text-[#14532d] border border-[#86efac] dark:bg-[#14532d] dark:text-[#bbf7d0] dark:border-[#22c55e]"
       : status === "excluded" || status === "discarded"
-        ? "bg-[#fef3c7] text-[#92400e]"
+        ? "bg-[#fef3c7] text-[#78350f] border border-[#fde68a] dark:bg-[#78350f] dark:text-[#fef3c7] dark:border-[#d97706]"
         : status === "invalid"
-          ? "bg-red-50 text-red-800"
-          : "bg-[#e0f2fe] text-[#075985]";
+          ? "bg-red-100 text-red-900 border border-red-300 dark:bg-red-950 dark:text-red-200 dark:border-red-700"
+          : "bg-[#0369a1] text-white border border-[#0284c7] dark:bg-[#075985] dark:text-[#e0f2fe] dark:border-[#38bdf8] font-bold";
 
   return (
     <span
-      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${className}`}
+      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold shadow-xs ${className}`}
     >
       {label}
     </span>
