@@ -100,6 +100,20 @@ export default async function DashboardPage({
 
   const resolvedSearchParams = await searchParams;
   const flash = flashMessage(resolvedSearchParams);
+  const selectedTaxYear = resolvedSearchParams?.taxYear === "all" ? "all" : "2026";
+
+  let recentInvoicesQuery = supabase
+    .from("invoices")
+    .select(
+      `${INVOICE_REPORTING_COLUMNS},number,invoice_date,due_date,payment_terms,delivery_status,sent_at,paid_at,reminder_enabled,next_reminder_at,pdf_path,clients(name,email)`,
+    )
+    .eq("user_id", user.id);
+
+  if (selectedTaxYear === "2026") {
+    recentInvoicesQuery = recentInvoicesQuery
+      .gte("invoice_date", "2026-04-06")
+      .lte("invoice_date", "2027-04-05");
+  }
 
   const [
     { data: recentInvoices, error: recentError },
@@ -107,12 +121,7 @@ export default async function DashboardPage({
     { data: readinessCheck },
     reporting,
   ] = await Promise.all([
-    supabase
-      .from("invoices")
-      .select(
-        `${INVOICE_REPORTING_COLUMNS},number,invoice_date,due_date,payment_terms,delivery_status,sent_at,paid_at,reminder_enabled,next_reminder_at,pdf_path,clients(name,email)`,
-      )
-      .eq("user_id", user.id)
+    recentInvoicesQuery
       .order("created_at", { ascending: false })
       .limit(10),
     supabase
@@ -136,7 +145,11 @@ export default async function DashboardPage({
         readFinancialStamp(() => supabase.rpc("reconciliation_export_stamp")),
       async () => {
         const rows = await readAllExportRows<InvoiceReportingRow>(async (after) => {
-          let query = supabase.from("invoices").select(INVOICE_REPORTING_COLUMNS).eq("user_id", user.id).order("id").limit(500);
+          let query = supabase.from("invoices").select(INVOICE_REPORTING_COLUMNS).eq("user_id", user.id);
+          if (selectedTaxYear === "2026") {
+            query = query.gte("invoice_date", "2026-04-06").lte("invoice_date", "2027-04-05");
+          }
+          query = query.order("id").limit(500);
           if (after) query = query.gt("id", after);
           const result = await query;
           return { data: result.data, error: result.error };
@@ -399,7 +412,40 @@ export default async function DashboardPage({
             aria-label="Invoice totals"
             className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5"
           >
-            <h2 className="col-span-full">Native GBP invoice balances</h2>
+            <div className="col-span-full flex flex-wrap items-center justify-between gap-4 border-b border-[#bbf7d0] pb-3 dark:border-[#2d6a4a]">
+              <div>
+                <h2 className="text-base font-semibold text-[#14532d] dark:text-[#bbf7d0]">
+                  Native GBP Invoice Balances
+                </h2>
+                <p className="text-xs text-[#4b8068] dark:text-[#86efac]">
+                  {selectedTaxYear === "2026"
+                    ? "Filtered to This Tax Year (6 Apr 2026 – 5 Apr 2027)"
+                    : "Showing All-Time lifetime invoice totals"}
+                </p>
+              </div>
+              <div className="flex items-center gap-1 rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] p-1 text-xs dark:border-[#2d6a4a] dark:bg-[#143522]">
+                <Link
+                  href="/dashboard?taxYear=2026"
+                  className={`rounded-md px-3 py-1 font-semibold transition ${
+                    selectedTaxYear === "2026"
+                      ? "bg-[#15803d] text-white shadow-xs"
+                      : "text-[#4b8068] hover:text-[#14532d] dark:text-[#86efac]"
+                  }`}
+                >
+                  This Year (2026/27)
+                </Link>
+                <Link
+                  href="/dashboard?taxYear=all"
+                  className={`rounded-md px-3 py-1 font-semibold transition ${
+                    selectedTaxYear === "all"
+                      ? "bg-[#15803d] text-white shadow-xs"
+                      : "text-[#4b8068] hover:text-[#14532d] dark:text-[#86efac]"
+                  }`}
+                >
+                  All-Time
+                </Link>
+              </div>
+            </div>
             {[
               ["Original invoiced", totals.invoiced],
               ["Allocated cash receipts", totals.receipts],
